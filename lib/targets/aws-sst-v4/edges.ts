@@ -1,0 +1,80 @@
+import type { EdgeIntentMeta } from '../types';
+
+// AWS / SST v4 edge intents. Each connection's intent drives what the generator
+// emits (link arrays, subscriber wiring, SDK helpers). See docs/sst-v4-target.md.
+export const AWS_EDGE_INTENTS: EdgeIntentMeta[] = [
+  {
+    intent: 'uploadsTo',
+    label: 'uploads to',
+    description: 'App writes objects to a bucket (signed-URL upload). Adds link + S3 helper.',
+    from: ['nextjs', 'worker'],
+    to: ['bucket'],
+  },
+  {
+    intent: 'readsFrom',
+    label: 'reads from',
+    description: 'Reads from a bucket / table. Adds link + read helper.',
+    from: ['nextjs', 'worker'],
+    to: ['bucket', 'dynamo'],
+  },
+  {
+    intent: 'writesTo',
+    label: 'writes to',
+    description: 'Writes items to a Dynamo table. Adds link + Dynamo helper.',
+    from: ['nextjs', 'worker'],
+    to: ['dynamo'],
+  },
+  {
+    intent: 'publishesTo',
+    label: 'publishes to',
+    description: 'Sends messages to a queue. Adds link + SQS send helper.',
+    from: ['nextjs', 'worker'],
+    to: ['queue'],
+  },
+  {
+    intent: 'subscribesTo',
+    label: 'subscribes to',
+    description: 'A worker consumes a queue. Generates queue.subscribe({ handler, link }).',
+    from: ['worker'],
+    to: ['queue'],
+  },
+  {
+    intent: 'invokes',
+    label: 'invokes',
+    description: 'Cron triggers a worker/function on a schedule.',
+    from: ['cron'],
+    to: ['worker'],
+  },
+  {
+    intent: 'usesSecret',
+    label: 'uses secret',
+    description: 'A component links a secret (Resource.<Secret>.value).',
+    from: ['nextjs', 'worker', 'cron'],
+    to: ['secret'],
+  },
+  {
+    intent: 'linksTo',
+    label: 'links to',
+    description: 'Generic link: grants access + SDK exposure with no specific helper.',
+    from: [],
+    to: [],
+  },
+];
+
+const INTENT_BY_PAIR: Record<string, string> = {
+  'nextjs>bucket': 'uploadsTo',
+  'worker>bucket': 'readsFrom',
+  'nextjs>dynamo': 'writesTo',
+  'worker>dynamo': 'writesTo',
+  'nextjs>queue': 'publishesTo',
+  'worker>queue': 'subscribesTo',
+  'cron>worker': 'invokes',
+  'nextjs>secret': 'usesSecret',
+  'worker>secret': 'usesSecret',
+  'cron>secret': 'usesSecret',
+};
+
+export function awsDefaultIntent(fromKind: string, toKind: string): string | null {
+  if (fromKind === toKind) return null;
+  return INTENT_BY_PAIR[`${fromKind}>${toKind}`] ?? 'linksTo';
+}

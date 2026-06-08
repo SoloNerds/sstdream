@@ -1,15 +1,12 @@
-// Canvas-local UI state for M1. NOT the blueprint envelope — that arrives in M2
-// (lib/core/blueprint) and is target-aware. These five kinds are hard-coded for
-// the M1 shell and will be replaced by the target-driven catalog in M2.
-
-export const NODE_KINDS = ['nextjs', 'bucket', 'queue', 'worker', 'dynamo'] as const;
-
-export type NodeKind = (typeof NODE_KINDS)[number];
+// Canvas-local UI state. The blueprint envelope (lib/core/blueprint) is the durable
+// model; the store converts to/from it. `kind` and `intent` are validated against
+// the active Target's catalog (lib/targets) at runtime.
 
 export interface CanvasNode {
   id: string;
-  kind: NodeKind;
-  label: string;
+  kind: string;
+  name: string;
+  props: Record<string, unknown>;
   position: { x: number; y: number };
 }
 
@@ -17,4 +14,5 @@ export interface CanvasEdge {
   id: string;
   source: string;
   target: string;
+  intent: string;
 }

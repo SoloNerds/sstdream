@@ -9,52 +9,62 @@ beforeEach(() => {
 });
 
 describe('canvas store', () => {
-  it('adds nodes with their catalog label and unique ids', () => {
+  it('adds nodes with the catalog default name and unique names', () => {
     const a = state().addNode('bucket', { x: 0, y: 0 });
-    const b = state().addNode('queue', { x: 10, y: 10 });
+    const b = state().addNode('bucket', { x: 10, y: 10 });
     expect(state().nodes).toHaveLength(2);
     expect(a).not.toBe(b);
-    expect(state().nodes[0].label).toBe('Bucket');
+    expect(state().nodes[0].name).toBe('Bucket');
+    expect(state().nodes[1].name).toBe('Bucket2');
   });
 
-  it('moves a node', () => {
-    const id = state().addNode('bucket', { x: 0, y: 0 });
-    state().moveNode(id, { x: 5, y: 7 });
-    expect(state().nodes[0].position).toEqual({ x: 5, y: 7 });
+  it('infers a default edge intent from the source/target kinds', () => {
+    const web = state().addNode('nextjs', { x: 0, y: 0 });
+    const bucket = state().addNode('bucket', { x: 1, y: 1 });
+    const id = state().addEdge(web, bucket);
+    expect(id).not.toBeNull();
+    expect(state().edges[0].intent).toBe('uploadsTo');
   });
 
-  it('adds edges but rejects self-loops and duplicates', () => {
-    const a = state().addNode('nextjs', { x: 0, y: 0 });
-    const b = state().addNode('bucket', { x: 1, y: 1 });
-    expect(state().addEdge(a, a)).toBeNull();
-    expect(state().addEdge(a, b)).not.toBeNull();
-    expect(state().addEdge(a, b)).toBeNull();
+  it('rejects self-loops and duplicate edges', () => {
+    const web = state().addNode('nextjs', { x: 0, y: 0 });
+    const queue = state().addNode('queue', { x: 1, y: 1 });
+    expect(state().addEdge(web, web)).toBeNull();
+    expect(state().addEdge(web, queue)).not.toBeNull();
+    expect(state().addEdge(web, queue)).toBeNull();
     expect(state().edges).toHaveLength(1);
   });
 
   it('removes a node and all edges touching it, clearing selection', () => {
-    const a = state().addNode('nextjs', { x: 0, y: 0 });
-    const b = state().addNode('bucket', { x: 1, y: 1 });
-    state().addEdge(a, b);
-    state().select(a);
-    state().removeNode(a);
+    const web = state().addNode('nextjs', { x: 0, y: 0 });
+    const bucket = state().addNode('bucket', { x: 1, y: 1 });
+    state().addEdge(web, bucket);
+    state().select(web);
+    state().removeNode(web);
     expect(state().nodes).toHaveLength(1);
     expect(state().edges).toHaveLength(0);
     expect(state().selectedId).toBeNull();
   });
 
-  it('removes an edge by id', () => {
-    const a = state().addNode('nextjs', { x: 0, y: 0 });
-    const b = state().addNode('bucket', { x: 1, y: 1 });
-    const e = state().addEdge(a, b);
-    expect(e).not.toBeNull();
-    state().removeEdge(e as string);
-    expect(state().edges).toHaveLength(0);
-  });
-
-  it('renames a node', () => {
+  it('renames a node and merges props', () => {
     const id = state().addNode('bucket', { x: 0, y: 0 });
     state().renameNode(id, 'Uploads');
-    expect(state().nodes[0].label).toBe('Uploads');
+    state().setNodeProps(id, { access: 'public' });
+    state().setNodeProps(id, { cors: true });
+    expect(state().nodes[0].name).toBe('Uploads');
+    expect(state().nodes[0].props).toEqual({ access: 'public', cors: true });
+  });
+
+  it('loads a snapshot and keeps generating non-colliding ids', () => {
+    state().loadSnapshot({
+      nodes: [
+        { id: 'bucket_3', kind: 'bucket', name: 'Uploads', props: {}, position: { x: 0, y: 0 } },
+      ],
+      edges: [],
+    });
+    expect(state().nodes).toHaveLength(1);
+    const newId = state().addNode('queue', { x: 5, y: 5 });
+    expect(newId).not.toBe('bucket_3');
+    expect(state().nodes).toHaveLength(2);
   });
 });

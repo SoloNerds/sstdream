@@ -1,0 +1,70 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`aws-sst-v4 catalog > matches snapshot 1`] = `
+{
+  "bucket": {
+    "accent": "bg-emerald-600",
+    "category": "storage",
+    "component": "sst.aws.Bucket",
+    "defaultName": "Bucket",
+    "description": "S3 bucket for object storage / uploads",
+    "kind": "bucket",
+    "label": "Bucket",
+  },
+  "cron": {
+    "accent": "bg-rose-600",
+    "category": "schedule",
+    "component": "sst.aws.CronV2",
+    "defaultName": "Cron",
+    "description": "Scheduled Lambda (CronV2 — not the deprecated Cron)",
+    "kind": "cron",
+    "label": "Cron",
+  },
+  "dynamo": {
+    "accent": "bg-sky-600",
+    "category": "database",
+    "component": "sst.aws.Dynamo",
+    "defaultName": "Table",
+    "description": "DynamoDB table",
+    "kind": "dynamo",
+    "label": "Dynamo",
+  },
+  "nextjs": {
+    "accent": "bg-neutral-800",
+    "category": "compute",
+    "component": "sst.aws.Nextjs",
+    "defaultName": "Web",
+    "description": "Next.js app on AWS (OpenNext → Lambda/S3/CloudFront)",
+    "kind": "nextjs",
+    "label": "Next.js Web",
+    "singleton": true,
+  },
+  "queue": {
+    "accent": "bg-amber-600",
+    "category": "messaging",
+    "component": "sst.aws.Queue",
+    "defaultName": "Queue",
+    "description": "SQS queue with a Lambda subscriber",
+    "kind": "queue",
+    "label": "Queue",
+  },
+  "secret": {
+    "accent": "bg-stone-600",
+    "category": "config",
+    "component": "sst.Secret",
+    "defaultName": "Secret",
+    "description": "Encrypted secret, set via \`sst secret set\`",
+    "kind": "secret",
+    "label": "Secret",
+  },
+  "worker": {
+    "accent": "bg-violet-600",
+    "category": "compute",
+    "component": "sst.aws.Function",
+    "defaultName": "Worker",
+    "description": "Lambda function (queue subscriber / job handler)",
+    "kind": "worker",
+    "label": "Worker",
+  },
+}
+`;
