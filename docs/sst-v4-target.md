@@ -41,31 +41,31 @@ Source: <https://sst.dev/docs/reference/config/>
 export default $config({
   app(input) {
     return {
-      name: "my-app",                 // required; prefixes resource names
-      home: "aws",                    // required: "aws" | "cloudflare" | "local"
-      removal: input.stage === "production" ? "retain" : "remove",
-      protect: input.stage === "production",
+      name: 'my-app', // required; prefixes resource names
+      home: 'aws', // required: "aws" | "cloudflare" | "local"
+      removal: input.stage === 'production' ? 'retain' : 'remove',
+      protect: input.stage === 'production',
       providers: {
-        aws: { region: "us-east-1" }, // optional; object OR version string
+        aws: { region: 'us-east-1' }, // optional; object OR version string
       },
     };
   },
   async run() {
-    const bucket = new sst.aws.Bucket("MyBucket");
-    return { bucket: bucket.name };   // outputs -> CLI + .sst/outputs.json
+    const bucket = new sst.aws.Bucket('MyBucket');
+    return { bucket: bucket.name }; // outputs -> CLI + .sst/outputs.json
   },
 });
 ```
 
 ### `app(input)` reference
 
-| Field | Required | Type / values | Notes |
-|---|---|---|---|
-| `name` | ✅ | `string` | Prefixes all resource names. |
-| `home` | ✅ | `"aws" \| "cloudflare" \| "local"` | Where SST stores **state + secrets**. `aws` = S3 + SSM. |
-| `removal` | ❌ | `"remove" \| "retain" \| "retain-all"` | Default `"retain"`. **No `"destroy"`.** `retain` keeps S3+Dynamo, removes the rest; `retain-all` keeps everything. |
-| `protect` | ❌ | `boolean` | If `true`, `sst remove` errors out. |
-| `providers` | ❌ | `Record<string, string \| object>` | Value is a version string (`aws: "7.x"`) **or** a config object (`aws: { region }`). Omit → home provider with defaults. |
+| Field       | Required | Type / values                          | Notes                                                                                                                    |
+| ----------- | -------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `name`      | ✅       | `string`                               | Prefixes all resource names.                                                                                             |
+| `home`      | ✅       | `"aws" \| "cloudflare" \| "local"`     | Where SST stores **state + secrets**. `aws` = S3 + SSM.                                                                  |
+| `removal`   | ❌       | `"remove" \| "retain" \| "retain-all"` | Default `"retain"`. **No `"destroy"`.** `retain` keeps S3+Dynamo, removes the rest; `retain-all` keeps everything.       |
+| `protect`   | ❌       | `boolean`                              | If `true`, `sst remove` errors out.                                                                                      |
+| `providers` | ❌       | `Record<string, string \| object>`     | Value is a version string (`aws: "7.x"`) **or** a config object (`aws: { region }`). Omit → home provider with defaults. |
 
 - `input.stage` is the CLI stage (required, non-optional string). Docs use `input.stage`, not `input?.stage`.
 - `run()` returns `void | Record<string, any>`; a returned object becomes the app outputs.
@@ -105,40 +105,48 @@ coercion) tracked in SST GitHub issues — surface as a README caveat, not a blo
 > Exact verified signatures. **`subscribe()` is NOT uniform across components** — see callout.
 
 ### 4.1 `sst.aws.Nextjs`
+
 Source: <https://sst.dev/docs/component/aws/nextjs/>
+
 ```ts
-new sst.aws.Nextjs("Web", {
-  path: ".",                          // dir relative to sst.config.ts (default ".")
-  link: [uploads, jobs, table],       // grants perms + SDK access
-  environment: { NEXT_PUBLIC_APP_NAME: "..." },
+new sst.aws.Nextjs('Web', {
+  path: '.', // dir relative to sst.config.ts (default ".")
+  link: [uploads, jobs, table], // grants perms + SDK access
+  environment: { NEXT_PUBLIC_APP_NAME: '...' },
   // server?: { memory, architecture, runtime, timeout }  domain?: string | {...}
 });
 // outputs: .url ; .nodes.{server,assets,cdn}
 ```
+
 Builds via OpenNext internally (don't import it). Deploys to **AWS** (Lambda+S3+CloudFront).
 
 ### 4.2 `sst.aws.Bucket`
+
 Source: <https://sst.dev/docs/component/aws/bucket>
+
 ```ts
-new sst.aws.Bucket("Uploads", {
-  access: "public",                   // "public" | "cloudfront"  — NO `public` boolean
-  cors: {                             // defaults to true; set false to disable
-    allowHeaders: ["*"],
-    allowMethods: ["GET", "PUT", "POST", "DELETE", "HEAD"],
-    allowOrigins: ["*"],
-    exposeHeaders: ["ETag"],
-    maxAge: "0 seconds",
+new sst.aws.Bucket('Uploads', {
+  access: 'public', // "public" | "cloudfront"  — NO `public` boolean
+  cors: {
+    // defaults to true; set false to disable
+    allowHeaders: ['*'],
+    allowMethods: ['GET', 'PUT', 'POST', 'DELETE', 'HEAD'],
+    allowOrigins: ['*'],
+    exposeHeaders: ['ETag'],
+    maxAge: '0 seconds',
   },
 });
 // props: .name .arn .domain ; method: .notify(...)
 ```
 
 ### 4.3 `sst.aws.Dynamo`
+
 Source: <https://sst.dev/docs/component/aws/dynamo/>
+
 ```ts
-const table = new sst.aws.Dynamo("AppTable", {
-  fields: { pk: "string", sk: "string" },   // type: "string"|"number"|"binary"
-  primaryIndex: { hashKey: "pk", rangeKey: "sk" }, // rangeKey optional
+const table = new sst.aws.Dynamo('AppTable', {
+  fields: { pk: 'string', sk: 'string' }, // type: "string"|"number"|"binary"
+  primaryIndex: { hashKey: 'pk', rangeKey: 'sk' }, // rangeKey optional
   // globalIndexes: { GSI1: { hashKey, rangeKey? } }
   // localIndexes:  { LSI1: { rangeKey } }
   // stream: "keys-only"|"new-image"|"old-image"|"new-and-old-images"
@@ -146,13 +154,17 @@ const table = new sst.aws.Dynamo("AppTable", {
 });
 
 // ⚠️ Dynamo.subscribe IS name-first AND requires stream enabled:
-table.subscribe("ProcessRows", "src/sub.handler", { /* filters? */ });
+table.subscribe('ProcessRows', 'src/sub.handler', {
+  /* filters? */
+});
 ```
 
 ### 4.4 `sst.aws.Queue`
+
 Source: <https://sst.dev/docs/component/aws/queue/>
+
 ```ts
-const jobs = new sst.aws.Queue("Jobs", {
+const jobs = new sst.aws.Queue('Jobs', {
   // fifo?: true | { contentBasedDeduplication }
   // dlq?: arn | { queue, retry }   visibilityTimeout?: "30 seconds"
 });
@@ -160,42 +172,49 @@ const jobs = new sst.aws.Queue("Jobs", {
 // ⚠️⚠️ Queue.subscribe is SUBSCRIBER-FIRST (NO name arg).
 // Put handler/link/timeout in the FIRST FunctionArgs object:
 jobs.subscribe({
-  handler: "src/workers/process-job.handler",
+  handler: 'src/workers/process-job.handler',
   link: [uploads, table],
-  timeout: "60 seconds",
+  timeout: '60 seconds',
 });
 // 2nd arg = QueueSubscriberArgs (filters/batch/transform ONLY):
 //   jobs.subscribe("src/x.handler", { filters: [...] })
 ```
 
 ### 4.5 `sst.aws.Function`
+
 Source: <https://sst.dev/docs/component/aws/function/>
+
 ```ts
-new sst.aws.Function("MyFn", {
-  handler: "src/lambda.handler",   // {path}/{file}.{method} for node/python
-  runtime: "nodejs24.x",           // default; node18/20/22/24, go, rust, python3.9–3.14
+new sst.aws.Function('MyFn', {
+  handler: 'src/lambda.handler', // {path}/{file}.{method} for node/python
+  runtime: 'nodejs24.x', // default; node18/20/22/24, go, rust, python3.9–3.14
   link: [bucket],
-  environment: { DEBUG: "true" },  // total <= 4 KB
-  timeout: "20 seconds",           // default; 1s–900s
+  environment: { DEBUG: 'true' }, // total <= 4 KB
+  timeout: '20 seconds', // default; 1s–900s
 });
 ```
+
 Officially supported runtimes: **Node.js, Go**. Python/Rust are community-supported.
 
 ### 4.6 Cron — **use `sst.aws.CronV2`** (`sst.aws.Cron` is deprecated in 2026)
+
 Source: <https://sst.dev/docs/component/aws/cron-v2/>
+
 ```ts
-new sst.aws.CronV2("DailyJob", {
-  function: "src/cron.handler",    // prop is `function` (or `task`), NOT `job`
-  schedule: "rate(1 day)",         // "rate(...)" | "cron(...)" | "at(...)"
+new sst.aws.CronV2('DailyJob', {
+  function: 'src/cron.handler', // prop is `function` (or `task`), NOT `job`
+  schedule: 'rate(1 day)', // "rate(...)" | "cron(...)" | "at(...)"
   // timezone: "America/New_York"  retries: 3  dlq: <arn>
 });
 ```
 
 ### 4.7 `sst.Secret`
+
 Source: <https://sst.dev/docs/component/secret/>
+
 ```ts
-const secret = new sst.Secret("MySecret");          // capital first letter
-new sst.aws.Nextjs("Web", { link: [secret] });
+const secret = new sst.Secret('MySecret'); // capital first letter
+new sst.aws.Nextjs('Web', { link: [secret] });
 // set out-of-band: `sst secret set MySecret <value> [--stage prod] [--fallback]`
 // runtime: Resource.MySecret.value
 ```
@@ -207,9 +226,10 @@ new sst.aws.Nextjs("Web", { link: [secret] });
 Source: <https://sst.dev/docs/linking/>, <https://sst.dev/docs/reference/sdk/>
 
 ```ts
-import { Resource } from "sst";          // bare `sst` package
-const name = Resource.Uploads.name;      // <Name> = component name in sst.config.ts
+import { Resource } from 'sst'; // bare `sst` package
+const name = Resource.Uploads.name; // <Name> = component name in sst.config.ts
 ```
+
 - A resource appears on `Resource` **only if linked** to the consuming component.
 - SST generates `sst-env.d.ts` for typed autocomplete.
 - AWS SDK clients needed per resource: S3 → `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner`; SQS → `@aws-sdk/client-sqs`; Dynamo → `@aws-sdk/client-dynamodb` (or `lib-dynamodb`).
@@ -272,7 +292,7 @@ target produces files the user runs themselves.
 **Two lanes, one shell (corrected model).** AWS/SST and Vercel are **separate product
 lanes**, not one canvas with a different export button — see
 [architecture-targets.md](architecture-targets.md) for the full spec. Per-lane: the
-**catalog** (node types), **edge intents** (what a connection *means*), **validation
+**catalog** (node types), **edge intents** (what a connection _means_), **validation
 rules**, **generators**, **file manifest**, and **docs**. Shared: the **UI shell**, the
 blueprint **envelope** (version/target/app/metadata), and the **simulation / cost /
 recommendation engines** (frameworks that run over whichever lane's catalog is active).

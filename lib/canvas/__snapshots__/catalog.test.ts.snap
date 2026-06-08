@@ -1,0 +1,36 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`node catalog > matches snapshot 1`] = `
+{
+  "bucket": {
+    "accent": "bg-emerald-600",
+    "description": "sst.aws.Bucket (S3)",
+    "kind": "bucket",
+    "label": "Bucket",
+  },
+  "dynamo": {
+    "accent": "bg-sky-600",
+    "description": "sst.aws.Dynamo table",
+    "kind": "dynamo",
+    "label": "Dynamo",
+  },
+  "nextjs": {
+    "accent": "bg-neutral-800",
+    "description": "sst.aws.Nextjs app",
+    "kind": "nextjs",
+    "label": "Next.js Web",
+  },
+  "queue": {
+    "accent": "bg-amber-600",
+    "description": "sst.aws.Queue (SQS)",
+    "kind": "queue",
+    "label": "Queue",
+  },
+  "worker": {
+    "accent": "bg-violet-600",
+    "description": "sst.aws.Function subscriber",
+    "kind": "worker",
+    "label": "Worker",
+  },
+}
+`;

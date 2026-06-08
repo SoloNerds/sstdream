@@ -15,17 +15,17 @@
 
 ## 1. The shared / per-target boundary
 
-| Layer | Shared across lanes | Per-lane |
-|---|---|---|
-| UI shell (canvas, palette, properties panel, nav) | ✅ | |
-| Blueprint **envelope** (`version`, `target`, `app`, `metadata`) | ✅ | |
-| Simulation / Cost / Recommendation **engines** (frameworks) | ✅ | run over the active lane's catalog |
-| **Catalog** (node types + meanings) | | ✅ |
-| **Edge intents** (what a connection generates) | | ✅ |
-| **Validation rules** | | ✅ |
-| **Generators** (code/config emit) | | ✅ |
-| **File manifest** (what the export contains) | | ✅ |
-| **Install/deploy docs** | | ✅ |
+| Layer                                                           | Shared across lanes | Per-lane                           |
+| --------------------------------------------------------------- | ------------------- | ---------------------------------- |
+| UI shell (canvas, palette, properties panel, nav)               | ✅                  |                                    |
+| Blueprint **envelope** (`version`, `target`, `app`, `metadata`) | ✅                  |                                    |
+| Simulation / Cost / Recommendation **engines** (frameworks)     | ✅                  | run over the active lane's catalog |
+| **Catalog** (node types + meanings)                             |                     | ✅                                 |
+| **Edge intents** (what a connection generates)                  |                     | ✅                                 |
+| **Validation rules**                                            |                     | ✅                                 |
+| **Generators** (code/config emit)                               |                     | ✅                                 |
+| **File manifest** (what the export contains)                    |                     | ✅                                 |
+| **Install/deploy docs**                                         |                     | ✅                                 |
 
 The engines (M7–M9) are **target-aware frameworks**: they accept a lane's catalog +
 edge semantics and produce simulation traces, cost numbers, and recommendations specific
@@ -34,7 +34,7 @@ to that lane. They are not target-agnostic logic.
 `target` on the blueprint selects the lane:
 
 ```ts
-type DeployTarget = "aws-sst-v4" | "vercel";
+type DeployTarget = 'aws-sst-v4' | 'vercel';
 ```
 
 ---
@@ -96,14 +96,14 @@ Source of truth: [sst-v4-target.md](sst-v4-target.md).
 
 **Edge intents → SST relationships:**
 
-| Edge intent | Generates |
-|---|---|
-| `linksTo` | adds resource to `link: [...]` |
-| `uploadsTo` / `readsFrom` / `writesTo` | link + AWS SDK helper (S3/Dynamo) |
-| `publishesTo` | link queue + SQS send helper |
-| `subscribesTo` | `queue.subscribe({...})` **(subscriber-first!)** / `table.subscribe("Name", ...)` **(name-first + `stream`)** |
-| `invokes` | function link/permission |
-| `usesSecret` | `new sst.Secret` + link |
+| Edge intent                            | Generates                                                                                                     |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `linksTo`                              | adds resource to `link: [...]`                                                                                |
+| `uploadsTo` / `readsFrom` / `writesTo` | link + AWS SDK helper (S3/Dynamo)                                                                             |
+| `publishesTo`                          | link queue + SQS send helper                                                                                  |
+| `subscribesTo`                         | `queue.subscribe({...})` **(subscriber-first!)** / `table.subscribe("Name", ...)` **(name-first + `stream`)** |
+| `invokes`                              | function link/permission                                                                                      |
+| `usesSecret`                           | `new sst.Secret` + link                                                                                       |
 
 **Lane validations:** prod `removal: retain` / `protect: true`; queue has a subscriber;
 worker has linked table; bucket upload uses signed URL; Dynamo has a primary key; function
@@ -111,6 +111,7 @@ timeout sane; declared secrets present; **no legacy imports / no provider import
 resources in `run()`**.
 
 **Manifest:**
+
 ```
 aws-sst-export/
 ├── sst.config.ts
@@ -138,24 +139,24 @@ SST. But it **does** (as of 2026) have native async primitives.
 Consumer** (native, beta) · **Vercel Workflow** (native, GA) · **Vercel Blob** (first-party)
 · **Edge Config** (first-party) · **Redis (Upstash)** · **Postgres (Neon/Supabase/Aurora/
 Prisma)** · Env Vars · Domain · Analytics · Speed Insights · Stripe Webhook Route ·
-Resend Email · External API · *(optional Marketplace job provider)*.
+Resend Email · External API · _(optional Marketplace job provider)_.
 
 > ✅ **Verified corrections:** `Vercel KV`/`Vercel Postgres` are **dead** as first-party
 > products (→ Upstash Redis / Neon via Marketplace; never emit `@vercel/kv`/`@vercel/postgres`).
-> `Vercel Blob` and `Edge Config` **remain** first-party. Cron *count* is 100/project on
-> all plans; only *frequency* is plan-gated (Hobby once/day).
+> `Vercel Blob` and `Edge Config` **remain** first-party. Cron _count_ is 100/project on
+> all plans; only _frequency_ is plan-gated (Hobby once/day).
 
 **Edge intents → app/integration artifacts:**
 
-| Edge intent | Generates |
-|---|---|
-| `usesEnv` | entry in `.env.example` + `required-env.json` |
-| `callsRoute` | API route handler stub |
-| `storesFileIn` | Blob helper + upload route |
-| `readsFromService` / `writesToService` | DB/KV client helper + env |
-| `scheduledBy` | `/api/cron/...` route + `crons` entry in `vercel.json` |
-| `receivesWebhook` | webhook route + signing-secret env |
-| `sendsEmailThrough` | Resend/email helper + env |
+| Edge intent                            | Generates                                              |
+| -------------------------------------- | ------------------------------------------------------ |
+| `usesEnv`                              | entry in `.env.example` + `required-env.json`          |
+| `callsRoute`                           | API route handler stub                                 |
+| `storesFileIn`                         | Blob helper + upload route                             |
+| `readsFromService` / `writesToService` | DB/KV client helper + env                              |
+| `scheduledBy`                          | `/api/cron/...` route + `crons` entry in `vercel.json` |
+| `receivesWebhook`                      | webhook route + signing-secret env                     |
+| `sendsEmailThrough`                    | Resend/email helper + env                              |
 
 **Lane validations:** cron path has a route file; webhook route has a signing secret;
 Blob helper has its token/env; DB selected ⇒ `DATABASE_URL` present; route using a secret
@@ -163,6 +164,7 @@ not marked client-side; function within platform limits; **background job ⇒ re
 external job/queue provider** (no fake Worker node).
 
 **Manifest:**
+
 ```
 vercel-export/
 ├── vercel.json            # incl. crons
@@ -188,7 +190,7 @@ Starter · Dashboard + External DB · Cron Job + Email Report.
    now has native async): pick by workload — `after()`/`waitUntil()` (fire-and-forget),
    **Vercel Queues** push-consumer (the native "worker", beta), **Vercel Workflows**
    (long-running/durable, GA), or Cron for scheduled work. Marketplace providers (Inngest,
-   Trigger.dev, QStash) are *optional* alternatives, not requirements. Still no app-owned
+   Trigger.dev, QStash) are _optional_ alternatives, not requirements. Still no app-owned
    SQS/Lambda — that's the AWS lane.
 2. **Database ownership.** AWS: app can **own** the DB (Dynamo; later Postgres). Vercel:
    app **connects** to a managed/external DB (Neon, Supabase, PlanetScale, …) → export a
@@ -199,12 +201,21 @@ Starter · Dashboard + External DB · Cron Job + Email Report.
    `vercel-env.md`.
 
 `required-env.json` shape:
+
 ```json
 {
   "required": [
-    { "name": "DATABASE_URL", "scope": "server", "environment": ["development","preview","production"] },
-    { "name": "STRIPE_SECRET_KEY", "scope": "server", "environment": ["preview","production"] },
-    { "name": "NEXT_PUBLIC_APP_URL", "scope": "client", "environment": ["development","preview","production"] }
+    {
+      "name": "DATABASE_URL",
+      "scope": "server",
+      "environment": ["development", "preview", "production"]
+    },
+    { "name": "STRIPE_SECRET_KEY", "scope": "server", "environment": ["preview", "production"] },
+    {
+      "name": "NEXT_PUBLIC_APP_URL",
+      "scope": "client",
+      "environment": ["development", "preview", "production"]
+    }
   ]
 }
 ```

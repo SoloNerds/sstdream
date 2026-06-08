@@ -1,13 +1,13 @@
 # Vercel Compatibility Target — `vercel-target.md`
 
 > **Source of truth for SSTDREAM's Vercel lane** (catalog, validation, generator).
-> Vercel is a *separate lane* from AWS/SST — it **hosts the app and integrates services**;
+> Vercel is a _separate lane_ from AWS/SST — it **hosts the app and integrates services**;
 > it does not use SST. See [architecture-targets.md](architecture-targets.md).
 
 - **Doc version:** `0.1.0`
 - **Verified against live Vercel docs on:** `2026-06-08` (docs `last_updated` 2026-02 … 2026-06)
 - **Closes the M10 compatibility-lock spike** (issue #69).
-- **Provenance:** verified via official `vercel.com/docs/*`. Several facts here *corrected*
+- **Provenance:** verified via official `vercel.com/docs/*`. Several facts here _corrected_
   earlier design assumptions — see callouts. Re-verify beta APIs (Queues/Workflows) each
   release; they are moving fast.
 
@@ -26,7 +26,7 @@
    exist as first-party products** — use Marketplace providers (Redis→Upstash,
    Postgres→Neon/Supabase/Aurora/Prisma). Never emit `@vercel/kv` or `@vercel/postgres`.
 5. Background work uses Vercel's **native** primitives first (`after`/`waitUntil`, Queues,
-   Workflows, Cron); Marketplace providers (Inngest/Trigger.dev/QStash) are *optional*
+   Workflows, Cron); Marketplace providers (Inngest/Trigger.dev/QStash) are _optional_
    alternatives, not requirements.
 
 ---
@@ -53,16 +53,16 @@ Source: <https://vercel.com/docs/project-configuration/vercel-json>
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [{ "path": "/api/cron/daily", "schedule": "0 5 * * *" }],
   "functions": {
-    "app/api/**/*": { "maxDuration": 60 }   // integer SECONDS; glob keys; order matters
+    "app/api/**/*": { "maxDuration": 60 }, // integer SECONDS; glob keys; order matters
   },
-  "rewrites":  [{ "source": "/about", "destination": "/about-us" }],
+  "rewrites": [{ "source": "/about", "destination": "/about-us" }],
   "redirects": [{ "source": "/old", "destination": "/new", "permanent": true }], // 308
-  "headers":   [{ "source": "/(.*)", "headers": [{ "key": "X-Frame-Options", "value": "DENY" }] }]
+  "headers": [{ "source": "/(.*)", "headers": [{ "key": "X-Frame-Options", "value": "DENY" }] }],
 }
 ```
 
 - Prefer `rewrites`/`redirects`/`headers` over the deprecated `routes`/`builds`/`env`.
-- Per-function keys: `runtime`, `maxDuration`, `memory`*, `supportsCancellation`,
+- Per-function keys: `runtime`, `maxDuration`, `memory`\*, `supportsCancellation`,
   `includeFiles`/`excludeFiles` (**not supported in Next.js** — use `next.config`
   `outputFileTracingIncludes/Excludes`), `regions`, `functionFailoverRegions` (Ent).
 - ⚠️ With **Fluid Compute** (default since 2025-04-23), `memory` **cannot** be set in
@@ -77,11 +77,11 @@ Source: <https://vercel.com/docs/functions/configuring-functions/duration>
 > ⚠️ **Corrected:** the old `10s/60s … 900s` numbers are **stale**. Current, with Fluid
 > Compute (default on):
 
-| Plan | Default | Max |
-|---|---|---|
-| Hobby | 300s | 300s |
-| Pro | 300s | ~800s |
-| Enterprise | 300s | ~800s |
+| Plan       | Default | Max   |
+| ---------- | ------- | ----- |
+| Hobby      | 300s    | 300s  |
+| Pro        | 300s    | ~800s |
+| Enterprise | 300s    | ~800s |
 
 - Set per route: `export const maxDuration = 60;` (Next.js App Router ≥13.5; Pages Router
   uses `export const config = { maxDuration: 60 }`), or via `vercel.json` `functions`.
@@ -96,32 +96,42 @@ Source: <https://vercel.com/docs/functions/configuring-functions/duration>
 > ⚠️ **Corrected (biggest change):** "Vercel has no native background jobs / no Worker" is
 > **false as of 2026.** Choose by workload — do NOT assume you must go external.
 
-| Need | Use | Package / API |
-|---|---|---|
-| Fire-and-forget after response | `after()` (Next ≥15.1) or `waitUntil()` | `next/server` / `@vercel/functions` |
-| Durable queue + consumer ("worker") | **Vercel Queues** (Beta) | `@vercel/queue` |
-| Long-running / multi-step (pause→months) | **Vercel Workflows** (GA) | `workflow` (`'use workflow'`/`'use step'`) |
-| Scheduled invocation | **Cron Jobs** (§5) | `vercel.json` `crons` |
-| External alternative | Inngest / Trigger.dev / Upstash QStash | Marketplace integrations |
+| Need                                     | Use                                     | Package / API                              |
+| ---------------------------------------- | --------------------------------------- | ------------------------------------------ |
+| Fire-and-forget after response           | `after()` (Next ≥15.1) or `waitUntil()` | `next/server` / `@vercel/functions`        |
+| Durable queue + consumer ("worker")      | **Vercel Queues** (Beta)                | `@vercel/queue`                            |
+| Long-running / multi-step (pause→months) | **Vercel Workflows** (GA)               | `workflow` (`'use workflow'`/`'use step'`) |
+| Scheduled invocation                     | **Cron Jobs** (§5)                      | `vercel.json` `crons`                      |
+| External alternative                     | Inngest / Trigger.dev / Upstash QStash  | Marketplace integrations                   |
 
-There is no *always-on* poll loop (serverless compute), but **push-mode Queue consumers**
+There is no _always-on_ poll loop (serverless compute), but **push-mode Queue consumers**
 are Vercel's native "worker": Vercel invokes your function per message (air-gapped,
 retries, visibility timeout). Configure the trigger at deploy time:
 
 ```jsonc
 // vercel.json — queue consumer trigger (BETA: type/key may change before GA)
-{ "functions": { "app/api/queues/process/route.ts": {
-  "experimentalTriggers": [{ "type": "queue/v2beta", "topic": "orders", "retryAfterSeconds": 60 }]
-} } }
+{
+  "functions": {
+    "app/api/queues/process/route.ts": {
+      "experimentalTriggers": [
+        { "type": "queue/v2beta", "topic": "orders", "retryAfterSeconds": 60 },
+      ],
+    },
+  },
+}
 ```
+
 ```ts
 // producer
 import { send } from '@vercel/queue';
-await send('orders', { orderId });           // opts: retentionSeconds (60s–7d, def 24h), delaySeconds, idempotencyKey
+await send('orders', { orderId }); // opts: retentionSeconds (60s–7d, def 24h), delaySeconds, idempotencyKey
 // consumer
 import { handleCallback } from '@vercel/queue';
-export const POST = handleCallback(async (message, metadata) => { await process(message); });
+export const POST = handleCallback(async (message, metadata) => {
+  await process(message);
+});
 ```
+
 Queues: at-least-once (make consumers idempotent), auto-retry, TTL 60s–7d, no built-in
 DLQ (handle poison messages in the `retry` callback), approximate ordering.
 
@@ -132,13 +142,19 @@ DLQ (handle poison messages in the `retry` callback), approximate ordering.
 Source: <https://vercel.com/docs/cron-jobs>
 
 ```jsonc
-{ "$schema": "https://openapi.vercel.sh/vercel.json",
-  "crons": [{ "path": "/api/cron/daily", "schedule": "0 5 * * *" }] }
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [{ "path": "/api/cron/daily", "schedule": "0 5 * * *" }],
+}
 ```
+
 ```ts
 // app/api/cron/daily/route.ts — must export GET; Vercel triggers via HTTP GET
-export function GET(request: Request) { /* verify CRON_SECRET */ return new Response('ok'); }
+export function GET(request: Request) {
+  /* verify CRON_SECRET */ return new Response('ok');
+}
 ```
+
 - Runs on **production deployments only**; user-agent `vercel-cron/1.0`; header
   `x-vercel-cron-schedule`. Authenticate with a `CRON_SECRET` env var.
 - Schedule: standard 5-field cron, **UTC only**, **numeric only** (no `MON`/`JAN`), and you
@@ -154,6 +170,7 @@ export function GET(request: Request) { /* verify CRON_SECRET */ return new Resp
 Source: <https://vercel.com/docs/vercel-blob>, <https://vercel.com/docs/redis>, <https://vercel.com/docs/marketplace-storage>
 
 **First-party (keep in catalog):**
+
 - **Vercel Blob** — `@vercel/blob` (server: `put`/`del`/`head`/`list`/`copy`; client:
   `upload`/`handleUpload` from `@vercel/blob/client`). Backed by S3.
   ⚠️ **Stores have an immutable `private | public` mode and nearly every method REQUIRES an
@@ -165,12 +182,13 @@ Source: <https://vercel.com/docs/vercel-blob>, <https://vercel.com/docs/redis>, 
 - **Edge Config** — low-latency global config store (first-party).
 
 **Marketplace (corrected — these are NOT first-party anymore):**
+
 - **Redis / KV** → **Upstash Redis** (`@upstash/redis`). `@vercel/kv` is dead (auto-migrated
   Dec 2024).
 - **Postgres** → **Neon** (migration default), Supabase, AWS Aurora, or Prisma Postgres
   (`@neondatabase/serverless`). `@vercel/postgres` deprecated.
 - Provision: `vercel install neon|upstash|supabase` (CI: `vercel install neon --name db
-  --plan free -e production -e preview`) → connects to project, pulls creds to `.env.local`.
+--plan free -e production -e preview`) → connects to project, pulls creds to `.env.local`.
 
 ---
 
@@ -195,25 +213,25 @@ Vercel Next.js Project · Function Route · **Cron** · **Vercel Queue + Consume
 beta) · **Vercel Workflow** (native) · **Vercel Blob** · **Edge Config** ·
 **Redis (Upstash)** · **Postgres (Neon/Supabase/Aurora/Prisma)** · **Env Vars** · Domain ·
 Analytics · Speed Insights · Stripe Webhook Route · Resend Email · External API ·
-*(optional Marketplace job provider: Inngest / Trigger.dev / QStash)*.
+_(optional Marketplace job provider: Inngest / Trigger.dev / QStash)_.
 
 > No app-owned infra (no S3/Dynamo/SQS components — that's the AWS lane). DB/Redis are
-> external managed services the app *connects to*.
+> external managed services the app _connects to_.
 
 ## 9. Edge intents → artifacts
 
-| Intent | Generates |
-|---|---|
-| `usesEnv` | `.env.example` + `required-env.json` entry |
-| `callsRoute` | API route handler stub |
-| `storesFileIn` | Blob helper (`lib/blob.ts`) + upload route (`access` set) |
-| `readsFromService`/`writesToService` | DB/Redis client helper (`lib/db.ts`) + env |
-| `scheduledBy` | `/api/cron/<name>/route.ts` (GET + CRON_SECRET) + `crons` entry |
-| `enqueuesTo` | `@vercel/queue` `send()` producer |
-| `consumedBy` | `handleCallback` consumer + `experimentalTriggers` in `vercel.json` |
-| `orchestratedBy` | Vercel Workflow (`'use workflow'`/`'use step'`) |
-| `receivesWebhook` | webhook route + signing-secret env |
-| `sendsEmailThrough` | Resend helper + env |
+| Intent                               | Generates                                                           |
+| ------------------------------------ | ------------------------------------------------------------------- |
+| `usesEnv`                            | `.env.example` + `required-env.json` entry                          |
+| `callsRoute`                         | API route handler stub                                              |
+| `storesFileIn`                       | Blob helper (`lib/blob.ts`) + upload route (`access` set)           |
+| `readsFromService`/`writesToService` | DB/Redis client helper (`lib/db.ts`) + env                          |
+| `scheduledBy`                        | `/api/cron/<name>/route.ts` (GET + CRON_SECRET) + `crons` entry     |
+| `enqueuesTo`                         | `@vercel/queue` `send()` producer                                   |
+| `consumedBy`                         | `handleCallback` consumer + `experimentalTriggers` in `vercel.json` |
+| `orchestratedBy`                     | Vercel Workflow (`'use workflow'`/`'use step'`)                     |
+| `receivesWebhook`                    | webhook route + signing-secret env                                  |
+| `sendsEmailThrough`                  | Resend helper + env                                                 |
 
 ## 10. Validation rules (Vercel lane)
 
