@@ -11,6 +11,7 @@ import {
   parseBlueprint,
 } from '@/lib/core/blueprint/serialize';
 import { AI_PROCESSING_APP } from '@/lib/templates/ai-processing-app';
+import type { ValidationResult } from '@/lib/core/validation/types';
 
 function download(filename: string, text: string) {
   const blob = new Blob([text], { type: 'application/json' });
@@ -22,7 +23,7 @@ function download(filename: string, text: string) {
   URL.revokeObjectURL(url);
 }
 
-export function Toolbar() {
+export function Toolbar({ validation }: { validation: ValidationResult }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const appName = useCanvasStore((s) => s.app.name);
   const setApp = useCanvasStore((s) => s.setApp);
@@ -30,6 +31,7 @@ export function Toolbar() {
   const reset = useCanvasStore((s) => s.reset);
 
   const onExport = () => {
+    if (!validation.ok) return;
     const s = useCanvasStore.getState();
     const bp = canvasToBlueprint(
       { nodes: s.nodes, edges: s.edges },
@@ -75,7 +77,17 @@ export function Toolbar() {
       <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()}>
         Import
       </Button>
-      <Button size="sm" variant="outline" onClick={onExport}>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={onExport}
+        disabled={!validation.ok}
+        title={
+          validation.ok
+            ? 'Export design JSON'
+            : `Fix ${validation.errors.length} error(s) to export`
+        }
+      >
         Export design
       </Button>
       <Button size="sm" variant="ghost" onClick={reset}>

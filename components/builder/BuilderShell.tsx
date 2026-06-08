@@ -5,6 +5,8 @@ import { Palette } from './Palette';
 import { Canvas } from './Canvas';
 import { PropertiesPanel } from './PropertiesPanel';
 import { Toolbar } from './Toolbar';
+import { StatusBar } from './StatusBar';
+import { useValidation } from './useValidation';
 import { useCanvasStore } from '@/lib/canvas/store';
 import { getTarget, isTargetImplemented } from '@/lib/targets/registry';
 import { loadBlueprint, saveBlueprint } from '@/lib/core/blueprint/persistence';
@@ -12,6 +14,7 @@ import { blueprintToCanvas, canvasToBlueprint } from '@/lib/core/blueprint/seria
 
 export function BuilderShell() {
   const targetId = useCanvasStore((s) => s.targetId);
+  const validation = useValidation();
 
   // Restore the last design from localStorage on mount.
   useEffect(() => {
@@ -58,7 +61,7 @@ export function BuilderShell() {
             {getTarget(targetId).label}
           </span>
         </div>
-        <Toolbar />
+        <Toolbar validation={validation} />
       </header>
       <div className="flex min-h-0 flex-1">
         <aside className="w-64 shrink-0 overflow-y-auto border-r border-neutral-200 dark:border-neutral-800">
@@ -71,6 +74,7 @@ export function BuilderShell() {
           <PropertiesPanel />
         </aside>
       </div>
+      <StatusBar validation={validation} />
     </div>
   );
 }

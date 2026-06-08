@@ -69,15 +69,18 @@ export function createEmptyBlueprint(
   });
 }
 
-/** Build a blueprint from the current canvas + app/target config. */
-export function canvasToBlueprint(
+/**
+ * Build a blueprint-shaped object WITHOUT zod validation, so the validation
+ * engine can report problems (e.g. an invalid app name) instead of throwing.
+ */
+export function draftBlueprint(
   snapshot: CanvasSnapshot,
   deploy: DeployTarget,
   app: AppDefaults,
   now: string,
   previousCreatedAt?: string,
 ): Blueprint {
-  return BlueprintSchema.parse({
+  return {
     version: BLUEPRINT_VERSION,
     target: TARGET_DEFAULTS[deploy],
     app: {
@@ -110,7 +113,18 @@ export function canvasToBlueprint(
       updatedAt: now,
       generatedBy: 'sstdream',
     },
-  });
+  } as Blueprint;
+}
+
+/** Build a validated blueprint from the current canvas + app/target config. */
+export function canvasToBlueprint(
+  snapshot: CanvasSnapshot,
+  deploy: DeployTarget,
+  app: AppDefaults,
+  now: string,
+  previousCreatedAt?: string,
+): Blueprint {
+  return BlueprintSchema.parse(draftBlueprint(snapshot, deploy, app, now, previousCreatedAt));
 }
 
 export function blueprintToCanvas(bp: Blueprint): CanvasSnapshot {

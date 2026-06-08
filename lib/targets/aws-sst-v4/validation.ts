@@ -1,0 +1,246 @@
+import type { Blueprint, Resource } from '@/lib/core/blueprint/types';
+import type { Diagnostic, ValidationRule } from '@/lib/core/validation/types';
+
+// AWS / SST v4 design-level validation rules. Code-shape guarantees (no legacy
+// imports, resources-in-run, Queue.subscribe subscriber-first, CronV2 not Cron)
+// are enforced by the generator + its snapshot tests (M4); these rules check the
+// design graph that the generator consumes. See docs/sst-v4-target.md §6.
+
+const NAME_RE = /^[A-Z][A-Za-z0-9]*$/;
+const APP_NAME_RE = /^[a-z][a-z0-9-]*$/;
+
+function resourceMap(bp: Blueprint): Map<string, Resource> {
+  return new Map(bp.resources.map((r) => [r.id, r]));
+}
+
+export const AWS_RULES: ValidationRule[] = [
+  {
+    id: 'app-name-valid',
+    run: (bp) =>
+      APP_NAME_RE.test(bp.app.name)
+        ? []
+        : [
+            {
+              rule: 'app-name-valid',
+              severity: 'error',
+              message: `App name "${bp.app.name}" is invalid.`,
+              hint: 'Lowercase letters, numbers and dashes; start with a letter (e.g. ai-processing-app).',
+            },
+          ],
+  },
+  {
+    id: 'empty-design',
+    run: (bp) =>
+      bp.resources.length === 0
+        ? [
+            {
+              rule: 'empty-design',
+              severity: 'warning',
+              message: 'The design is empty — add resources before exporting.',
+            },
+          ]
+        : [],
+  },
+  {
+    id: 'unique-resource-names',
+    run: (bp) => {
+      const seen = new Set<string>();
+      const out: Diagnostic[] = [];
+      for (const r of bp.resources) {
+        if (seen.has(r.name)) {
+          out.push({
+            rule: 'unique-resource-names',
+            severity: 'error',
+            resourceId: r.id,
+            message: `Duplicate resource name "${r.name}". SST component names must be unique.`,
+          });
+        }
+        seen.add(r.name);
+      }
+      return out;
+    },
+  },
+  {
+    id: 'valid-resource-name',
+    run: (bp) =>
+      bp.resources
+        .filter((r) => !NAME_RE.test(r.name))
+        .map((r) => ({
+          rule: 'valid-resource-name',
+          severity: 'error' as const,
+          resourceId: r.id,
+          message: `Resource name "${r.name}" is not a valid SST component name.`,
+          hint: 'Use PascalCase letters/numbers, e.g. "Uploads".',
+        })),
+  },
+  {
+    id: 'edge-intent-applicability',
+    run: (bp, ctx) => {
+      const map = resourceMap(bp);
+      const intents = new Map(ctx.target.edgeIntents.map((i) => [i.intent, i]));
+      const out: Diagnostic[] = [];
+      for (const c of bp.connections) {
+        const meta = intents.get(c.intent);
+        if (!meta) {
+          out.push({
+            rule: 'edge-intent-applicability',
+            severity: 'error',
+            connectionId: c.id,
+            message: `Unknown connection intent "${c.intent}".`,
+          });
+          continue;
+        }
+        const src = map.get(c.source);
+        const tgt = map.get(c.target);
+        if (!src || !tgt) {
+          out.push({
+            rule: 'edge-intent-applicability',
+            severity: 'error',
+            connectionId: c.id,
+            message: 'Connection references a missing resource.',
+          });
+          continue;
+        }
+        if (meta.from.length && !meta.from.includes(src.kind)) {
+          out.push({
+            rule: 'edge-intent-applicability',
+            severity: 'error',
+            connectionId: c.id,
+            message: `"${meta.label}" cannot start from ${src.name} (${src.kind}).`,
+          });
+        }
+        if (meta.to.length && !meta.to.includes(tgt.kind)) {
+          out.push({
+            rule: 'edge-intent-applicability',
+            severity: 'error',
+            connectionId: c.id,
+            message: `"${meta.label}" cannot point to ${tgt.name} (${tgt.kind}).`,
+          });
+        }
+      }
+      return out;
+    },
+  },
+  {
+    id: 'cron-needs-function',
+    run: (bp) =>
+      bp.resources
+        .filter((r) => r.kind === 'cron')
+        .filter((c) => !bp.connections.some((e) => e.source === c.id && e.intent === 'invokes'))
+        .map((c) => ({
+          rule: 'cron-needs-function',
+          severity: 'error' as const,
+          resourceId: c.id,
+          message: `Cron "${c.name}" has no function to invoke.`,
+          hint: 'Connect Cron → Worker (invokes).',
+        })),
+  },
+  {
+    id: 'queue-needs-subscriber',
+    run: (bp) =>
+      bp.resources
+        .filter((r) => r.kind === 'queue')
+        .filter(
+          (q) => !bp.connections.some((c) => c.target === q.id && c.intent === 'subscribesTo'),
+        )
+        .map((q) => ({
+          rule: 'queue-needs-subscriber',
+          severity: 'warning' as const,
+          resourceId: q.id,
+          message: `Queue "${q.name}" has no worker subscribing to it.`,
+          hint: 'Connect Worker → Queue (subscribesTo), or it will have no consumer.',
+        })),
+  },
+  {
+    id: 'worker-needs-trigger',
+    run: (bp) =>
+      bp.resources
+        .filter((r) => r.kind === 'worker')
+        .filter(
+          (w) =>
+            !bp.connections.some((c) => c.source === w.id && c.intent === 'subscribesTo') &&
+            !bp.connections.some((c) => c.target === w.id && c.intent === 'invokes'),
+        )
+        .map((w) => ({
+          rule: 'worker-needs-trigger',
+          severity: 'warning' as const,
+          resourceId: w.id,
+          message: `Worker "${w.name}" is not triggered by a queue or cron.`,
+          hint: 'Connect Worker → Queue (subscribesTo) or Cron → Worker (invokes).',
+        })),
+  },
+  {
+    id: 'orphan-secret',
+    run: (bp) =>
+      bp.resources
+        .filter((r) => r.kind === 'secret')
+        .filter((s) => !bp.connections.some((c) => c.target === s.id && c.intent === 'usesSecret'))
+        .map((s) => ({
+          rule: 'orphan-secret',
+          severity: 'warning' as const,
+          resourceId: s.id,
+          message: `Secret "${s.name}" is not linked to anything.`,
+          hint: 'Connect a resource → Secret (usesSecret).',
+        })),
+  },
+  {
+    id: 'unused-storage',
+    run: (bp) => {
+      const connected = new Set<string>();
+      for (const c of bp.connections) {
+        connected.add(c.source);
+        connected.add(c.target);
+      }
+      return bp.resources
+        .filter((r) => (r.kind === 'bucket' || r.kind === 'dynamo') && !connected.has(r.id))
+        .map((r) => ({
+          rule: 'unused-storage',
+          severity: 'warning' as const,
+          resourceId: r.id,
+          message: `${r.kind === 'bucket' ? 'Bucket' : 'Table'} "${r.name}" is not linked to anything and will be unused.`,
+        }));
+    },
+  },
+  {
+    id: 'single-nextjs',
+    run: (bp) => {
+      const apps = bp.resources.filter((r) => r.kind === 'nextjs');
+      return apps.slice(1).map((a) => ({
+        rule: 'single-nextjs',
+        severity: 'warning' as const,
+        resourceId: a.id,
+        message: `More than one Next.js app ("${a.name}"). The MVP exports a single web app.`,
+      }));
+    },
+  },
+  {
+    id: 'production-removal-retain',
+    run: (bp) => {
+      const prod = bp.app.stages.find((s) => s.name === 'production');
+      return prod && prod.removal && prod.removal !== 'retain'
+        ? [
+            {
+              rule: 'production-removal-retain',
+              severity: 'warning',
+              message: `Production removal is "${prod.removal}". Production should usually be "retain" to avoid data loss.`,
+            },
+          ]
+        : [];
+    },
+  },
+  {
+    id: 'production-protect',
+    run: (bp) => {
+      const prod = bp.app.stages.find((s) => s.name === 'production');
+      return prod && prod.protect !== true
+        ? [
+            {
+              rule: 'production-protect',
+              severity: 'warning',
+              message: 'Production "protect" is off. Enable it to block accidental `sst remove`.',
+            },
+          ]
+        : [];
+    },
+  },
+];
