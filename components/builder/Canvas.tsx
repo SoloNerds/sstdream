@@ -18,6 +18,7 @@ import { useSimStore } from '@/lib/canvas/simStore';
 import type { SimStatus } from '@/lib/core/simulation/types';
 import { ResourceNode } from './nodes/ResourceNode';
 import { DRAG_MIME } from './Palette';
+import { useCost } from './useCost';
 
 const nodeTypes = { resource: ResourceNode };
 
@@ -37,11 +38,17 @@ export function Canvas() {
   const addEdge = useCanvasStore((s) => s.addEdge);
   const select = useCanvasStore((s) => s.select);
 
+  const cost = useCost();
+  const costById = useMemo(
+    () => Object.fromEntries(cost.perResource.map((r) => [r.resourceId, r.monthlyUsd])),
+    [cost],
+  );
+
   const rfNodes: Node[] = nodes.map((n) => ({
     id: n.id,
     type: 'resource',
     position: n.position,
-    data: { name: n.name, kind: n.kind },
+    data: { name: n.name, kind: n.kind, cost: costById[n.id] },
     selected: n.id === selectedId,
   }));
 

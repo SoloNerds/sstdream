@@ -5,6 +5,7 @@ import { Palette } from './Palette';
 import { Canvas } from './Canvas';
 import { PropertiesPanel } from './PropertiesPanel';
 import { SimulationPanel } from './SimulationPanel';
+import { CostPanel } from './CostPanel';
 import { Toolbar } from './Toolbar';
 import { StatusBar } from './StatusBar';
 import { useValidation } from './useValidation';
@@ -16,7 +17,7 @@ import { blueprintToCanvas, canvasToBlueprint } from '@/lib/core/blueprint/seria
 export function BuilderShell() {
   const targetId = useCanvasStore((s) => s.targetId);
   const validation = useValidation();
-  const [tab, setTab] = useState<'properties' | 'simulation'>('properties');
+  const [tab, setTab] = useState<'properties' | 'simulation' | 'cost'>('properties');
 
   // Restore the last design from localStorage on mount.
   useEffect(() => {
@@ -74,7 +75,7 @@ export function BuilderShell() {
         </main>
         <aside className="flex w-72 shrink-0 flex-col border-l border-neutral-200 dark:border-neutral-800">
           <div className="flex shrink-0 border-b border-neutral-200 text-xs dark:border-neutral-800">
-            {(['properties', 'simulation'] as const).map((t) => (
+            {(['properties', 'simulation', 'cost'] as const).map((t) => (
               <button
                 key={t}
                 type="button"
@@ -90,7 +91,9 @@ export function BuilderShell() {
             ))}
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
-            {tab === 'properties' ? <PropertiesPanel /> : <SimulationPanel />}
+            {tab === 'properties' && <PropertiesPanel />}
+            {tab === 'simulation' && <SimulationPanel />}
+            {tab === 'cost' && <CostPanel />}
           </div>
         </aside>
       </div>

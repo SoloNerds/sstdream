@@ -2,6 +2,7 @@
 
 import { useCanvasStore } from '@/lib/canvas/store';
 import { getTarget } from '@/lib/targets/registry';
+import { useCost } from './useCost';
 
 export function PropertiesPanel() {
   const targetId = useCanvasStore((s) => s.targetId);
@@ -11,6 +12,7 @@ export function PropertiesPanel() {
   const renameNode = useCanvasStore((s) => s.renameNode);
   const removeNode = useCanvasStore((s) => s.removeNode);
   const setEdgeIntent = useCanvasStore((s) => s.setEdgeIntent);
+  const cost = useCost();
 
   const target = getTarget(targetId);
 
@@ -65,6 +67,27 @@ export function PropertiesPanel() {
           ))}
         </div>
       )}
+
+      {(() => {
+        const breakdown = cost.perResource.find((r) => r.resourceId === node.id);
+        if (!breakdown || breakdown.monthlyUsd <= 0) return null;
+        return (
+          <div className="flex flex-col gap-1">
+            <span className="text-xs uppercase tracking-wide text-neutral-500">Est. cost</span>
+            <div className="text-sm font-medium">~${breakdown.monthlyUsd.toFixed(2)}/mo</div>
+            <ul className="text-xs text-neutral-500">
+              {breakdown.lines
+                .filter((l) => l.usd > 0)
+                .map((l) => (
+                  <li key={l.label} className="flex justify-between">
+                    <span>{l.label}</span>
+                    <span>${l.usd.toFixed(2)}</span>
+                  </li>
+                ))}
+            </ul>
+          </div>
+        );
+      })()}
 
       <button
         type="button"
