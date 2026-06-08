@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Palette } from './Palette';
 import { Canvas } from './Canvas';
 import { PropertiesPanel } from './PropertiesPanel';
+import { SimulationPanel } from './SimulationPanel';
 import { Toolbar } from './Toolbar';
 import { StatusBar } from './StatusBar';
 import { useValidation } from './useValidation';
@@ -15,6 +16,7 @@ import { blueprintToCanvas, canvasToBlueprint } from '@/lib/core/blueprint/seria
 export function BuilderShell() {
   const targetId = useCanvasStore((s) => s.targetId);
   const validation = useValidation();
+  const [tab, setTab] = useState<'properties' | 'simulation'>('properties');
 
   // Restore the last design from localStorage on mount.
   useEffect(() => {
@@ -70,8 +72,26 @@ export function BuilderShell() {
         <main className="min-w-0 flex-1">
           <Canvas />
         </main>
-        <aside className="w-72 shrink-0 overflow-y-auto border-l border-neutral-200 dark:border-neutral-800">
-          <PropertiesPanel />
+        <aside className="flex w-72 shrink-0 flex-col border-l border-neutral-200 dark:border-neutral-800">
+          <div className="flex shrink-0 border-b border-neutral-200 text-xs dark:border-neutral-800">
+            {(['properties', 'simulation'] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTab(t)}
+                className={`flex-1 px-3 py-1.5 capitalize ${
+                  tab === t
+                    ? 'border-b-2 border-indigo-500 font-medium'
+                    : 'text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                }`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {tab === 'properties' ? <PropertiesPanel /> : <SimulationPanel />}
+          </div>
         </aside>
       </div>
       <StatusBar validation={validation} />

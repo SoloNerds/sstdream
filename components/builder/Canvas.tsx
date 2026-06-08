@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import {
   ReactFlow,
   Background,
@@ -14,10 +14,18 @@ import {
 import '@xyflow/react/dist/style.css';
 import { useCanvasStore } from '@/lib/canvas/store';
 import { getTarget } from '@/lib/targets/registry';
+import { useSimStore } from '@/lib/canvas/simStore';
+import type { SimStatus } from '@/lib/core/simulation/types';
 import { ResourceNode } from './nodes/ResourceNode';
 import { DRAG_MIME } from './Palette';
 
 const nodeTypes = { resource: ResourceNode };
+
+const STATUS_COLOR: Record<SimStatus, string> = {
+  ok: '#16a34a',
+  broken: '#dc2626',
+  warning: '#d97706',
+};
 
 export function Canvas() {
   const targetId = useCanvasStore((s) => s.targetId);
@@ -37,13 +45,32 @@ export function Canvas() {
     selected: n.id === selectedId,
   }));
 
-  const rfEdges: Edge[] = edges.map((e) => ({
-    id: e.id,
-    source: e.source,
-    target: e.target,
-    label: e.intent,
-    labelStyle: { fontSize: 10 },
-  }));
+  const simTrace = useSimStore((s) => s.trace);
+  const simIndex = useSimStore((s) => s.index);
+  const edgeStatus = useMemo(() => {
+    const map: Record<string, SimStatus> = {};
+    if (simTrace) {
+      const limit = simIndex < 0 ? simTrace.events.length : simIndex + 1;
+      for (const ev of simTrace.events.slice(0, limit)) {
+        if (ev.edgeId && map[ev.edgeId] !== 'broken') map[ev.edgeId] = ev.status;
+      }
+    }
+    return map;
+  }, [simTrace, simIndex]);
+  const activeEdgeId = simTrace && simIndex >= 0 ? simTrace.events[simIndex]?.edgeId : undefined;
+
+  const rfEdges: Edge[] = edges.map((e) => {
+    const status = edgeStatus[e.id];
+    return {
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      label: e.intent,
+      labelStyle: { fontSize: 10 },
+      animated: e.id === activeEdgeId,
+      style: status ? { stroke: STATUS_COLOR[status], strokeWidth: 2 } : undefined,
+    };
+  });
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
