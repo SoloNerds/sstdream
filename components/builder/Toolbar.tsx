@@ -1,7 +1,8 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { CodePreview } from './CodePreview';
 import { useCanvasStore } from '@/lib/canvas/store';
 import { isTargetImplemented } from '@/lib/targets/registry';
 import {
@@ -25,6 +26,7 @@ function download(filename: string, text: string) {
 
 export function Toolbar({ validation }: { validation: ValidationResult }) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState(false);
   const appName = useCanvasStore((s) => s.app.name);
   const setApp = useCanvasStore((s) => s.setApp);
   const loadSnapshot = useCanvasStore((s) => s.loadSnapshot);
@@ -63,47 +65,59 @@ export function Toolbar({ validation }: { validation: ValidationResult }) {
   };
 
   return (
-    <div className="flex items-center gap-2">
-      <input
-        aria-label="App name"
-        className="w-44 rounded-md border border-neutral-300 bg-transparent px-2 py-1 text-sm dark:border-neutral-700"
-        value={appName}
-        onChange={(e) => setApp({ name: e.target.value })}
-        placeholder="app-name"
-      />
-      <Button size="sm" variant="outline" onClick={onLoadTemplate}>
-        Load template
-      </Button>
-      <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()}>
-        Import
-      </Button>
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={onExport}
-        disabled={!validation.ok}
-        title={
-          validation.ok
-            ? 'Export design JSON'
-            : `Fix ${validation.errors.length} error(s) to export`
-        }
-      >
-        Export design
-      </Button>
-      <Button size="sm" variant="ghost" onClick={reset}>
-        Clear
-      </Button>
-      <input
-        ref={fileRef}
-        type="file"
-        accept="application/json,.json"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) void onImportFile(file);
-          e.target.value = '';
-        }}
-      />
-    </div>
+    <>
+      <div className="flex items-center gap-2">
+        <input
+          aria-label="App name"
+          className="w-44 rounded-md border border-neutral-300 bg-transparent px-2 py-1 text-sm dark:border-neutral-700"
+          value={appName}
+          onChange={(e) => setApp({ name: e.target.value })}
+          placeholder="app-name"
+        />
+        <Button size="sm" variant="outline" onClick={onLoadTemplate}>
+          Load template
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()}>
+          Import
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setPreview(true)}
+          disabled={!validation.ok}
+          title={validation.ok ? 'Preview generated SST files' : 'Fix errors to preview'}
+        >
+          Preview SST
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={onExport}
+          disabled={!validation.ok}
+          title={
+            validation.ok
+              ? 'Export design JSON'
+              : `Fix ${validation.errors.length} error(s) to export`
+          }
+        >
+          Export design
+        </Button>
+        <Button size="sm" variant="ghost" onClick={reset}>
+          Clear
+        </Button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) void onImportFile(file);
+            e.target.value = '';
+          }}
+        />
+      </div>
+      {preview && <CodePreview onClose={() => setPreview(false)} />}
+    </>
   );
 }

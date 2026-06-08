@@ -1,0 +1,53 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`sst.config.ts generator — AI Processing App > matches snapshot 1`] = `
+"/// <reference path="./.sst/platform/config.d.ts" />
+
+export default $config({
+  app(input) {
+    return {
+      name: "ai-processing-app",
+      home: "aws",
+      removal: input.stage === "production" ? "retain" : "remove",
+      protect: input.stage === "production",
+      providers: {
+        aws: {
+          region: "us-east-1",
+        },
+      },
+    };
+  },
+  async run() {
+    const uploads = new sst.aws.Bucket("Uploads");
+
+    const appTable = new sst.aws.Dynamo("AppTable", {
+      fields: {
+        pk: "string",
+        sk: "string",
+      },
+      primaryIndex: { hashKey: "pk", rangeKey: "sk" },
+    });
+
+    const jobs = new sst.aws.Queue("Jobs");
+
+    jobs.subscribe({
+      handler: "src/workers/process-job.handler",
+      link: [appTable],
+      timeout: "60 seconds",
+    });
+
+    const web = new sst.aws.Nextjs("Web", {
+      path: ".",
+      link: [uploads, jobs],
+    });
+
+    return {
+      web: web.url,
+      uploads: uploads.name,
+      appTable: appTable.name,
+      jobs: jobs.url,
+    };
+  },
+});
+"
+`;
