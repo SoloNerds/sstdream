@@ -1,0 +1,49 @@
+import { describe, it, expect } from 'vitest';
+import { unzipSync, strFromU8 } from 'fflate';
+import { buildExport } from './manifest';
+import { zipFiles } from './zip';
+import { canvasToBlueprint, parseBlueprint } from '@/lib/core/blueprint/serialize';
+import { AI_PROCESSING_APP } from '@/lib/templates/ai-processing-app';
+
+const NOW = '2026-06-08T00:00:00.000Z';
+const bp = canvasToBlueprint(AI_PROCESSING_APP.snapshot, 'aws-sst-v4', AI_PROCESSING_APP.app, NOW);
+const files = buildExport(bp);
+const byPath = Object.fromEntries(files.map((f) => [f.path, f.content]));
+
+describe('export manifest — AI Processing App', () => {
+  it('includes code, README, env, and the design file', () => {
+    const paths = files.map((f) => f.path);
+    expect(paths).toContain('sst.config.ts');
+    expect(paths).toContain('README.md');
+    expect(paths).toContain('.env.example');
+    expect(paths).toContain('package.additions.json');
+    expect(paths).toContain('sstdream.design.json');
+    expect(paths[0]).toBe('README.md'); // friendly ordering
+  });
+
+  it('README documents both yarn and npm install + deploy', () => {
+    const readme = byPath['README.md'];
+    expect(readme).toContain('yarn add sst');
+    expect(readme).toContain('npm install sst');
+    expect(readme).toContain('sst deploy --stage production');
+    expect(readme).toContain('package.additions.json');
+  });
+
+  it('the embedded design.json re-imports to the identical blueprint', () => {
+    const reparsed = parseBlueprint(byPath['sstdream.design.json']);
+    expect(reparsed).toEqual(bp);
+  });
+
+  it('zips to a valid archive that round-trips every file', () => {
+    const zipped = zipFiles(files);
+    expect(zipped.byteLength).toBeGreaterThan(0);
+    const unzipped = unzipSync(zipped);
+    expect(Object.keys(unzipped).sort()).toEqual(files.map((f) => f.path).sort());
+    expect(strFromU8(unzipped['sst.config.ts'])).toBe(byPath['sst.config.ts']);
+  });
+
+  it('zips under a root directory when requested', () => {
+    const unzipped = unzipSync(zipFiles(files, 'my-app'));
+    expect(Object.keys(unzipped).every((p) => p.startsWith('my-app/'))).toBe(true);
+  });
+});

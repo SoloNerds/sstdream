@@ -2,47 +2,20 @@
 
 import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { CodePreview } from './CodePreview';
+import { ExportDialog } from './ExportDialog';
 import { useCanvasStore } from '@/lib/canvas/store';
 import { isTargetImplemented } from '@/lib/targets/registry';
-import {
-  canvasToBlueprint,
-  blueprintToCanvas,
-  serializeBlueprint,
-  parseBlueprint,
-} from '@/lib/core/blueprint/serialize';
+import { blueprintToCanvas, parseBlueprint } from '@/lib/core/blueprint/serialize';
 import { AI_PROCESSING_APP } from '@/lib/templates/ai-processing-app';
 import type { ValidationResult } from '@/lib/core/validation/types';
 
-function download(filename: string, text: string) {
-  const blob = new Blob([text], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
 export function Toolbar({ validation }: { validation: ValidationResult }) {
   const fileRef = useRef<HTMLInputElement>(null);
-  const [preview, setPreview] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const appName = useCanvasStore((s) => s.app.name);
   const setApp = useCanvasStore((s) => s.setApp);
   const loadSnapshot = useCanvasStore((s) => s.loadSnapshot);
   const reset = useCanvasStore((s) => s.reset);
-
-  const onExport = () => {
-    if (!validation.ok) return;
-    const s = useCanvasStore.getState();
-    const bp = canvasToBlueprint(
-      { nodes: s.nodes, edges: s.edges },
-      s.targetId,
-      s.app,
-      new Date().toISOString(),
-    );
-    download('sstdream.design.json', serializeBlueprint(bp));
-  };
 
   const onImportFile = async (file: File) => {
     try {
@@ -82,25 +55,15 @@ export function Toolbar({ validation }: { validation: ValidationResult }) {
         </Button>
         <Button
           size="sm"
-          variant="outline"
-          onClick={() => setPreview(true)}
-          disabled={!validation.ok}
-          title={validation.ok ? 'Preview generated SST files' : 'Fix errors to preview'}
-        >
-          Preview SST
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={onExport}
+          onClick={() => setExporting(true)}
           disabled={!validation.ok}
           title={
             validation.ok
-              ? 'Export design JSON'
+              ? 'Export the SST project'
               : `Fix ${validation.errors.length} error(s) to export`
           }
         >
-          Export design
+          Export
         </Button>
         <Button size="sm" variant="ghost" onClick={reset}>
           Clear
@@ -117,7 +80,7 @@ export function Toolbar({ validation }: { validation: ValidationResult }) {
           }}
         />
       </div>
-      {preview && <CodePreview onClose={() => setPreview(false)} />}
+      {exporting && <ExportDialog onClose={() => setExporting(false)} />}
     </>
   );
 }
