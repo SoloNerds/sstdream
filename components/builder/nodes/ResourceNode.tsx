@@ -11,14 +11,14 @@ export function ResourceNode({ data, selected }: NodeProps) {
 
   return (
     <div
-      className={`min-w-36 rounded-md border bg-white shadow-sm dark:bg-neutral-900 ${
+      className={`min-w-40 rounded-lg border bg-white shadow-md transition-shadow dark:bg-neutral-900 ${
         selected
           ? 'border-indigo-500 ring-2 ring-indigo-500/40'
-          : 'border-neutral-300 dark:border-neutral-700'
+          : 'border-neutral-300 hover:shadow-lg dark:border-neutral-700'
       }`}
     >
       <div
-        className={`flex items-center justify-between rounded-t-md px-3 py-1 text-xs font-semibold text-white ${meta?.accent ?? 'bg-neutral-700'}`}
+        className={`flex items-center justify-between rounded-t-lg px-3 py-1.5 text-xs font-semibold text-white ${meta?.accent ?? 'bg-neutral-700'}`}
       >
         <span>{meta?.label ?? d.kind ?? 'node'}</span>
       </div>

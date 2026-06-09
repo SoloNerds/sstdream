@@ -9,6 +9,7 @@ import { CostPanel } from './CostPanel';
 import { RecommendationsPanel } from './RecommendationsPanel';
 import { Toolbar } from './Toolbar';
 import { StatusBar } from './StatusBar';
+import { ThemeToggle } from './ThemeToggle';
 import { useValidation } from './useValidation';
 
 const TAB_LABEL = {
@@ -85,7 +86,10 @@ export function BuilderShell() {
             ))}
           </select>
         </div>
-        <Toolbar validation={validation} />
+        <div className="flex items-center gap-2">
+          <Toolbar validation={validation} />
+          <ThemeToggle />
+        </div>
       </header>
       <div className="flex min-h-0 flex-1">
         <aside className="w-64 shrink-0 overflow-y-auto border-r border-neutral-200 dark:border-neutral-800">

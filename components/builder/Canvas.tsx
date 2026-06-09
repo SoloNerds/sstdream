@@ -6,6 +6,7 @@ import {
   Background,
   Controls,
   MiniMap,
+  MarkerType,
   type Node,
   type Edge,
   type Connection,
@@ -68,14 +69,18 @@ export function Canvas() {
 
   const rfEdges: Edge[] = edges.map((e) => {
     const status = edgeStatus[e.id];
+    const color = status ? STATUS_COLOR[status] : '#64748b';
     return {
       id: e.id,
       source: e.source,
       target: e.target,
+      type: 'smoothstep',
       label: e.intent,
-      labelStyle: { fontSize: 10 },
+      labelBgPadding: [6, 3] as [number, number],
+      labelBgBorderRadius: 4,
       animated: e.id === activeEdgeId,
-      style: status ? { stroke: STATUS_COLOR[status], strokeWidth: 2 } : undefined,
+      style: { stroke: color, strokeWidth: status ? 2.5 : 1.5 },
+      markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color },
     };
   });
 
@@ -112,7 +117,7 @@ export function Canvas() {
 
   return (
     <div
-      className="h-full w-full"
+      className="relative h-full w-full"
       onDrop={onDrop}
       onDragOver={(e) => {
         e.preventDefault();
@@ -130,10 +135,25 @@ export function Canvas() {
         fitView
         proOptions={{ hideAttribution: true }}
       >
-        <Background />
+        <Background color="rgba(100,116,139,0.35)" gap={18} />
         <Controls />
         <MiniMap pannable zoomable />
       </ReactFlow>
+
+      {nodes.length === 0 && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <div className="rounded-xl border border-dashed border-neutral-300 bg-white/70 px-6 py-5 text-center text-sm text-neutral-500 backdrop-blur dark:border-neutral-700 dark:bg-neutral-900/60">
+            <p className="font-medium text-neutral-700 dark:text-neutral-200">Start your design</p>
+            <p className="mt-1">
+              Drag a resource from the left, or click <span className="font-medium">Templates</span>
+              .
+            </p>
+            <p className="mt-0.5 text-xs">
+              Wire nodes by dragging a node&apos;s right dot → another node&apos;s left dot.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
