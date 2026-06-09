@@ -75,6 +75,50 @@ export async function enqueueJob(payload: Record<string, unknown>) {
 }
 `;
 
+const busFile = (busName: string): string =>
+  `import { Resource } from "sst";
+import { EventBridgeClient, PutEventsCommand } from "@aws-sdk/client-eventbridge";
+
+const client = new EventBridgeClient({});
+
+/** Publish an event to the EventBridge bus. */
+export async function publishEvent(
+  detailType: string,
+  detail: Record<string, unknown>,
+  source = "app",
+) {
+  await client.send(
+    new PutEventsCommand({
+      Entries: [
+        {
+          EventBusName: Resource.${busName}.name,
+          Source: source,
+          DetailType: detailType,
+          Detail: JSON.stringify(detail),
+        },
+      ],
+    }),
+  );
+}
+`;
+
+const topicFile = (topicName: string): string =>
+  `import { Resource } from "sst";
+import { SNSClient, PublishCommand } from "@aws-sdk/client-sns";
+
+const client = new SNSClient({});
+
+/** Publish a message to the SNS topic. */
+export async function publishMessage(message: Record<string, unknown>) {
+  await client.send(
+    new PublishCommand({
+      TopicArn: Resource.${topicName}.arn,
+      Message: JSON.stringify(message),
+    }),
+  );
+}
+`;
+
 const dynamoFile = (tableName: string): string =>
   `import { Resource } from "sst";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
@@ -572,6 +616,8 @@ function packageAdditions(flags: {
   stripe: boolean;
   mongodb: boolean;
   clerk: boolean;
+  bus: boolean;
+  topic: boolean;
 }): string {
   const deps: Record<string, string> = { sst: 'latest' };
   if (flags.storage) {
@@ -589,6 +635,8 @@ function packageAdditions(flags: {
   if (flags.stripe) deps['stripe'] = 'latest';
   if (flags.mongodb) deps['mongodb'] = 'latest';
   if (flags.clerk) deps['@clerk/nextjs'] = 'latest';
+  if (flags.bus) deps['@aws-sdk/client-eventbridge'] = 'latest';
+  if (flags.topic) deps['@aws-sdk/client-sns'] = 'latest';
   const json = {
     dependencies: deps,
     scripts: { 'dev:sst': 'sst dev', deploy: 'sst deploy', remove: 'sst remove' },
@@ -613,9 +661,15 @@ export function generateRuntimeFiles(bp: Blueprint): GeneratedFile[] {
   const uploadBucket = uploadEdge ? resourceOf(uploadEdge.target) : undefined;
   const uploadFromApp = uploadEdge ? resourceOf(uploadEdge.source)?.kind === 'nextjs' : false;
 
-  const publishEdge = bp.connections.find((c) => c.intent === 'publishesTo');
-  const publishQueue = publishEdge ? resourceOf(publishEdge.target) : undefined;
-  const publishFromApp = publishEdge ? resourceOf(publishEdge.source)?.kind === 'nextjs' : false;
+  // publishesTo can target a queue, bus, or topic — resolve each separately.
+  const pubEdges = bp.connections.filter((c) => c.intent === 'publishesTo');
+  const queueEdge = pubEdges.find((c) => resourceOf(c.target)?.kind === 'queue');
+  const publishQueue = queueEdge ? resourceOf(queueEdge.target) : undefined;
+  const publishFromApp = queueEdge ? resourceOf(queueEdge.source)?.kind === 'nextjs' : false;
+  const busEdge = pubEdges.find((c) => resourceOf(c.target)?.kind === 'bus');
+  const publishBus = busEdge ? resourceOf(busEdge.target) : undefined;
+  const topicEdge = pubEdges.find((c) => resourceOf(c.target)?.kind === 'snstopic');
+  const publishTopic = topicEdge ? resourceOf(topicEdge.target) : undefined;
 
   const dynamoRes = bp.resources.find(
     (r) =>
@@ -645,6 +699,13 @@ export function generateRuntimeFiles(bp: Blueprint): GeneratedFile[] {
         language: 'ts',
       });
     }
+  }
+
+  if (publishBus) {
+    files.push({ path: 'lib/bus.ts', content: busFile(publishBus.name), language: 'ts' });
+  }
+  if (publishTopic) {
+    files.push({ path: 'lib/topic.ts', content: topicFile(publishTopic.name), language: 'ts' });
   }
 
   if (dynamoRes) {
@@ -848,6 +909,8 @@ export function generateRuntimeFiles(bp: Blueprint): GeneratedFile[] {
       stripe: Boolean(stripeRes),
       mongodb: Boolean(mongoRes),
       clerk: Boolean(clerkRes),
+      bus: Boolean(publishBus),
+      topic: Boolean(publishTopic),
     }),
     language: 'json',
   });

@@ -64,6 +64,15 @@ exports[`aws-sst-v4 catalog > matches snapshot 1`] = `
       },
     ],
   },
+  "bus": {
+    "accent": "bg-amber-500",
+    "category": "messaging",
+    "component": "sst.aws.Bus",
+    "defaultName": "Bus",
+    "description": "EventBridge bus — pub/sub events to Lambda subscribers",
+    "kind": "bus",
+    "label": "Event Bus",
+  },
   "clerk": {
     "accent": "bg-purple-700",
     "category": "config",
@@ -263,6 +272,23 @@ exports[`aws-sst-v4 catalog > matches snapshot 1`] = `
     "description": "Encrypted secret, set via \`sst secret set\`",
     "kind": "secret",
     "label": "Secret",
+  },
+  "snstopic": {
+    "accent": "bg-rose-500",
+    "category": "messaging",
+    "component": "sst.aws.SnsTopic",
+    "defaultName": "Topic",
+    "description": "SNS topic — fan-out messages to subscribers",
+    "kind": "snstopic",
+    "label": "SNS Topic",
+    "props": [
+      {
+        "default": false,
+        "key": "fifo",
+        "label": "FIFO topic",
+        "type": "boolean",
+      },
+    ],
   },
   "staticsite": {
     "accent": "bg-slate-700",

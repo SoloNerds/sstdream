@@ -62,6 +62,18 @@ function renderQueue(r: Resource, plan: AwsPlan): string {
   return `const ${v} = new sst.aws.Queue("${r.name}");`;
 }
 
+function renderBus(r: Resource, plan: AwsPlan): string {
+  return `const ${plan.varNameById.get(r.id)} = new sst.aws.Bus("${r.name}");`;
+}
+
+function renderSnsTopic(r: Resource, plan: AwsPlan): string {
+  const v = plan.varNameById.get(r.id);
+  if (r.props.fifo === true) {
+    return `const ${v} = new sst.aws.SnsTopic("${r.name}", {\n  fifo: true,\n});`;
+  }
+  return `const ${v} = new sst.aws.SnsTopic("${r.name}");`;
+}
+
 function renderEmail(r: Resource, plan: AwsPlan): string {
   const v = plan.varNameById.get(r.id);
   const sender = str(r.props.sender) ?? 'noreply@example.com';
@@ -92,14 +104,16 @@ function renderCognito(r: Resource, plan: AwsPlan): string {
 }
 
 function renderSubscriber(sub: AwsPlan['subscribers'][number]): string {
-  // Queue.subscribe is SUBSCRIBER-FIRST: handler/link/timeout go in the first object.
   const p = sub.worker.props;
-  const lines = [`${sub.queueVar}.subscribe({`, `  handler: "${sub.handlerPath}",`];
-  if (sub.linkVars.length) lines.push(`  link: ${linkArray(sub.linkVars)},`);
-  if (str(p.memory)) lines.push(`  memory: "${str(p.memory)}",`);
-  lines.push(`  timeout: "${str(p.timeout) ?? '60 seconds'}",`);
-  lines.push(`});`);
-  return lines.join('\n');
+  const cfg = [`  handler: "${sub.handlerPath}",`];
+  if (sub.linkVars.length) cfg.push(`  link: ${linkArray(sub.linkVars)},`);
+  if (str(p.memory)) cfg.push(`  memory: "${str(p.memory)}",`);
+  cfg.push(`  timeout: "${str(p.timeout) ?? '60 seconds'}",`);
+  // Queue.subscribe is SUBSCRIBER-FIRST; Bus / SnsTopic.subscribe are NAME-FIRST.
+  if (sub.targetKind === 'queue') {
+    return [`${sub.targetVar}.subscribe({`, ...cfg, `});`].join('\n');
+  }
+  return [`${sub.targetVar}.subscribe("${sub.worker.name}", {`, ...cfg, `});`].join('\n');
 }
 
 function renderFunction(fn: AwsPlan['functions'][number]): string {
@@ -216,6 +230,8 @@ export function generateSstConfig(bp: Blueprint): string {
     for (const r of postgresResources) statements.push(renderPostgres(r, plan));
   }
   for (const r of byKind('queue')) statements.push(renderQueue(r, plan));
+  for (const r of byKind('bus')) statements.push(renderBus(r, plan));
+  for (const r of byKind('snstopic')) statements.push(renderSnsTopic(r, plan));
   for (const sub of plan.subscribers) statements.push(renderSubscriber(sub));
   for (const fn of plan.functions) statements.push(renderFunction(fn));
   for (const cron of plan.crons) statements.push(renderCron(cron));

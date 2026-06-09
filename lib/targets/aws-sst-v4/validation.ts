@@ -139,17 +139,20 @@ export const AWS_RULES: ValidationRule[] = [
     id: 'queue-needs-subscriber',
     run: (bp) =>
       bp.resources
-        .filter((r) => r.kind === 'queue')
+        .filter((r) => r.kind === 'queue' || r.kind === 'bus' || r.kind === 'snstopic')
         .filter(
           (q) => !bp.connections.some((c) => c.target === q.id && c.intent === 'subscribesTo'),
         )
-        .map((q) => ({
-          rule: 'queue-needs-subscriber',
-          severity: 'warning' as const,
-          resourceId: q.id,
-          message: `Queue "${q.name}" has no worker subscribing to it.`,
-          hint: 'Connect Worker → Queue (subscribesTo), or it will have no consumer.',
-        })),
+        .map((q) => {
+          const word = q.kind === 'queue' ? 'Queue' : q.kind === 'bus' ? 'Event bus' : 'SNS topic';
+          return {
+            rule: 'queue-needs-subscriber',
+            severity: 'warning' as const,
+            resourceId: q.id,
+            message: `${word} "${q.name}" has no worker subscribing to it.`,
+            hint: 'Connect a Worker (subscribesTo), or messages will have no consumer.',
+          };
+        }),
   },
   {
     id: 'worker-needs-trigger',

@@ -7,7 +7,10 @@ import { camelCase, kebabCase, uniq } from '@/lib/core/codegen/strings';
 
 export interface SubscriberPlan {
   worker: Resource;
-  queueVar: string;
+  /** The queue/bus/topic variable the worker subscribes to. */
+  targetVar: string;
+  /** Kind of the subscribed resource — drives the subscribe() call shape. */
+  targetKind: 'queue' | 'bus' | 'snstopic';
   handlerPath: string; // e.g. "src/workers/process-job.handler"
   handlerFile: string; // e.g. "src/workers/process-job.ts"
   linkVars: string[];
@@ -52,6 +55,8 @@ const DECL_ORDER: Record<string, number> = {
   dynamo: 2,
   postgres: 2,
   queue: 3,
+  bus: 3,
+  snstopic: 3,
   worker: 4,
   nextjs: 5,
   staticsite: 5,
@@ -75,6 +80,8 @@ export function planAws(bp: Blueprint): AwsPlan {
       r.kind === 'dynamo' ||
       r.kind === 'postgres' ||
       r.kind === 'queue' ||
+      r.kind === 'bus' ||
+      r.kind === 'snstopic' ||
       r.kind === 'nextjs' ||
       r.kind === 'staticsite' ||
       (r.kind === 'worker' && !isSubscriber(r) && !isCronInvoked(r));
@@ -92,15 +99,21 @@ export function planAws(bp: Blueprint): AwsPlan {
   const handlerPathFor = (w: Resource) => `src/workers/${kebabCase(w.name)}.handler`;
   const handlerFileFor = (w: Resource) => `src/workers/${kebabCase(w.name)}.ts`;
 
+  const byId = new Map(bp.resources.map((r) => [r.id, r]));
   const subscribers: SubscriberPlan[] = bp.resources
     .filter((r) => r.kind === 'worker' && isSubscriber(r))
-    .map((w) => ({
-      worker: w,
-      queueVar: varNameById.get(subEdge(w)!.target) ?? camelCase(w.name),
-      handlerPath: handlerPathFor(w),
-      handlerFile: handlerFileFor(w),
-      linkVars: linkVarsFor(w.id),
-    }));
+    .map((w) => {
+      const target = byId.get(subEdge(w)!.target);
+      const targetKind = (target?.kind ?? 'queue') as SubscriberPlan['targetKind'];
+      return {
+        worker: w,
+        targetVar: varNameById.get(subEdge(w)!.target) ?? camelCase(w.name),
+        targetKind,
+        handlerPath: handlerPathFor(w),
+        handlerFile: handlerFileFor(w),
+        linkVars: linkVarsFor(w.id),
+      };
+    });
 
   const functions: FunctionPlan[] = bp.resources
     .filter((r) => r.kind === 'worker' && !isSubscriber(r) && !isCronInvoked(r))

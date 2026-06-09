@@ -107,6 +107,12 @@ function breakdownFor(r: Resource): CostBreakdown {
         },
       ];
       break;
+    case 'bus':
+      lines = [{ label: 'EventBridge events (1M)', usd: 1 }];
+      break;
+    case 'snstopic':
+      lines = [{ label: 'SNS messages (1M)', usd: 0.5 }];
+      break;
     case 'worker':
       lines = lambdaLines(
         PROFILE.workerInvocationsPerMonth,

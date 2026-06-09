@@ -223,6 +223,24 @@ export const AWS_TEMPLATES: TemplateMeta[] = [
     ],
   ),
   aws(
+    'aws-events',
+    'Event-Driven',
+    'EventBridge bus: the app publishes events, a worker subscribes and logs them.',
+    ['Events'],
+    'event-driven-app',
+    [
+      n('nextjs_1', 'nextjs', 'Web', 80, 160),
+      n('bus_2', 'bus', 'Events', 380, 80),
+      n('worker_3', 'worker', 'Handler', 660, 80),
+      n('dynamo_4', 'dynamo', 'Log', 660, 260),
+    ],
+    [
+      e('edge_5', 'nextjs_1', 'bus_2', 'publishesTo'),
+      e('edge_6', 'worker_3', 'bus_2', 'subscribesTo'),
+      e('edge_7', 'worker_3', 'dynamo_4', 'writesTo'),
+    ],
+  ),
+  aws(
     'aws-marketing',
     'Marketing Site',
     'Leads table + a weekly report cron.',

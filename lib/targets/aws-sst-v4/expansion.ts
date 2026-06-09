@@ -94,6 +94,16 @@ function resourcesFor(
       return [P('DynamoDB', 'Table', { paid: true, note: 'on-demand' })];
     case 'queue':
       return [P('SQS', 'Queue', { paid: true })];
+    case 'bus':
+      return [
+        P('EventBridge', 'Event bus', { paid: true }),
+        P('EventBridge', 'Rules per subscriber', { conditional: 'a worker subscribes' }),
+      ];
+    case 'snstopic':
+      return [
+        P('SNS', 'Topic', { paid: true }),
+        P('SNS', 'Subscriptions per subscriber', { conditional: 'a worker subscribes' }),
+      ];
     case 'worker':
       return workerResources(r, ctx.isSubscriber(r));
     case 'cron':
@@ -164,6 +174,8 @@ const ORDER = [
   'dynamo',
   'bucket',
   'queue',
+  'bus',
+  'snstopic',
   'worker',
   'cron',
   'cognito',
