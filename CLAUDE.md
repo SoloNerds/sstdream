@@ -35,6 +35,7 @@ lib/core/
   simulation/    # data-flow trace ("does everything talk?")
   cost/          # per-resource monthly estimate
   expansion/     # logical→physical resource map ("Infrastructure view", read-only)
+  audit/         # advisory security/ops findings (surfaced on the Infrastructure view)
   recommendations/  # rule-based fixes (pure, idempotent apply)
   codegen/       # GeneratedFile types, strings, generate() facade
   export/        # buildExport() manifest + zip()
@@ -58,8 +59,22 @@ A new lane is registered in `lib/targets/registry.ts` plus the `generate.ts`,
   PR** (direct push to `main` is blocked). Use `gh pr merge --squash`.
 - The canvas store (`lib/canvas/store.ts`) is UI state; the durable model is the blueprint.
 
+## State of the lanes
+
+- **AWS lane is feature-deep.** 20 catalog kinds (Next.js, Static Site, Bucket, Dynamo +GSI,
+  Postgres/Aurora +fck-nat, Queue/Bus/SnsTopic, HTTP API, Worker, Cron, Secret, Email,
+  Cognito/Clerk, Stripe, MongoDB, External API, AI Chat). The export is a **complete runnable
+  project** (scaffold: package.json/tsconfig/next.config/layout/page + **AGENTS.md**), with
+  **full CRUD server actions + example pages** per Dynamo/Mongo table the app touches,
+  worker roles for queue/bus/topic subscribers, API routes, cron, and S3 notifications.
+- **Worker roles** (in `generator/plan.ts`): subscriber (queue/bus/topic, name-first vs
+  object-first subscribe), route handler (handlesRoute → ApiGatewayV2), cron-invoked, bucket
+  notifier (handlesBucketEvents → bucket.notify), or standalone function.
+
 ## Known follow-ups
 
-- Simulation / cost / recommendations are AWS-only; they degrade gracefully on the Vercel
-  lane (selectors return empty). Add Vercel providers to complete parity.
-- No AI assistant (deferred by design until export quality is proven).
+- **Router** is the one remaining AWS component (complex multi-resource `route`/`routeBucket`).
+- **Vercel lane parity** is the big frontier: simulation / cost / expansion / audit are
+  AWS-only and degrade gracefully on Vercel (selectors return empty). Resend email + an AI
+  SDK v5 template belong on the Vercel lane (email is SES on AWS, Resend on Vercel).
+- No in-app AI assistant (deferred by design until export quality is proven).
