@@ -127,6 +127,11 @@ function breakdownFor(r: Resource): CostBreakdown {
         { label: 'VPC NAT gateway', usd: 32 },
       ];
       break;
+    case 'stripe':
+    case 'mongodb':
+    case 'externalApi':
+      lines = [{ label: 'External / usage-based', usd: 0 }];
+      break;
     default:
       lines = [];
   }

@@ -74,6 +74,27 @@ export const AWS_EDGE_INTENTS: EdgeIntentMeta[] = [
     to: ['email'],
   },
   {
+    intent: 'usesStripe',
+    label: 'uses Stripe',
+    description: 'App integrates Stripe — webhook route + lib/stripe.ts + env keys.',
+    from: ['nextjs'],
+    to: ['stripe'],
+  },
+  {
+    intent: 'queriesMongo',
+    label: 'queries Mongo',
+    description: 'App/worker connects to MongoDB via DATABASE_URL (lib/mongo.ts).',
+    from: ['nextjs', 'worker'],
+    to: ['mongodb'],
+  },
+  {
+    intent: 'callsApi',
+    label: 'calls',
+    description: 'App/worker calls an external API (lib helper + base-url/key env).',
+    from: ['nextjs', 'worker'],
+    to: ['externalApi'],
+  },
+  {
     intent: 'linksTo',
     label: 'links to',
     description: 'Generic link: grants access + SDK exposure with no specific helper.',
@@ -98,6 +119,11 @@ const INTENT_BY_PAIR: Record<string, string> = {
   'worker>postgres': 'queriesDb',
   'nextjs>email': 'sendsEmail',
   'worker>email': 'sendsEmail',
+  'nextjs>stripe': 'usesStripe',
+  'nextjs>mongodb': 'queriesMongo',
+  'worker>mongodb': 'queriesMongo',
+  'nextjs>externalApi': 'callsApi',
+  'worker>externalApi': 'callsApi',
 };
 
 export function awsDefaultIntent(fromKind: string, toKind: string): string | null {

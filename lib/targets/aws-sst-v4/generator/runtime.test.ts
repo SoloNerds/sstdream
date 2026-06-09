@@ -26,6 +26,7 @@ describe('runtime code generator — AI Processing App', () => {
         'lib/queue.ts',
         'lib/storage.ts',
         'package.additions.json',
+        'required-env.json',
         'sst.config.ts',
         'src/workers/process-job.ts',
       ].sort(),

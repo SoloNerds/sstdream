@@ -171,6 +171,24 @@ export const AWS_TEMPLATES: TemplateMeta[] = [
     ],
   ),
   aws(
+    'aws-stripe-saas',
+    'Stripe SaaS',
+    'Stripe payments (webhook) + MongoDB + uploads. Env-driven integrations.',
+    ['SaaS', 'Payments'],
+    'stripe-saas',
+    [
+      n('nextjs_1', 'nextjs', 'Web', 80, 180),
+      n('stripe_2', 'stripe', 'Stripe', 380, 60),
+      n('mongodb_3', 'mongodb', 'Mongo', 380, 180),
+      n('bucket_4', 'bucket', 'Uploads', 380, 300),
+    ],
+    [
+      e('edge_5', 'nextjs_1', 'stripe_2', 'usesStripe'),
+      e('edge_6', 'nextjs_1', 'mongodb_3', 'queriesMongo'),
+      e('edge_7', 'nextjs_1', 'bucket_4', 'uploadsTo'),
+    ],
+  ),
+  aws(
     'aws-marketing',
     'Marketing Site',
     'Leads table + a weekly report cron.',

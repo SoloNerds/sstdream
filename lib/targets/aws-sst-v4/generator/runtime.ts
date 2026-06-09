@@ -1,5 +1,7 @@
 import type { Blueprint, Resource } from '@/lib/core/blueprint/types';
 import type { GeneratedFile } from '@/lib/core/codegen/types';
+import { kebabCase } from '@/lib/core/codegen/strings';
+import { collectAwsEnv } from '../env';
 import { planAws } from './plan';
 
 // Runtime / app code generator. Verified against docs/sst-v4-target.md §5:
@@ -242,6 +244,64 @@ export const pool = new Pool({
 });
 `;
 
+// External integrations (env-driven — no SST infra). Verified env-var names from
+// real projects: STRIPE_SECRET_KEY/STRIPE_WEBHOOK_SECRET, DATABASE_URL (Mongo), etc.
+const stripeLibFile = (): string =>
+  `import Stripe from "stripe";
+
+// Server-only Stripe client. Set STRIPE_SECRET_KEY in your .env.
+export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+`;
+
+const stripeWebhookRouteFile = (): string =>
+  `import { stripe } from "../../../../lib/stripe";
+
+export const runtime = "nodejs";
+
+export async function POST(request: Request) {
+  const body = await request.text();
+  const signature = request.headers.get("stripe-signature");
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(body, signature!, process.env.STRIPE_WEBHOOK_SECRET!);
+  } catch {
+    return new Response("Invalid signature", { status: 400 });
+  }
+  // TODO: handle event.type (checkout.session.completed, customer.subscription.updated, …)
+  console.log("stripe event", event.type);
+  return new Response("ok");
+}
+`;
+
+const mongoLibFile = (): string =>
+  `import { MongoClient } from "mongodb";
+
+// External MongoDB (Atlas). Set DATABASE_URL in your .env.
+const client = new MongoClient(process.env.DATABASE_URL ?? "");
+
+export async function getDb(name?: string) {
+  await client.connect();
+  return client.db(name);
+}
+
+export { client };
+`;
+
+const externalApiLibFile = (baseUrlEnv: string, keyEnv: string): string =>
+  `// Generic external-API client. Set ${baseUrlEnv} and ${keyEnv} in your .env.
+const BASE_URL = process.env.${baseUrlEnv} ?? "";
+const API_KEY = process.env.${keyEnv} ?? "";
+
+export async function callApi(path: string, init?: RequestInit) {
+  const res = await fetch(\`\${BASE_URL}\${path}\`, {
+    ...init,
+    headers: { Authorization: \`Bearer \${API_KEY}\`, ...(init?.headers ?? {}) },
+  });
+  if (!res.ok) throw new Error(\`API request failed: \${res.status}\`);
+  return res.json();
+}
+`;
+
 function packageAdditions(flags: {
   storage: boolean;
   queue: boolean;
@@ -249,6 +309,8 @@ function packageAdditions(flags: {
   ai: boolean;
   email: boolean;
   postgres: boolean;
+  stripe: boolean;
+  mongodb: boolean;
 }): string {
   const deps: Record<string, string> = { sst: 'latest' };
   if (flags.storage) {
@@ -263,6 +325,8 @@ function packageAdditions(flags: {
   if (flags.ai) deps['@anthropic-ai/sdk'] = 'latest';
   if (flags.email) deps['@aws-sdk/client-sesv2'] = 'latest';
   if (flags.postgres) deps['pg'] = 'latest';
+  if (flags.stripe) deps['stripe'] = 'latest';
+  if (flags.mongodb) deps['mongodb'] = 'latest';
   const json = {
     dependencies: deps,
     scripts: { 'dev:sst': 'sst dev', deploy: 'sst deploy', remove: 'sst remove' },
@@ -348,6 +412,63 @@ export function generateRuntimeFiles(bp: Blueprint): GeneratedFile[] {
     files.push({ path: 'lib/db.ts', content: postgresHelperFile(pgRes.name), language: 'ts' });
   }
 
+  const stripeRes = bp.resources.find(
+    (r) =>
+      r.kind === 'stripe' &&
+      bp.connections.some((c) => c.intent === 'usesStripe' && c.target === r.id),
+  );
+  if (stripeRes) {
+    files.push({ path: 'lib/stripe.ts', content: stripeLibFile(), language: 'ts' });
+    files.push({
+      path: 'app/api/webhooks/stripe/route.ts',
+      content: stripeWebhookRouteFile(),
+      language: 'ts',
+    });
+  }
+
+  const mongoRes = bp.resources.find(
+    (r) =>
+      r.kind === 'mongodb' &&
+      bp.connections.some((c) => c.intent === 'queriesMongo' && c.target === r.id),
+  );
+  if (mongoRes) {
+    files.push({ path: 'lib/mongo.ts', content: mongoLibFile(), language: 'ts' });
+  }
+
+  for (const api of bp.resources.filter(
+    (r) =>
+      r.kind === 'externalApi' &&
+      bp.connections.some((c) => c.intent === 'callsApi' && c.target === r.id),
+  )) {
+    const baseUrlEnv =
+      typeof api.props.baseUrlEnv === 'string' && api.props.baseUrlEnv
+        ? api.props.baseUrlEnv
+        : 'API_BASE_URL';
+    const keyEnv =
+      typeof api.props.keyEnv === 'string' && api.props.keyEnv ? api.props.keyEnv : 'API_KEY';
+    files.push({
+      path: `lib/${kebabCase(api.name)}.ts`,
+      content: externalApiLibFile(baseUrlEnv, keyEnv),
+      language: 'ts',
+    });
+  }
+
+  files.push({
+    path: 'required-env.json',
+    content: `${JSON.stringify(
+      {
+        required: collectAwsEnv(bp).map((e) => ({
+          name: e.name,
+          scope: e.scope,
+          ...(e.hint ? { hint: e.hint } : {}),
+        })),
+      },
+      null,
+      2,
+    )}\n`,
+    language: 'json',
+  });
+
   const linksDynamo = (linkVars: string[]) => linkVars.some((v) => varToKind.get(v) === 'dynamo');
 
   for (const sub of plan.subscribers) {
@@ -386,6 +507,8 @@ export function generateRuntimeFiles(bp: Blueprint): GeneratedFile[] {
       ai: Boolean(aiRes),
       email: Boolean(emailRes),
       postgres: Boolean(pgRes),
+      stripe: Boolean(stripeRes),
+      mongodb: Boolean(mongoRes),
     }),
     language: 'json',
   });

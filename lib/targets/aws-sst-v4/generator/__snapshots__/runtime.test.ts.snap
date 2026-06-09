@@ -90,6 +90,15 @@ export async function createUploadUrl(key: string, contentType?: string) {
   }
 }
 ",
+  "required-env.json": "{
+  "required": [
+    {
+      "name": "NEXT_PUBLIC_APP_NAME",
+      "scope": "client"
+    }
+  ]
+}
+",
   "src/workers/process-job.ts": "import { putItem } from "../../lib/dynamo";
 
 /** SQS subscriber for the "ProcessJob" worker. */

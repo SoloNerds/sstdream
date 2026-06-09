@@ -1,4 +1,5 @@
 import type { Blueprint } from '@/lib/core/blueprint/types';
+import { collectAwsEnv, type AwsEnvVar } from './env';
 
 // Per-lane export docs (AWS / SST v4). README install/deploy with npm + yarn,
 // and a minimal .env.example. See docs/architecture-targets.md (per-lane docs).
@@ -76,10 +77,26 @@ ${run} sst deploy --stage production
 }
 
 export function buildAwsEnvExample(bp: Blueprint): string {
-  return `# Local environment variables for ${bp.app.name}.
-# SST injects LINKED resources at runtime (via Resource from "sst"), so you usually
-# don't need to set those here. Add app-specific variables below.
+  const vars = collectAwsEnv(bp);
+  const groups = new Map<string, AwsEnvVar[]>();
+  for (const v of vars) {
+    const g = v.group ?? 'App';
+    (groups.get(g) ?? groups.set(g, []).get(g)!).push(v);
+  }
 
-NEXT_PUBLIC_APP_NAME="${bp.app.name}"
-`;
+  const lines: string[] = [
+    `# Environment variables for ${bp.app.name} — copy this to .env`,
+    `# SST-linked resources (Resource.* from "sst") and SST secrets`,
+    `# (sst secret set <Name> <value>) are NOT listed here.`,
+    '',
+  ];
+  for (const [group, gvars] of groups) {
+    lines.push(`# ${group}`);
+    for (const v of gvars) {
+      const value = v.name === 'NEXT_PUBLIC_APP_NAME' ? `"${bp.app.name}"` : '';
+      lines.push(`${v.name}=${value}${v.hint ? `          # ${v.hint}` : ''}`);
+    }
+    lines.push('');
+  }
+  return `${lines.join('\n')}`;
 }
