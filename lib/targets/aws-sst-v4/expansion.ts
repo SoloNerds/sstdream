@@ -1,0 +1,188 @@
+import type { Blueprint, Resource } from '@/lib/core/blueprint/types';
+import type { InfraGroup, PhysicalResource } from '@/lib/core/expansion/types';
+
+// Verified resource-expansion map (resource-expansion sweep, 2026-06-09 vs live SST
+// docs). Maps each logical node to the underlying AWS resources `sst deploy` creates.
+// "always" = no extra config; `conditional` = the trigger. Corrected facts baked in:
+// VPC has NO NAT by default; Bucket never makes CloudFront; Cognito has no Identity Pool.
+
+const P = (
+  service: string,
+  name: string,
+  opts: Partial<Omit<PhysicalResource, 'service' | 'name'>> = {},
+): PhysicalResource => ({ service, name, ...opts });
+
+const str = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
+
+function nextjsResources(r: Resource): PhysicalResource[] {
+  const out = [
+    P('CloudFront', 'Distribution', { note: 'the public URL / global CDN', paid: true }),
+    P('CloudFront', 'viewer-request Function', { note: 'routes asset vs server origin' }),
+    P('CloudFront', 'Origin Access (OAI)', { security: true, note: 'reads the private S3 bucket' }),
+    P('CloudFront', 'Cache policy'),
+    P('S3', 'Assets + ISR cache bucket', {
+      paid: true,
+      security: true,
+      note: 'private; static + ISR cache',
+    }),
+    P('Lambda', 'Server (SSR) function', { paid: true, note: '1024 MB, nodejs' }),
+    P('Lambda', 'Server Function URL', {
+      security: true,
+      note: 'PUBLIC by default (protection: "none")',
+    }),
+    P('Lambda', 'Image-optimization function', { paid: true, note: 'next/image, 1536 MB' }),
+    P('Lambda', 'Image-opt Function URL', { security: true }),
+    P('Lambda', 'Revalidation (ISR) function', { paid: true }),
+    P('SQS', 'Revalidation queue (FIFO)', { note: 'triggers the ISR revalidator' }),
+    P('Lambda', 'SQS → revalidation mapping'),
+    P('DynamoDB', 'ISR tag-cache table', { paid: true, note: 'on-demand' }),
+    P('Lambda', 'Revalidation seeder', { note: 'deploy-time custom resource' }),
+    P('IAM', 'Execution role per Lambda', { security: true }),
+    P('CloudWatch', 'Log group per Lambda', { paid: true, note: 'persists after teardown' }),
+  ];
+  if (str(r.props.domain)) {
+    out.push(P('ACM', 'TLS certificate', { conditional: 'custom domain', security: true }));
+    out.push(P('Route53', 'DNS records', { conditional: 'custom domain' }));
+  }
+  return out;
+}
+
+function bucketResources(r: Resource): PhysicalResource[] {
+  const access = str(r.props.access);
+  return [
+    P('S3', 'Bucket', { paid: true }),
+    P('S3', 'Bucket policy', {
+      security: true,
+      note: access ? `grants ${access} read access` : 'private',
+    }),
+    P('S3', 'Public access block', { security: true }),
+    P('S3', 'Ownership controls'),
+    P('S3', 'CORS configuration'),
+    // NOTE: a Bucket NEVER creates a CloudFront distribution (verified).
+  ];
+}
+
+function workerResources(r: Resource, isSubscriber: boolean): PhysicalResource[] {
+  const out = [
+    P('Lambda', 'Function', { paid: true }),
+    P('IAM', 'Execution role', { security: true }),
+    P('CloudWatch', 'Log group', { paid: true }),
+  ];
+  if (isSubscriber)
+    out.push(P('Lambda', 'SQS event-source mapping', { note: 'consumes its queue' }));
+  return out;
+}
+
+function resourcesFor(
+  r: Resource,
+  ctx: { isSubscriber: (w: Resource) => boolean },
+): PhysicalResource[] | null {
+  switch (r.kind) {
+    case 'nextjs':
+      return nextjsResources(r);
+    case 'bucket':
+      return bucketResources(r);
+    case 'dynamo':
+      return [P('DynamoDB', 'Table', { paid: true, note: 'on-demand' })];
+    case 'queue':
+      return [P('SQS', 'Queue', { paid: true })];
+    case 'worker':
+      return workerResources(r, ctx.isSubscriber(r));
+    case 'cron':
+      return [
+        P('EventBridge', 'Scheduler schedule', { note: 'EventBridge Scheduler (not a Rule)' }),
+        P('IAM', 'Scheduler role', { security: true }),
+      ];
+    case 'postgres':
+      return [
+        P('RDS', 'Postgres instance', { paid: true, note: 'db.t4g.micro' }),
+        P('RDS', 'DB subnet group'),
+        P('RDS', 'DB parameter group'),
+        P('Secrets Manager', 'Master credentials', { security: true }),
+        P('SSM', 'Link parameters', { note: 'Resource.<Db>.{host,port,…}' }),
+      ];
+    case 'cognito':
+      return [
+        P('Cognito', 'User Pool', { security: true }),
+        P('Cognito', 'User Pool Client', { note: 'addClient("Web") — no Identity Pool' }),
+      ];
+    case 'secret':
+      return [P('SSM', 'Parameter (SecureString)', { security: true })];
+    case 'ai':
+      return [P('SSM', 'Parameter (SecureString)', { security: true, note: 'Anthropic API key' })];
+    case 'email':
+      return [P('SES', 'Email identity'), P('SES', 'Configuration set')];
+    case 'stripe':
+    case 'clerk':
+    case 'mongodb':
+    case 'externalApi':
+      return [
+        P('External', `${r.name} (no AWS infra)`, { note: 'env-driven third-party service' }),
+      ];
+    default:
+      return null;
+  }
+}
+
+function vpcGroup(postgres: Resource[]): InfraGroup {
+  const vals = postgres.map((r) => str(r.props.nat) ?? 'none');
+  const nat = vals.includes('managed') ? 'managed' : vals.includes('ec2') ? 'ec2' : 'none';
+  const resources = [
+    P('VPC', 'VPC'),
+    P('VPC', 'Public subnets ×2'),
+    P('VPC', 'Private subnets ×2'),
+    P('VPC', 'Route tables ×4'),
+    P('EC2', 'Internet Gateway'),
+    P('EC2', 'Default security group', { security: true }),
+    P('Cloud Map', 'Private DNS namespace', {
+      paid: true,
+      note: '~$0.50/mo — the only standing VPC cost',
+    }),
+  ];
+  if (nat === 'ec2') {
+    resources.push(P('EC2', 'fck-nat instances ×2', { paid: true, note: 't4g.nano, ~$4/mo' }));
+    resources.push(P('EC2', 'Elastic IPs (NAT)'));
+  } else if (nat === 'managed') {
+    resources.push(P('EC2', 'NAT Gateway(s)', { paid: true, note: '~$32/mo per AZ' }));
+    resources.push(P('EC2', 'Elastic IPs (NAT)'));
+  }
+  return { id: 'vpc', title: 'VPC (shared by Postgres)', kind: 'vpc', resources };
+}
+
+const ORDER = [
+  'nextjs',
+  'postgres',
+  'dynamo',
+  'bucket',
+  'queue',
+  'worker',
+  'cron',
+  'cognito',
+  'secret',
+  'ai',
+  'email',
+  'stripe',
+  'clerk',
+  'mongodb',
+  'externalApi',
+];
+
+export function expandAws(bp: Blueprint): InfraGroup[] {
+  const isSubscriber = (w: Resource) =>
+    bp.connections.some((c) => c.source === w.id && c.intent === 'subscribesTo');
+
+  const sorted = [...bp.resources].sort(
+    (a, b) => (ORDER.indexOf(a.kind) + 1 || 99) - (ORDER.indexOf(b.kind) + 1 || 99),
+  );
+
+  const groups: InfraGroup[] = [];
+  for (const r of sorted) {
+    const resources = resourcesFor(r, { isSubscriber });
+    if (resources) groups.push({ id: r.id, title: r.name, kind: r.kind, resources });
+  }
+
+  const postgres = bp.resources.filter((r) => r.kind === 'postgres');
+  if (postgres.length) groups.push(vpcGroup(postgres));
+
+  return groups;
+}

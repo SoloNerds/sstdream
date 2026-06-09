@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Palette } from './Palette';
 import { Canvas } from './Canvas';
+import { InfraView } from './InfraView';
 import { PropertiesPanel } from './PropertiesPanel';
 import { SimulationPanel } from './SimulationPanel';
 import { CostPanel } from './CostPanel';
@@ -28,6 +29,7 @@ export function BuilderShell() {
   const targetId = useCanvasStore((s) => s.targetId);
   const validation = useValidation();
   const [tab, setTab] = useState<'properties' | 'simulation' | 'cost' | 'advice'>('properties');
+  const [view, setView] = useState<'design' | 'infra'>('design');
 
   // Restore the last design from localStorage on mount.
   useEffect(() => {
@@ -85,6 +87,22 @@ export function BuilderShell() {
               </option>
             ))}
           </select>
+          <div className="ml-1 flex overflow-hidden rounded-md border border-neutral-300 text-xs dark:border-neutral-700">
+            {(['design', 'infra'] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setView(v)}
+                className={
+                  view === v
+                    ? 'bg-indigo-600 px-2.5 py-0.5 font-medium text-white'
+                    : 'px-2.5 py-0.5 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                }
+              >
+                {v === 'design' ? 'Design' : 'Infrastructure'}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Toolbar validation={validation} />
@@ -95,9 +113,7 @@ export function BuilderShell() {
         <aside className="w-64 shrink-0 overflow-y-auto border-r border-neutral-200 dark:border-neutral-800">
           <Palette />
         </aside>
-        <main className="min-w-0 flex-1">
-          <Canvas />
-        </main>
+        <main className="min-w-0 flex-1">{view === 'design' ? <Canvas /> : <InfraView />}</main>
         <aside className="flex w-72 shrink-0 flex-col border-l border-neutral-200 dark:border-neutral-800">
           <div className="flex shrink-0 border-b border-neutral-200 text-xs dark:border-neutral-800">
             {(['properties', 'simulation', 'cost', 'advice'] as const).map((t) => (

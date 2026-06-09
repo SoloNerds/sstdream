@@ -34,6 +34,7 @@ lib/core/
   validation/    # Diagnostic/engine + per-target rule selection (export gate)
   simulation/    # data-flow trace ("does everything talk?")
   cost/          # per-resource monthly estimate
+  expansion/     # logical→physical resource map ("Infrastructure view", read-only)
   recommendations/  # rule-based fixes (pure, idempotent apply)
   codegen/       # GeneratedFile types, strings, generate() facade
   export/        # buildExport() manifest + zip()
