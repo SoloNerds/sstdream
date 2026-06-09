@@ -6,8 +6,14 @@ import { getTarget } from '@/lib/targets/registry';
 
 export function ResourceNode({ data, selected }: NodeProps) {
   const targetId = useCanvasStore((s) => s.targetId);
-  const d = data as { name?: string; kind?: string; cost?: number };
+  const d = data as {
+    name?: string;
+    kind?: string;
+    cost?: number;
+    issue?: { severity: 'error' | 'warning'; messages: string[] };
+  };
   const meta = d.kind ? getTarget(targetId).catalog[d.kind] : undefined;
+  const issue = d.issue;
 
   return (
     <div
@@ -21,6 +27,16 @@ export function ResourceNode({ data, selected }: NodeProps) {
         className={`flex items-center justify-between rounded-t-lg px-3 py-1.5 text-xs font-semibold text-white ${meta?.accent ?? 'bg-neutral-700'}`}
       >
         <span>{meta?.label ?? d.kind ?? 'node'}</span>
+        {issue && (
+          <span
+            title={issue.messages.join('\n')}
+            className={`ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ${
+              issue.severity === 'error' ? 'bg-red-500 text-white' : 'bg-amber-400 text-black'
+            }`}
+          >
+            {issue.severity === 'error' ? '!' : '?'}
+          </span>
+        )}
       </div>
       <div className="px-3 py-2">
         <div className="text-sm font-medium">{d.name ?? ''}</div>

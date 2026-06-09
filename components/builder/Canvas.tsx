@@ -20,6 +20,7 @@ import type { SimStatus } from '@/lib/core/simulation/types';
 import { ResourceNode } from './nodes/ResourceNode';
 import { DRAG_MIME } from './Palette';
 import { useCost } from './useCost';
+import { useValidation } from './useValidation';
 
 const nodeTypes = { resource: ResourceNode };
 
@@ -45,11 +46,27 @@ export function Canvas() {
     [cost],
   );
 
+  const validation = useValidation();
+  const issuesById = useMemo(() => {
+    const map: Record<string, { severity: 'error' | 'warning'; messages: string[] }> = {};
+    for (const d of validation.diagnostics) {
+      if (!d.resourceId || d.severity === 'info') continue;
+      const sev = d.severity as 'error' | 'warning';
+      const cur = map[d.resourceId];
+      if (!cur) map[d.resourceId] = { severity: sev, messages: [d.message] };
+      else {
+        cur.messages.push(d.message);
+        if (sev === 'error') cur.severity = 'error';
+      }
+    }
+    return map;
+  }, [validation]);
+
   const rfNodes: Node[] = nodes.map((n) => ({
     id: n.id,
     type: 'resource',
     position: n.position,
-    data: { name: n.name, kind: n.kind, cost: costById[n.id] },
+    data: { name: n.name, kind: n.kind, cost: costById[n.id], issue: issuesById[n.id] },
     selected: n.id === selectedId,
   }));
 
