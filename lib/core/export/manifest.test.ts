@@ -21,12 +21,12 @@ describe('export manifest — AI Processing App', () => {
     expect(paths[0]).toBe('README.md'); // friendly ordering
   });
 
-  it('README documents both yarn and npm install + deploy', () => {
+  it('README documents the runnable project: run, deploy, AGENTS.md, and the existing-app path', () => {
     const readme = byPath['README.md'];
-    expect(readme).toContain('yarn add sst');
-    expect(readme).toContain('npm install sst');
+    expect(readme).toContain('sst dev');
     expect(readme).toContain('sst deploy --stage production');
-    expect(readme).toContain('package.additions.json');
+    expect(readme).toContain('AGENTS.md');
+    expect(readme).toContain('package.additions.json'); // existing-app merge path
   });
 
   it('the embedded design.json re-imports to the identical blueprint', () => {

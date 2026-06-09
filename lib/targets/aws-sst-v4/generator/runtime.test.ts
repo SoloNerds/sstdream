@@ -19,16 +19,23 @@ describe('runtime code generator — AI Processing App', () => {
     const paths = files.map((f) => f.path).sort();
     expect(paths).toEqual(
       [
+        '.gitignore',
+        'AGENTS.md',
         'app/actions/create-upload-url.ts',
         'app/actions/enqueue-job.ts',
+        'app/layout.tsx',
+        'app/page.tsx',
         'lib/dynamo.ts',
         'lib/env.ts',
         'lib/queue.ts',
         'lib/storage.ts',
+        'next.config.ts',
         'package.additions.json',
+        'package.json',
         'required-env.json',
         'sst.config.ts',
         'src/workers/process-job.ts',
+        'tsconfig.json',
       ].sort(),
     );
   });
