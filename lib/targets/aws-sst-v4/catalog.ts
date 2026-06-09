@@ -128,6 +128,20 @@ export const AWS_CATALOG: ResourceCatalog = {
     description: 'RDS Postgres (a VPC is generated automatically)',
     accent: 'bg-cyan-700',
     category: 'database',
+    props: [
+      {
+        key: 'nat',
+        label: 'NAT (internet from private subnets)',
+        type: 'select',
+        default: 'none',
+        options: [
+          { value: 'none', label: 'None — cheapest, no internet egress' },
+          { value: 'ec2', label: 'fck-nat EC2 — ~$4/mo (≈10× cheaper)' },
+          { value: 'managed', label: 'Managed NAT Gateway — ~$32/mo/AZ' },
+        ],
+        help: 'SST VPCs have no NAT by default. Add one only if Lambdas in the VPC must reach the public internet. fck-nat (nat: "ec2") is a cheap t4g.nano NAT instance.',
+      },
+    ],
   },
   email: {
     kind: 'email',

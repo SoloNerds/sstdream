@@ -250,6 +250,18 @@ api.route("GET /", "src/get.handler")` (route key = `"METHOD /path"`; optional 3
 > methods; dynamic `params`/`searchParams` and `cookies()`/`headers()` are **async** (await
 > them). Our generated routes don't read dynamic params, so they're 16-clean as-is.
 
+> **VPC / NAT defaults (verified 2026-06-09, via the resource-expansion sweep):**
+> `new sst.aws.Vpc("Vpc")` creates **NO NAT** by default ("NAT is disabled"). The only
+> standing cost of a bare VPC is the **CloudMap private-DNS namespace (~$0.50/mo)**. NAT is
+> opt-in: `nat: "ec2"` = **fck-nat** t4g.nano instances (~$4/mo, ≈10× cheaper) for internet
+> egress from private subnets; `nat: "managed"` = NAT Gateway(s), **~$32/mo per AZ**. Lambdas
+> in the VPC only need NAT to reach the **public internet** — RDS access inside the VPC does
+> not. So `sst.aws.Postgres` ≈ **$14/mo** (RDS $11.5 + 20 GB $2.3) + ~$0.50 VPC, **not ~$47**.
+> Also verified: `sst.aws.Bucket` **never** creates a CloudFront distribution (`access` only
+> edits the bucket policy); `sst.aws.CognitoUserPool` creates **no** Identity Pool (separate
+> component). SST v4 is **pure Pulumi** (no CloudFormation); the authoritative live graph is
+> `sst diff --json` (needs AWS creds) — our generator instead ships a verified static map.
+
 ---
 
 ## 5. Runtime resource access (generated app code)

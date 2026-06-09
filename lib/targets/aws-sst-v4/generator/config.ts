@@ -75,6 +75,15 @@ function renderPostgres(r: Resource, plan: AwsPlan): string {
   return `const ${v} = new sst.aws.Postgres("${r.name}", {\n  vpc,\n});`;
 }
 
+// SST VPCs have NO NAT by default. Pick the strongest NAT requested across the
+// Postgres nodes that share the generated VPC: managed > ec2 (fck-nat) > none.
+function pickNat(resources: Resource[]): 'none' | 'ec2' | 'managed' {
+  const vals = resources.map((r) => str(r.props.nat) ?? 'none');
+  if (vals.includes('managed')) return 'managed';
+  if (vals.includes('ec2')) return 'ec2';
+  return 'none';
+}
+
 // Cognito user pool + a web client. Linked → Resource.<Pool>.id; the pool/client
 // ids are injected into the Next.js app as NEXT_PUBLIC_COGNITO_* env (see renderNextjs).
 function renderCognito(r: Resource, plan: AwsPlan): string {
@@ -180,7 +189,12 @@ export function generateSstConfig(bp: Blueprint): string {
   for (const r of byKind('dynamo')) statements.push(renderDynamo(r, plan));
   const postgresResources = byKind('postgres');
   if (postgresResources.length) {
-    statements.push('const vpc = new sst.aws.Vpc("Vpc");');
+    const nat = pickNat(postgresResources);
+    statements.push(
+      nat === 'none'
+        ? 'const vpc = new sst.aws.Vpc("Vpc");'
+        : `const vpc = new sst.aws.Vpc("Vpc", {\n  nat: "${nat}",\n});`,
+    );
     for (const r of postgresResources) statements.push(renderPostgres(r, plan));
   }
   for (const r of byKind('queue')) statements.push(renderQueue(r, plan));

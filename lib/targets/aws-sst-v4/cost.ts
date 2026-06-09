@@ -120,13 +120,18 @@ function breakdownFor(r: Resource): CostBreakdown {
     case 'email':
       lines = [{ label: 'SES (~10k emails)', usd: 1 }];
       break;
-    case 'postgres':
+    case 'postgres': {
+      // SST VPCs have NO NAT by default; the only standing VPC cost is CloudMap DNS.
       lines = [
-        { label: 'RDS Postgres (db.t4g.micro)', usd: 13 },
+        { label: 'RDS Postgres (db.t4g.micro)', usd: 11.5 },
         { label: 'Storage (20GB gp3)', usd: 2.3 },
-        { label: 'VPC NAT gateway', usd: 32 },
+        { label: 'VPC (CloudMap DNS)', usd: 0.5 },
       ];
+      const nat = r.props.nat;
+      if (nat === 'ec2') lines.push({ label: 'fck-nat EC2 (t4g.nano)', usd: 4 });
+      else if (nat === 'managed') lines.push({ label: 'NAT Gateway', usd: 32 });
       break;
+    }
     case 'cognito':
       lines = [{ label: 'Cognito (free ≤ 50k MAU)', usd: 0 }];
       break;
@@ -157,6 +162,7 @@ export function estimateAwsCost(bp: Blueprint): CostEstimate {
       'S3: 5GB storage, 100k PUT, 1M GET',
       'DynamoDB on-demand: 1M writes, 1M reads, 5GB',
       'SQS: 1M requests; CloudFront: 50GB out, 1M requests',
+      'VPCs have NO NAT by default; fck-nat (ec2) ≈ $4/mo, managed gateway ≈ $32/mo/AZ',
     ],
     disclaimer:
       'Rough design-time ballpark (us-east-1 on-demand). Not a billing forecast — your real costs depend on actual traffic, region, and free-tier usage.',

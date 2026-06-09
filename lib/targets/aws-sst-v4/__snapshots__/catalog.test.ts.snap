@@ -214,6 +214,29 @@ exports[`aws-sst-v4 catalog > matches snapshot 1`] = `
     "description": "RDS Postgres (a VPC is generated automatically)",
     "kind": "postgres",
     "label": "Postgres",
+    "props": [
+      {
+        "default": "none",
+        "help": "SST VPCs have no NAT by default. Add one only if Lambdas in the VPC must reach the public internet. fck-nat (nat: "ec2") is a cheap t4g.nano NAT instance.",
+        "key": "nat",
+        "label": "NAT (internet from private subnets)",
+        "options": [
+          {
+            "label": "None — cheapest, no internet egress",
+            "value": "none",
+          },
+          {
+            "label": "fck-nat EC2 — ~$4/mo (≈10× cheaper)",
+            "value": "ec2",
+          },
+          {
+            "label": "Managed NAT Gateway — ~$32/mo/AZ",
+            "value": "managed",
+          },
+        ],
+        "type": "select",
+      },
+    ],
   },
   "queue": {
     "accent": "bg-amber-600",
