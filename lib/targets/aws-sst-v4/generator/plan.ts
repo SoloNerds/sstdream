@@ -45,6 +45,7 @@ export interface AwsPlan {
 
 const DECL_ORDER: Record<string, number> = {
   secret: 0,
+  ai: 0,
   bucket: 1,
   dynamo: 2,
   queue: 3,
@@ -63,6 +64,7 @@ export function planAws(bp: Blueprint): AwsPlan {
   for (const r of bp.resources) {
     const standalone =
       r.kind === 'secret' ||
+      r.kind === 'ai' ||
       r.kind === 'bucket' ||
       r.kind === 'dynamo' ||
       r.kind === 'queue' ||

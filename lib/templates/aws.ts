@@ -37,6 +37,19 @@ const aws = (
 
 export const AWS_TEMPLATES: TemplateMeta[] = [
   aws(
+    'aws-ai-chat',
+    'AI Chat App',
+    'Streaming Claude chat (claude-opus-4-8) with history in DynamoDB. The flagship AI starter.',
+    ['AI', 'Flagship'],
+    'ai-chat-app',
+    [
+      n('nextjs_1', 'nextjs', 'Web', 80, 160),
+      n('ai_2', 'ai', 'AnthropicKey', 380, 80, { model: 'claude-opus-4-8' }),
+      n('dynamo_3', 'dynamo', 'ChatHistory', 380, 240),
+    ],
+    [e('edge_4', 'nextjs_1', 'ai_2', 'usesAI'), e('edge_5', 'nextjs_1', 'dynamo_3', 'writesTo')],
+  ),
+  aws(
     'aws-starter',
     'Next.js Starter',
     'A bare Next.js app on AWS — add resources as you go.',

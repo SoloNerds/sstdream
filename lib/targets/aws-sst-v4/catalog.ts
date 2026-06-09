@@ -120,6 +120,28 @@ export const AWS_CATALOG: ResourceCatalog = {
     accent: 'bg-stone-600',
     category: 'config',
   },
+  ai: {
+    kind: 'ai',
+    label: 'AI Chat',
+    defaultName: 'AnthropicKey',
+    component: 'Anthropic (Claude)',
+    description: 'Streaming Claude chat — API key stored as an SST secret',
+    accent: 'bg-fuchsia-700',
+    category: 'config',
+    props: [
+      {
+        key: 'model',
+        label: 'Model',
+        type: 'select',
+        default: 'claude-opus-4-8',
+        options: [
+          { value: 'claude-opus-4-8', label: 'Claude Opus 4.8' },
+          { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
+          { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
+        ],
+      },
+    ],
+  },
 };
 
 export const AWS_CATALOG_ORDER = [
@@ -130,4 +152,5 @@ export const AWS_CATALOG_ORDER = [
   'worker',
   'cron',
   'secret',
+  'ai',
 ];

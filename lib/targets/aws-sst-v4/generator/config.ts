@@ -140,6 +140,7 @@ export function generateSstConfig(bp: Blueprint): string {
 
   const statements: string[] = [];
   for (const r of byKind('secret')) statements.push(renderSecret(r, plan));
+  for (const r of byKind('ai')) statements.push(renderSecret(r, plan));
   for (const r of byKind('bucket')) statements.push(renderBucket(r, plan));
   for (const r of byKind('dynamo')) statements.push(renderDynamo(r, plan));
   for (const r of byKind('queue')) statements.push(renderQueue(r, plan));

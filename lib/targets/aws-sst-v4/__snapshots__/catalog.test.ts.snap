@@ -2,6 +2,37 @@
 
 exports[`aws-sst-v4 catalog > matches snapshot 1`] = `
 {
+  "ai": {
+    "accent": "bg-fuchsia-700",
+    "category": "config",
+    "component": "Anthropic (Claude)",
+    "defaultName": "AnthropicKey",
+    "description": "Streaming Claude chat — API key stored as an SST secret",
+    "kind": "ai",
+    "label": "AI Chat",
+    "props": [
+      {
+        "default": "claude-opus-4-8",
+        "key": "model",
+        "label": "Model",
+        "options": [
+          {
+            "label": "Claude Opus 4.8",
+            "value": "claude-opus-4-8",
+          },
+          {
+            "label": "Claude Sonnet 4.6",
+            "value": "claude-sonnet-4-6",
+          },
+          {
+            "label": "Claude Haiku 4.5",
+            "value": "claude-haiku-4-5",
+          },
+        ],
+        "type": "select",
+      },
+    ],
+  },
   "bucket": {
     "accent": "bg-emerald-600",
     "category": "storage",

@@ -114,6 +114,9 @@ function breakdownFor(r: Resource): CostBreakdown {
     case 'secret':
       lines = [{ label: 'SSM (free tier)', usd: 0 }];
       break;
+    case 'ai':
+      lines = [{ label: 'Anthropic API (usage-based)', usd: 0 }];
+      break;
     default:
       lines = [];
   }

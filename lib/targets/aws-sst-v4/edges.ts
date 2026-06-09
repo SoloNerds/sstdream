@@ -53,6 +53,13 @@ export const AWS_EDGE_INTENTS: EdgeIntentMeta[] = [
     to: ['secret'],
   },
   {
+    intent: 'usesAI',
+    label: 'uses AI',
+    description: 'App streams Claude via a server route; links the Anthropic API-key secret.',
+    from: ['nextjs'],
+    to: ['ai'],
+  },
+  {
     intent: 'linksTo',
     label: 'links to',
     description: 'Generic link: grants access + SDK exposure with no specific helper.',
@@ -72,6 +79,7 @@ const INTENT_BY_PAIR: Record<string, string> = {
   'nextjs>secret': 'usesSecret',
   'worker>secret': 'usesSecret',
   'cron>secret': 'usesSecret',
+  'nextjs>ai': 'usesAI',
 };
 
 export function awsDefaultIntent(fromKind: string, toKind: string): string | null {

@@ -10,10 +10,18 @@ const VERB: Record<string, string> = {
   writesTo: 'writes to',
   readsFrom: 'reads from',
   usesSecret: 'uses secret',
+  usesAI: 'uses AI',
   linksTo: 'links to',
 };
 
-const LEAF_INTENTS = new Set(['uploadsTo', 'writesTo', 'readsFrom', 'usesSecret', 'linksTo']);
+const LEAF_INTENTS = new Set([
+  'uploadsTo',
+  'writesTo',
+  'readsFrom',
+  'usesSecret',
+  'usesAI',
+  'linksTo',
+]);
 
 export function simulateAws(bp: Blueprint): SimTrace {
   const byId = new Map(bp.resources.map((r) => [r.id, r]));

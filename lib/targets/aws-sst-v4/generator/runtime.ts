@@ -130,7 +130,90 @@ export async function handler(event: unknown) {
 }
 `;
 
-function packageAdditions(flags: { storage: boolean; queue: boolean; dynamo: boolean }): string {
+// Verified Anthropic usage (claude-api skill): model id `claude-opus-4-8` (no date
+// suffix), official @anthropic-ai/sdk messages.stream(). Key is server-only via an SST
+// secret; the streaming Route Handler validates input before calling Claude.
+const aiHelperFile = (secretName: string, model: string): string =>
+  `import { Resource } from "sst";
+import Anthropic from "@anthropic-ai/sdk";
+
+// Server-only Claude client. The API key is an SST secret — set it with:
+//   sst secret set ${secretName} <your-anthropic-api-key>
+// It is never sent to the browser.
+export const anthropic = new Anthropic({ apiKey: Resource.${secretName}.value });
+
+export const CHAT_MODEL = "${model}";
+`;
+
+const aiChatRouteFile = (): string =>
+  `import { anthropic, CHAT_MODEL } from "../../../lib/ai";
+
+// The Anthropic SDK requires the Node.js runtime (not edge).
+export const runtime = "nodejs";
+export const maxDuration = 30;
+
+type ChatMessage = { role: "user" | "assistant"; content: string };
+
+const MAX_MESSAGES = 50;
+const MAX_CHARS = 8000;
+
+export async function POST(request: Request) {
+  let body: { messages?: ChatMessage[] };
+  try {
+    body = await request.json();
+  } catch {
+    return new Response("Invalid JSON", { status: 400 });
+  }
+
+  const messages = body.messages;
+  if (!Array.isArray(messages) || messages.length === 0 || messages.length > MAX_MESSAGES) {
+    return new Response("Invalid messages", { status: 400 });
+  }
+  for (const m of messages) {
+    if (
+      (m.role !== "user" && m.role !== "assistant") ||
+      typeof m.content !== "string" ||
+      m.content.length === 0 ||
+      m.content.length > MAX_CHARS
+    ) {
+      return new Response("Invalid message", { status: 400 });
+    }
+  }
+
+  const claude = anthropic.messages.stream({
+    model: CHAT_MODEL,
+    max_tokens: 4096,
+    messages,
+  });
+
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        for await (const event of claude) {
+          if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+            controller.enqueue(encoder.encode(event.delta.text));
+          }
+        }
+        controller.close();
+      } catch (err) {
+        controller.error(err);
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" },
+  });
+}
+`;
+
+function packageAdditions(flags: {
+  storage: boolean;
+  queue: boolean;
+  dynamo: boolean;
+  ai: boolean;
+}): string {
   const deps: Record<string, string> = { sst: 'latest' };
   if (flags.storage) {
     deps['@aws-sdk/client-s3'] = 'latest';
@@ -141,6 +224,7 @@ function packageAdditions(flags: { storage: boolean; queue: boolean; dynamo: boo
     deps['@aws-sdk/client-dynamodb'] = 'latest';
     deps['@aws-sdk/lib-dynamodb'] = 'latest';
   }
+  if (flags.ai) deps['@anthropic-ai/sdk'] = 'latest';
   const json = {
     dependencies: deps,
     scripts: { 'dev:sst': 'sst dev', deploy: 'sst deploy', remove: 'sst remove' },
@@ -203,6 +287,17 @@ export function generateRuntimeFiles(bp: Blueprint): GeneratedFile[] {
     files.push({ path: 'lib/dynamo.ts', content: dynamoFile(dynamoRes.name), language: 'ts' });
   }
 
+  const aiEdge = bp.connections.find((c) => c.intent === 'usesAI');
+  const aiRes = aiEdge ? resourceOf(aiEdge.target) : undefined;
+  if (aiRes) {
+    const model =
+      typeof aiRes.props.model === 'string' && aiRes.props.model
+        ? aiRes.props.model
+        : 'claude-opus-4-8';
+    files.push({ path: 'lib/ai.ts', content: aiHelperFile(aiRes.name, model), language: 'ts' });
+    files.push({ path: 'app/api/chat/route.ts', content: aiChatRouteFile(), language: 'ts' });
+  }
+
   const linksDynamo = (linkVars: string[]) => linkVars.some((v) => varToKind.get(v) === 'dynamo');
 
   for (const sub of plan.subscribers) {
@@ -238,6 +333,7 @@ export function generateRuntimeFiles(bp: Blueprint): GeneratedFile[] {
       storage: Boolean(uploadBucket),
       queue: Boolean(publishQueue),
       dynamo: Boolean(dynamoRes),
+      ai: Boolean(aiRes),
     }),
     language: 'json',
   });
