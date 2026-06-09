@@ -1,11 +1,12 @@
 import { generateAws } from '@/lib/targets/aws-sst-v4/generator';
+import { generateVercel } from '@/lib/targets/vercel/generator';
 import type { Blueprint } from '@/lib/core/blueprint/types';
 import type { DeployTarget } from '@/lib/targets/types';
 import type { GeneratedFile } from './types';
 
 const GENERATORS: Partial<Record<DeployTarget, (bp: Blueprint) => GeneratedFile[]>> = {
   'aws-sst-v4': generateAws,
-  // 'vercel': generateVercel,  // M10
+  vercel: generateVercel,
 };
 
 export function generateFiles(bp: Blueprint): GeneratedFile[] {

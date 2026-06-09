@@ -7,6 +7,7 @@ import { useCanvasStore } from '@/lib/canvas/store';
 import { isTargetImplemented } from '@/lib/targets/registry';
 import { blueprintToCanvas, parseBlueprint } from '@/lib/core/blueprint/serialize';
 import { AI_PROCESSING_APP } from '@/lib/templates/ai-processing-app';
+import { VERCEL_SAAS } from '@/lib/templates/vercel-saas';
 import type { ValidationResult } from '@/lib/core/validation/types';
 
 export function Toolbar({ validation }: { validation: ValidationResult }) {
@@ -33,8 +34,9 @@ export function Toolbar({ validation }: { validation: ValidationResult }) {
   };
 
   const onLoadTemplate = () => {
-    setApp(AI_PROCESSING_APP.app);
-    loadSnapshot(AI_PROCESSING_APP.snapshot);
+    const tpl = useCanvasStore.getState().targetId === 'vercel' ? VERCEL_SAAS : AI_PROCESSING_APP;
+    setApp(tpl.app);
+    loadSnapshot(tpl.snapshot);
   };
 
   return (

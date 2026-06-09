@@ -1,9 +1,10 @@
 import type { DeployTarget, Target } from './types';
 import { awsSstV4Target } from './aws-sst-v4';
+import { vercelTarget } from './vercel';
 
 const REGISTRY: Partial<Record<DeployTarget, Target>> = {
   'aws-sst-v4': awsSstV4Target,
-  // 'vercel': vercelTarget,  // added in M10
+  vercel: vercelTarget,
 };
 
 export const DEFAULT_TARGET: DeployTarget = 'aws-sst-v4';

@@ -18,7 +18,8 @@ const TAB_LABEL = {
   advice: 'Tips',
 } as const;
 import { useCanvasStore } from '@/lib/canvas/store';
-import { getTarget, isTargetImplemented } from '@/lib/targets/registry';
+import { isTargetImplemented, listTargets } from '@/lib/targets/registry';
+import type { DeployTarget } from '@/lib/targets/types';
 import { loadBlueprint, saveBlueprint } from '@/lib/core/blueprint/persistence';
 import { blueprintToCanvas, canvasToBlueprint } from '@/lib/core/blueprint/serialize';
 
@@ -68,9 +69,21 @@ export function BuilderShell() {
       <header className="flex items-center justify-between gap-4 border-b border-neutral-200 px-4 py-2 dark:border-neutral-800">
         <div className="flex items-center gap-2">
           <span className="text-sm font-bold">SSTDREAM</span>
-          <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
-            {getTarget(targetId).label}
-          </span>
+          <select
+            aria-label="Deploy lane"
+            value={targetId}
+            onChange={(e) => {
+              useCanvasStore.setState({ targetId: e.target.value as DeployTarget });
+              useCanvasStore.getState().reset();
+            }}
+            className="rounded border border-neutral-300 bg-transparent px-2 py-0.5 text-xs dark:border-neutral-700"
+          >
+            {listTargets().map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.label}
+              </option>
+            ))}
+          </select>
         </div>
         <Toolbar validation={validation} />
       </header>

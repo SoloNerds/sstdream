@@ -1,5 +1,6 @@
 import { getTarget, isTargetImplemented } from '@/lib/targets/registry';
 import { AWS_RULES } from '@/lib/targets/aws-sst-v4/validation';
+import { VERCEL_RULES } from '@/lib/targets/vercel/validation';
 import { runRules } from './engine';
 import type { Blueprint } from '@/lib/core/blueprint/types';
 import type { DeployTarget } from '@/lib/targets/types';
@@ -7,7 +8,7 @@ import type { ValidationResult, ValidationRule } from './types';
 
 const RULES: Record<DeployTarget, ValidationRule[]> = {
   'aws-sst-v4': AWS_RULES,
-  vercel: [], // filled in M10
+  vercel: VERCEL_RULES,
 };
 
 const EMPTY: ValidationResult = {
