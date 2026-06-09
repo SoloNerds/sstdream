@@ -95,6 +95,20 @@ export const AWS_EDGE_INTENTS: EdgeIntentMeta[] = [
     to: ['externalApi'],
   },
   {
+    intent: 'usesCognito',
+    label: 'authenticates with',
+    description: 'App uses a Cognito user pool; injects NEXT_PUBLIC_COGNITO_* from outputs.',
+    from: ['nextjs'],
+    to: ['cognito'],
+  },
+  {
+    intent: 'usesAuth',
+    label: 'authenticates with',
+    description: 'App uses Clerk — generates middleware.ts + Clerk env keys.',
+    from: ['nextjs'],
+    to: ['clerk'],
+  },
+  {
     intent: 'linksTo',
     label: 'links to',
     description: 'Generic link: grants access + SDK exposure with no specific helper.',
@@ -124,6 +138,8 @@ const INTENT_BY_PAIR: Record<string, string> = {
   'worker>mongodb': 'queriesMongo',
   'nextjs>externalApi': 'callsApi',
   'worker>externalApi': 'callsApi',
+  'nextjs>cognito': 'usesCognito',
+  'nextjs>clerk': 'usesAuth',
 };
 
 export function awsDefaultIntent(fromKind: string, toKind: string): string | null {

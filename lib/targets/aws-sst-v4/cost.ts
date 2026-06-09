@@ -127,6 +127,12 @@ function breakdownFor(r: Resource): CostBreakdown {
         { label: 'VPC NAT gateway', usd: 32 },
       ];
       break;
+    case 'cognito':
+      lines = [{ label: 'Cognito (free ≤ 50k MAU)', usd: 0 }];
+      break;
+    case 'clerk':
+      lines = [{ label: 'Clerk (external / free tier)', usd: 0 }];
+      break;
     case 'stripe':
     case 'mongodb':
     case 'externalApi':

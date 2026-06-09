@@ -238,9 +238,13 @@ api.route("GET /", "src/get.handler")` (route key = `"METHOD /path"`; optional 3
 - **`sst.aws.Router`** / **`sst.aws.StaticSite`** / **`sst.aws.Vpc`** — routing, static
   hosting, and the network the databases need.
 
-> **Implemented in the generator:** Email, Postgres (with auto-VPC), plus the **AI Chat**
-> integration (`@anthropic-ai/sdk`, model `claude-opus-4-8`). Bus/SnsTopic/Router/StaticSite/
-> ApiGatewayV2 are documented + verified here and queued for the next generator pass.
+> **Implemented in the generator:** Email, Postgres (with auto-VPC), **Cognito**
+> (`CognitoUserPool` + `addClient`, `Resource.<Pool>.id`, NEXT*PUBLIC_COGNITO*\* injected via
+> Next.js `environment`), the **AI Chat** integration (`@anthropic-ai/sdk`, `claude-opus-4-8`),
+> and the **env-driven** integrations **Stripe** / **MongoDB** / **External API** / **Clerk**
+> (`@clerk/nextjs` + `clerkMiddleware`) — these emit `lib/*` helpers + `.env.example` keys, not
+> SST resources. Bus/SnsTopic/Router/StaticSite/ApiGatewayV2 are documented + verified here and
+> queued for the next generator pass.
 
 > **Next.js 16 note:** generated Route Handlers (`app/api/.../route.ts`) export async HTTP
 > methods; dynamic `params`/`searchParams` and `cookies()`/`headers()` are **async** (await

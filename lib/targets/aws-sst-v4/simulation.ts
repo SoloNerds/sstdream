@@ -16,6 +16,8 @@ const VERB: Record<string, string> = {
   usesStripe: 'uses Stripe',
   queriesMongo: 'queries Mongo',
   callsApi: 'calls',
+  usesCognito: 'authenticates with',
+  usesAuth: 'authenticates with',
   linksTo: 'links to',
 };
 
@@ -30,6 +32,8 @@ const LEAF_INTENTS = new Set([
   'usesStripe',
   'queriesMongo',
   'callsApi',
+  'usesCognito',
+  'usesAuth',
   'linksTo',
 ]);
 

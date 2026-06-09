@@ -50,6 +50,40 @@ export const AWS_TEMPLATES: TemplateMeta[] = [
     [e('edge_4', 'nextjs_1', 'ai_2', 'usesAI'), e('edge_5', 'nextjs_1', 'dynamo_3', 'writesTo')],
   ),
   aws(
+    'aws-clerk-saas',
+    'Clerk SaaS',
+    'Drop-in Clerk auth + Stripe + MongoDB. The easiest full SaaS starter.',
+    ['SaaS', 'Auth', 'Flagship'],
+    'clerk-saas',
+    [
+      n('nextjs_1', 'nextjs', 'Web', 80, 180),
+      n('clerk_2', 'clerk', 'Clerk', 380, 60),
+      n('stripe_3', 'stripe', 'Stripe', 380, 180),
+      n('mongodb_4', 'mongodb', 'Mongo', 380, 300),
+    ],
+    [
+      e('edge_5', 'nextjs_1', 'clerk_2', 'usesAuth'),
+      e('edge_6', 'nextjs_1', 'stripe_3', 'usesStripe'),
+      e('edge_7', 'nextjs_1', 'mongodb_4', 'queriesMongo'),
+    ],
+  ),
+  aws(
+    'aws-cognito-app',
+    'Cognito App',
+    'AWS-native auth (Cognito user pool) + a DynamoDB table.',
+    ['Auth'],
+    'cognito-app',
+    [
+      n('nextjs_1', 'nextjs', 'Web', 80, 160),
+      n('cognito_2', 'cognito', 'AuthPool', 380, 80),
+      n('dynamo_3', 'dynamo', 'AppData', 380, 240),
+    ],
+    [
+      e('edge_4', 'nextjs_1', 'cognito_2', 'usesCognito'),
+      e('edge_5', 'nextjs_1', 'dynamo_3', 'writesTo'),
+    ],
+  ),
+  aws(
     'aws-starter',
     'Next.js Starter',
     'A bare Next.js app on AWS — add resources as you go.',

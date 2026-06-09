@@ -75,6 +75,13 @@ function renderPostgres(r: Resource, plan: AwsPlan): string {
   return `const ${v} = new sst.aws.Postgres("${r.name}", {\n  vpc,\n});`;
 }
 
+// Cognito user pool + a web client. Linked → Resource.<Pool>.id; the pool/client
+// ids are injected into the Next.js app as NEXT_PUBLIC_COGNITO_* env (see renderNextjs).
+function renderCognito(r: Resource, plan: AwsPlan): string {
+  const v = plan.varNameById.get(r.id);
+  return `const ${v} = new sst.aws.CognitoUserPool("${r.name}");\nconst ${v}Client = ${v}.addClient("Web");`;
+}
+
 function renderSubscriber(sub: AwsPlan['subscribers'][number]): string {
   // Queue.subscribe is SUBSCRIBER-FIRST: handler/link/timeout go in the first object.
   const p = sub.worker.props;
@@ -120,13 +127,26 @@ function renderNextjs(r: Resource, plan: AwsPlan): string {
   const lines = [`const ${v} = new sst.aws.Nextjs("${r.name}", {`, `  path: "${path}",`];
   if (str(r.props.domain)) lines.push(`  domain: "${str(r.props.domain)}",`);
   if (links.length) lines.push(`  link: ${linkArray(links)},`);
+
+  const envEntries: string[] = [];
   const env = r.props.environment;
-  if (env && typeof env === 'object' && !Array.isArray(env) && Object.keys(env).length) {
-    lines.push(`  environment: {`);
+  if (env && typeof env === 'object' && !Array.isArray(env)) {
     for (const [k, val] of Object.entries(env as Record<string, unknown>)) {
-      lines.push(`    ${k}: "${String(val)}",`);
+      envEntries.push(`    ${k}: "${String(val)}",`);
     }
-    lines.push(`  },`);
+  }
+  // Cognito: inject pool/client ids from outputs (expressions, not strings).
+  const cognitoEdge = plan.bp.connections.find(
+    (c) => c.source === r.id && c.intent === 'usesCognito',
+  );
+  const cognitoVar = cognitoEdge ? plan.varNameById.get(cognitoEdge.target) : undefined;
+  if (cognitoVar) {
+    envEntries.push(`    NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${cognitoVar}.id,`);
+    envEntries.push(`    NEXT_PUBLIC_COGNITO_CLIENT_ID: ${cognitoVar}Client.id,`);
+    envEntries.push(`    NEXT_PUBLIC_AWS_REGION: "${plan.bp.app.region}",`);
+  }
+  if (envEntries.length) {
+    lines.push(`  environment: {`, ...envEntries, `  },`);
   }
   lines.push(`});`);
   return lines.join('\n');
@@ -155,6 +175,7 @@ export function generateSstConfig(bp: Blueprint): string {
   for (const r of byKind('secret')) statements.push(renderSecret(r, plan));
   for (const r of byKind('ai')) statements.push(renderSecret(r, plan));
   for (const r of byKind('email')) statements.push(renderEmail(r, plan));
+  for (const r of byKind('cognito')) statements.push(renderCognito(r, plan));
   for (const r of byKind('bucket')) statements.push(renderBucket(r, plan));
   for (const r of byKind('dynamo')) statements.push(renderDynamo(r, plan));
   const postgresResources = byKind('postgres');

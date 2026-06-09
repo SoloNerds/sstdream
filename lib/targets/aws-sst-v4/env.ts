@@ -36,6 +36,22 @@ export function collectAwsEnv(bp: Blueprint): AwsEnvVar[] {
     });
   }
 
+  if (has('clerk')) {
+    vars.push({
+      name: 'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
+      scope: 'client',
+      hint: 'pk_test_...',
+      group: 'Clerk',
+    });
+    vars.push({ name: 'CLERK_SECRET_KEY', scope: 'server', hint: 'sk_test_...', group: 'Clerk' });
+    vars.push({
+      name: 'CLERK_WEBHOOK_SIGNING_SECRET',
+      scope: 'server',
+      hint: 'whsec_...',
+      group: 'Clerk',
+    });
+  }
+
   if (has('mongodb')) {
     vars.push({
       name: 'DATABASE_URL',

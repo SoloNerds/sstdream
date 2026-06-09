@@ -302,6 +302,32 @@ export async function callApi(path: string, init?: RequestInit) {
 }
 `;
 
+// Auth helpers. Clerk (drop-in, env-driven) — middleware + ClerkProvider note.
+// Verified: @clerk/nextjs, clerkMiddleware from @clerk/nextjs/server.
+const clerkMiddlewareFile = (): string =>
+  `import { clerkMiddleware } from "@clerk/nextjs/server";
+
+// Clerk auth middleware. Also wrap app/layout.tsx with <ClerkProvider> from "@clerk/nextjs".
+export default clerkMiddleware();
+
+export const config = {
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)", "/(api|trpc)(.*)"],
+};
+`;
+
+// Cognito (AWS-native) — pool id via Resource; client id/region injected as env.
+const cognitoAuthLibFile = (poolName: string): string =>
+  `import { Resource } from "sst";
+
+// Browser auth config. NEXT_PUBLIC_COGNITO_CLIENT_ID and NEXT_PUBLIC_AWS_REGION are
+// injected by SST from the user-pool outputs (see sst.config.ts).
+export const cognito = {
+  userPoolId: Resource.${poolName}.id,
+  clientId: process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID,
+  region: process.env.NEXT_PUBLIC_AWS_REGION,
+};
+`;
+
 function packageAdditions(flags: {
   storage: boolean;
   queue: boolean;
@@ -311,6 +337,7 @@ function packageAdditions(flags: {
   postgres: boolean;
   stripe: boolean;
   mongodb: boolean;
+  clerk: boolean;
 }): string {
   const deps: Record<string, string> = { sst: 'latest' };
   if (flags.storage) {
@@ -327,6 +354,7 @@ function packageAdditions(flags: {
   if (flags.postgres) deps['pg'] = 'latest';
   if (flags.stripe) deps['stripe'] = 'latest';
   if (flags.mongodb) deps['mongodb'] = 'latest';
+  if (flags.clerk) deps['@clerk/nextjs'] = 'latest';
   const json = {
     dependencies: deps,
     scripts: { 'dev:sst': 'sst dev', deploy: 'sst deploy', remove: 'sst remove' },
@@ -453,6 +481,28 @@ export function generateRuntimeFiles(bp: Blueprint): GeneratedFile[] {
     });
   }
 
+  const clerkRes = bp.resources.find(
+    (r) =>
+      r.kind === 'clerk' &&
+      bp.connections.some((c) => c.intent === 'usesAuth' && c.target === r.id),
+  );
+  if (clerkRes) {
+    files.push({ path: 'middleware.ts', content: clerkMiddlewareFile(), language: 'ts' });
+  }
+
+  const cognitoRes = bp.resources.find(
+    (r) =>
+      r.kind === 'cognito' &&
+      bp.connections.some((c) => c.intent === 'usesCognito' && c.target === r.id),
+  );
+  if (cognitoRes) {
+    files.push({
+      path: 'lib/auth.ts',
+      content: cognitoAuthLibFile(cognitoRes.name),
+      language: 'ts',
+    });
+  }
+
   files.push({
     path: 'required-env.json',
     content: `${JSON.stringify(
@@ -509,6 +559,7 @@ export function generateRuntimeFiles(bp: Blueprint): GeneratedFile[] {
       postgres: Boolean(pgRes),
       stripe: Boolean(stripeRes),
       mongodb: Boolean(mongoRes),
+      clerk: Boolean(clerkRes),
     }),
     language: 'json',
   });
