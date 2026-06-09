@@ -438,6 +438,130 @@ export async function requireUser(): Promise<string> {
 }
 `;
 
+// Example frontend — closes the loop: a server-component page that lists via the
+// action + a client form that creates. Restylable starter, one route per table.
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+const crudDynamoPageFile = (tableName: string): string =>
+  `import { list } from "../actions/${kebabCase(tableName)}";
+import { CreateForm } from "./create-form";
+
+// Example CRUD page for "${tableName}" — lists items and creates them via the server
+// actions in app/actions/${kebabCase(tableName)}.ts. Restyle / extend freely.
+export default async function Page() {
+  const items = await list();
+  return (
+    <main style={{ maxWidth: 640, margin: "2rem auto", fontFamily: "system-ui" }}>
+      <h1>${tableName}</h1>
+      <CreateForm />
+      <ul>
+        {items.map((item, i) => (
+          <li key={i}>
+            <code>{JSON.stringify(item)}</code>
+          </li>
+        ))}
+      </ul>
+    </main>
+  );
+}
+`;
+
+const crudDynamoFormFile = (tableName: string, hashKey: string, rangeKey?: string): string => {
+  const hCap = cap(hashKey);
+  const rCap = rangeKey ? cap(rangeKey) : '';
+  const rangeState = rangeKey ? `  const [${rangeKey}, set${rCap}] = useState("");\n` : '';
+  const createArgs = rangeKey ? `{ ${hashKey}, ${rangeKey} }` : `{ ${hashKey} }`;
+  const resetRange = rangeKey ? `    set${rCap}("");\n` : '';
+  const rangeInput = rangeKey
+    ? `      <input value={${rangeKey}} onChange={(e) => set${rCap}(e.target.value)} placeholder="${rangeKey}" required />\n`
+    : '';
+  return `"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { create } from "../actions/${kebabCase(tableName)}";
+
+export function CreateForm() {
+  const router = useRouter();
+  const [${hashKey}, set${hCap}] = useState("");
+${rangeState}  const [pending, setPending] = useState(false);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setPending(true);
+    await create(${createArgs});
+    set${hCap}("");
+${resetRange}    setPending(false);
+    router.refresh();
+  }
+
+  return (
+    <form onSubmit={onSubmit} style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+      <input value={${hashKey}} onChange={(e) => set${hCap}(e.target.value)} placeholder="${hashKey}" required />
+${rangeInput}      <button type="submit" disabled={pending}>
+        Add
+      </button>
+    </form>
+  );
+}
+`;
+};
+
+const crudMongoPageFile = (): string =>
+  `import { list } from "../actions/items";
+import { CreateForm } from "./create-form";
+
+// Example CRUD page for the "items" Mongo collection.
+export default async function Page() {
+  const items = await list();
+  return (
+    <main style={{ maxWidth: 640, margin: "2rem auto", fontFamily: "system-ui" }}>
+      <h1>Items</h1>
+      <CreateForm />
+      <ul>
+        {items.map((item) => (
+          <li key={String(item._id)}>
+            <code>{JSON.stringify(item)}</code>
+          </li>
+        ))}
+      </ul>
+    </main>
+  );
+}
+`;
+
+const crudMongoFormFile = (): string =>
+  `"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { create } from "../actions/items";
+
+export function CreateForm() {
+  const router = useRouter();
+  const [name, setName] = useState("");
+  const [pending, setPending] = useState(false);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setPending(true);
+    await create({ name });
+    setName("");
+    setPending(false);
+    router.refresh();
+  }
+
+  return (
+    <form onSubmit={onSubmit} style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="name" required />
+      <button type="submit" disabled={pending}>
+        Add
+      </button>
+    </form>
+  );
+}
+`;
+
 function packageAdditions(flags: {
   storage: boolean;
   queue: boolean;
@@ -633,16 +757,33 @@ export function generateRuntimeFiles(bp: Blueprint): GeneratedFile[] {
         : typeof t.props.rangeKey === 'string' && t.props.rangeKey
           ? t.props.rangeKey
           : undefined;
+    const slug = kebabCase(t.name);
     files.push({
-      path: `app/actions/${kebabCase(t.name)}.ts`,
+      path: `app/actions/${slug}.ts`,
       content: crudDynamoActionFile(t.name, hashKey, rangeKey),
       language: 'ts',
     });
+    files.push({
+      path: `app/${slug}/page.tsx`,
+      content: crudDynamoPageFile(t.name),
+      language: 'tsx',
+    });
+    files.push({
+      path: `app/${slug}/create-form.tsx`,
+      content: crudDynamoFormFile(t.name, hashKey, rangeKey),
+      language: 'tsx',
+    });
   }
 
-  // Mongo example CRUD actions when the app queries Mongo.
+  // Mongo example CRUD actions + page when the app queries Mongo.
   if (mongoRes && bp.connections.some((c) => appIds.has(c.source) && c.intent === 'queriesMongo')) {
     files.push({ path: 'app/actions/items.ts', content: crudMongoActionFile(), language: 'ts' });
+    files.push({ path: 'app/items/page.tsx', content: crudMongoPageFile(), language: 'tsx' });
+    files.push({
+      path: 'app/items/create-form.tsx',
+      content: crudMongoFormFile(),
+      language: 'tsx',
+    });
   }
 
   // Clerk auth guard helper.
