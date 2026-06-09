@@ -305,6 +305,23 @@ export const AWS_TEMPLATES: TemplateMeta[] = [
     ],
   ),
   aws(
+    'aws-cdn-router',
+    'CDN Router',
+    'A Router front-door (custom domain) serving a static docs site at /docs and a bucket at /assets.',
+    ['Network', 'CDN'],
+    'cdn-router',
+    [
+      n('nextjs_1', 'nextjs', 'Web', 80, 200),
+      n('router_2', 'router', 'Router', 360, 80, { domain: 'example.com' }),
+      n('staticsite_3', 'staticsite', 'Docs', 640, 40, { routePath: '/docs' }),
+      n('bucket_4', 'bucket', 'Assets', 640, 200, { access: 'cloudfront', routePath: '/assets' }),
+    ],
+    [
+      e('edge_5', 'router_2', 'bucket_4', 'routesBucket'),
+      e('edge_6', 'staticsite_3', 'router_2', 'routedBy'),
+    ],
+  ),
+  aws(
     'aws-marketing',
     'Marketing Site',
     'Leads table + a weekly report cron.',

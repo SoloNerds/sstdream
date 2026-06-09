@@ -103,6 +103,13 @@ exports[`aws-sst-v4 catalog > matches snapshot 1`] = `
         ],
         "type": "select",
       },
+      {
+        "help": "Path pattern when a Router serves this bucket. Requires access: CloudFront.",
+        "key": "routePath",
+        "label": "Router path (when routed)",
+        "placeholder": "/files",
+        "type": "text",
+      },
     ],
   },
   "bus": {
@@ -324,6 +331,23 @@ exports[`aws-sst-v4 catalog > matches snapshot 1`] = `
       },
     ],
   },
+  "router": {
+    "accent": "bg-indigo-500",
+    "category": "network",
+    "component": "sst.aws.Router",
+    "defaultName": "Router",
+    "description": "CloudFront front-door that routes paths to buckets / static sites",
+    "kind": "router",
+    "label": "Router",
+    "props": [
+      {
+        "key": "domain",
+        "label": "Custom domain",
+        "placeholder": "example.com",
+        "type": "text",
+      },
+    ],
+  },
   "secret": {
     "accent": "bg-stone-600",
     "category": "config",
@@ -376,6 +400,13 @@ exports[`aws-sst-v4 catalog > matches snapshot 1`] = `
         "key": "buildOutput",
         "label": "Build output dir",
         "placeholder": "dist",
+        "type": "text",
+      },
+      {
+        "help": "Path pattern when a Router serves this site.",
+        "key": "routePath",
+        "label": "Router path (when routed)",
+        "placeholder": "/docs",
         "type": "text",
       },
     ],

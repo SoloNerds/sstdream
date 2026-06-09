@@ -116,6 +116,13 @@ function resourcesFor(
         }),
         P('CloudWatch', 'Access log group', { paid: true }),
       ];
+    case 'router':
+      return [
+        P('CloudFront', 'Distribution', { paid: true, note: 'the front-door CDN' }),
+        P('CloudFront', 'Cache policy'),
+        P('ACM', 'TLS certificate', { conditional: 'custom domain', security: true }),
+        P('Route53', 'DNS records', { conditional: 'custom domain' }),
+      ];
     case 'worker':
       return workerResources(r, ctx.isSubscriber(r));
     case 'cron':
@@ -199,6 +206,7 @@ const ORDER = [
   'bus',
   'snstopic',
   'apigatewayv2',
+  'router',
   'worker',
   'cron',
   'cognito',

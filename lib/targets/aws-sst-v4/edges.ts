@@ -60,6 +60,21 @@ export const AWS_EDGE_INTENTS: EdgeIntentMeta[] = [
     to: ['bucket'],
   },
   {
+    intent: 'routesBucket',
+    label: 'routes to bucket',
+    description:
+      'A Router serves a bucket at a path (router.routeBucket). Needs access: cloudfront.',
+    from: ['router'],
+    to: ['bucket'],
+  },
+  {
+    intent: 'routedBy',
+    label: 'routed by',
+    description: 'A static site is served under a Router at a path (router option).',
+    from: ['staticsite'],
+    to: ['router'],
+  },
+  {
     intent: 'usesSecret',
     label: 'uses secret',
     description: 'A component links a secret (Resource.<Secret>.value).',
@@ -144,6 +159,8 @@ const INTENT_BY_PAIR: Record<string, string> = {
   'worker>snstopic': 'subscribesTo',
   'cron>worker': 'invokes',
   'worker>apigatewayv2': 'handlesRoute',
+  'router>bucket': 'routesBucket',
+  'staticsite>router': 'routedBy',
   'nextjs>secret': 'usesSecret',
   'worker>secret': 'usesSecret',
   'cron>secret': 'usesSecret',

@@ -61,20 +61,21 @@ A new lane is registered in `lib/targets/registry.ts` plus the `generate.ts`,
 
 ## State of the lanes
 
-- **AWS lane is feature-deep.** 20 catalog kinds (Next.js, Static Site, Bucket, Dynamo +GSI,
-  Postgres/Aurora +fck-nat, Queue/Bus/SnsTopic, HTTP API, Worker, Cron, Secret, Email,
-  Cognito/Clerk, Stripe, MongoDB, External API, AI Chat). The export is a **complete runnable
-  project** (scaffold: package.json/tsconfig/next.config/layout/page + **AGENTS.md**), with
-  **full CRUD server actions + example pages** per Dynamo/Mongo table the app touches,
+- **AWS lane is complete.** 21 catalog kinds (Next.js, Static Site, Bucket, Dynamo +GSI,
+  Postgres/Aurora +fck-nat, Queue/Bus/SnsTopic, HTTP API, **Router**, Worker, Cron, Secret,
+  Email, Cognito/Clerk, Stripe, MongoDB, External API, AI Chat). The export is a **complete
+  runnable project** (scaffold: package.json/tsconfig/next.config/layout/page + **AGENTS.md**),
+  with **full CRUD server actions + example pages** per Dynamo/Mongo table the app touches,
   worker roles for queue/bus/topic subscribers, API routes, cron, and S3 notifications.
 - **Worker roles** (in `generator/plan.ts`): subscriber (queue/bus/topic, name-first vs
   object-first subscribe), route handler (handlesRoute → ApiGatewayV2), cron-invoked, bucket
   notifier (handlesBucketEvents → bucket.notify), or standalone function.
+- **Router** routes a bucket (`routeBucket`, router→bucket) and serves a StaticSite (router
+  option, staticsite→router); paths live on the routed node's `routePath` prop.
 
 ## Known follow-ups
 
-- **Router** is the one remaining AWS component (complex multi-resource `route`/`routeBucket`).
-- **Vercel lane parity** is the big frontier: simulation / cost / expansion / audit are
-  AWS-only and degrade gracefully on Vercel (selectors return empty). Resend email + an AI
-  SDK v5 template belong on the Vercel lane (email is SES on AWS, Resend on Vercel).
+- **Vercel lane parity** is the frontier: simulation / cost / expansion / audit are AWS-only
+  and degrade gracefully on Vercel (selectors return empty). Resend email + an AI SDK v5
+  template belong on the Vercel lane (email is SES on AWS, Resend on Vercel).
 - No in-app AI assistant (deferred by design until export quality is proven).

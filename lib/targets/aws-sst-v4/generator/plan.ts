@@ -65,6 +65,7 @@ export interface AwsPlan {
   crons: CronPlan[];
   routes: RoutePlan[];
   bucketNotifies: BucketNotifyPlan[];
+  routerBuckets: { routerVar: string; bucketVar: string; path: string }[];
   /** Worker resources, by their handler file, that need a generated handler. */
   workerHandlerFiles: string[];
 }
@@ -82,6 +83,7 @@ const DECL_ORDER: Record<string, number> = {
   bus: 3,
   snstopic: 3,
   apigatewayv2: 3,
+  router: 3,
   worker: 4,
   nextjs: 5,
   staticsite: 5,
@@ -114,6 +116,7 @@ export function planAws(bp: Blueprint): AwsPlan {
       r.kind === 'bus' ||
       r.kind === 'snstopic' ||
       r.kind === 'apigatewayv2' ||
+      r.kind === 'router' ||
       r.kind === 'nextjs' ||
       r.kind === 'staticsite' ||
       (r.kind === 'worker' &&
@@ -216,6 +219,21 @@ export function planAws(bp: Blueprint): AwsPlan {
   }
   const bucketNotifies = [...bucketNotifyMap.values()];
 
+  const routerBuckets = bp.connections
+    .filter((c) => c.intent === 'routesBucket')
+    .map((c) => {
+      const routerVar = varNameById.get(c.source);
+      const bucket = byId.get(c.target);
+      const bucketVar = varNameById.get(c.target);
+      if (!routerVar || !bucket || !bucketVar) return null;
+      const path =
+        typeof bucket.props.routePath === 'string' && bucket.props.routePath
+          ? bucket.props.routePath
+          : '/*';
+      return { routerVar, bucketVar, path };
+    })
+    .filter((x): x is { routerVar: string; bucketVar: string; path: string } => Boolean(x));
+
   const linkVarsById = new Map(bp.resources.map((r) => [r.id, linkVarsFor(r.id)]));
 
   const declared = bp.resources
@@ -240,6 +258,7 @@ export function planAws(bp: Blueprint): AwsPlan {
     functions,
     crons,
     bucketNotifies,
+    routerBuckets,
     workerHandlerFiles,
   };
 }

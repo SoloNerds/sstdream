@@ -126,6 +126,18 @@ function renderBucketNotify(bn: AwsPlan['bucketNotifies'][number]): string {
   return [`${bn.bucketVar}.notify({`, `  notifications: [`, ...entries, `  ],`, `});`].join('\n');
 }
 
+function renderRouter(r: Resource, plan: AwsPlan): string {
+  const v = plan.varNameById.get(r.id);
+  const domain = str(r.props.domain);
+  return domain
+    ? `const ${v} = new sst.aws.Router("${r.name}", {\n  domain: "${domain}",\n});`
+    : `const ${v} = new sst.aws.Router("${r.name}");`;
+}
+
+function renderRouteBucket(rb: AwsPlan['routerBuckets'][number]): string {
+  return `${rb.routerVar}.routeBucket("${rb.path}", ${rb.bucketVar});`;
+}
+
 function renderEmail(r: Resource, plan: AwsPlan): string {
   const v = plan.varNameById.get(r.id);
   const sender = str(r.props.sender) ?? 'noreply@example.com';
@@ -240,6 +252,12 @@ function renderStaticSite(r: Resource, plan: AwsPlan): string {
   const cmd = str(r.props.buildCommand);
   const out = str(r.props.buildOutput);
   if (cmd && out) lines.push(`  build: { command: "${cmd}", output: "${out}" },`);
+  // Served under a Router at a path (router option).
+  const routedBy = plan.bp.connections.find((c) => c.source === r.id && c.intent === 'routedBy');
+  const routerVar = routedBy ? plan.varNameById.get(routedBy.target) : undefined;
+  if (routerVar) {
+    lines.push(`  router: { instance: ${routerVar}, path: "${str(r.props.routePath) ?? '/'}" },`);
+  }
   lines.push(`});`);
   return lines.join('\n');
 }
@@ -248,6 +266,7 @@ const OUTPUT_ORDER: Record<string, number> = {
   nextjs: 0,
   staticsite: 0,
   apigatewayv2: 0,
+  router: 0,
   bucket: 1,
   dynamo: 2,
   queue: 3,
@@ -263,7 +282,8 @@ function renderOutputs(bp: Blueprint, plan: AwsPlan): string | null {
         r.kind === 'nextjs' ||
         r.kind === 'queue' ||
         r.kind === 'staticsite' ||
-        r.kind === 'apigatewayv2'
+        r.kind === 'apigatewayv2' ||
+        r.kind === 'router'
           ? 'url'
           : 'name';
       return `  ${v}: ${v}.${prop},`;
@@ -298,11 +318,13 @@ export function generateSstConfig(bp: Blueprint): string {
   for (const r of byKind('bus')) statements.push(renderBus(r, plan));
   for (const r of byKind('snstopic')) statements.push(renderSnsTopic(r, plan));
   for (const r of byKind('apigatewayv2')) statements.push(renderApi(r, plan));
+  for (const r of byKind('router')) statements.push(renderRouter(r, plan));
   for (const sub of plan.subscribers) statements.push(renderSubscriber(sub));
   for (const fn of plan.functions) statements.push(renderFunction(fn));
   for (const cron of plan.crons) statements.push(renderCron(cron));
   for (const route of plan.routes) statements.push(renderRoute(route));
   for (const bn of plan.bucketNotifies) statements.push(renderBucketNotify(bn));
+  for (const rb of plan.routerBuckets) statements.push(renderRouteBucket(rb));
   for (const r of byKind('nextjs')) statements.push(renderNextjs(r, plan));
   for (const r of byKind('staticsite')) statements.push(renderStaticSite(r, plan));
 

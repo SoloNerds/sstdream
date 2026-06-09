@@ -175,6 +175,21 @@ export const AWS_RULES: ValidationRule[] = [
         })),
   },
   {
+    id: 'routed-bucket-cloudfront',
+    run: (bp) =>
+      bp.connections
+        .filter((c) => c.intent === 'routesBucket')
+        .map((c) => bp.resources.find((r) => r.id === c.target))
+        .filter((b) => b && b.props.access !== 'cloudfront')
+        .map((b) => ({
+          rule: 'routed-bucket-cloudfront',
+          severity: 'warning' as const,
+          resourceId: b!.id,
+          message: `Bucket "${b!.name}" is routed by a Router but its access isn't "cloudfront".`,
+          hint: 'Set the bucket access to CloudFront so the Router can serve it.',
+        })),
+  },
+  {
     id: 'orphan-secret',
     run: (bp) =>
       bp.resources

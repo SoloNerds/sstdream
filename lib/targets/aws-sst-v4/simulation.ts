@@ -18,6 +18,8 @@ const VERB: Record<string, string> = {
   callsApi: 'calls',
   usesCognito: 'authenticates with',
   usesAuth: 'authenticates with',
+  routesBucket: 'routes to',
+  routedBy: 'served by',
   linksTo: 'links to',
 };
 
@@ -34,6 +36,8 @@ const LEAF_INTENTS = new Set([
   'callsApi',
   'usesCognito',
   'usesAuth',
+  'routesBucket',
+  'routedBy',
   'linksTo',
 ]);
 
@@ -127,7 +131,12 @@ export function simulateAws(bp: Blueprint): SimTrace {
   };
 
   const entries = bp.resources.filter(
-    (r) => r.kind === 'nextjs' || r.kind === 'cron' || r.kind === 'apigatewayv2',
+    (r) =>
+      r.kind === 'nextjs' ||
+      r.kind === 'cron' ||
+      r.kind === 'apigatewayv2' ||
+      r.kind === 'router' ||
+      r.kind === 'staticsite',
   );
   for (const entry of entries) {
     events.push({
