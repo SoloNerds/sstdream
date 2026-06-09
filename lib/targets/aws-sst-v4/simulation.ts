@@ -106,6 +106,22 @@ export function simulateAws(bp: Blueprint): SimTrace {
           status: 'ok',
           label: `${name(edge.source)} ${VERB[edge.intent]} ${name(edge.target)}`,
         });
+        // Writing/uploading to a bucket can trigger its S3-event notifier workers.
+        if (byId.get(edge.target)?.kind === 'bucket') {
+          for (const nf of bp.connections.filter(
+            (c) => c.target === edge.target && c.intent === 'handlesBucketEvents',
+          )) {
+            events.push({
+              id: eid(),
+              edgeId: nf.id,
+              sourceId: edge.target,
+              targetId: nf.source,
+              status: 'ok',
+              label: `${name(edge.target)} notifies ${name(nf.source)}`,
+            });
+            walk(nf.source);
+          }
+        }
       }
     }
   };
@@ -145,7 +161,10 @@ export function simulateAws(bp: Blueprint): SimTrace {
   }
 
   for (const w of bp.resources.filter((r) => r.kind === 'worker')) {
-    if (!visited.has(w.id)) {
+    const isNotifier = bp.connections.some(
+      (c) => c.source === w.id && c.intent === 'handlesBucketEvents',
+    );
+    if (!visited.has(w.id) && !isNotifier) {
       events.push({
         id: eid(),
         sourceId: w.id,

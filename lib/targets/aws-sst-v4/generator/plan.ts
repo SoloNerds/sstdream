@@ -41,6 +41,18 @@ export interface RoutePlan {
   linkVars: string[];
 }
 
+export interface BucketNotifyPlan {
+  bucketVar: string;
+  bucketName: string;
+  notifiers: {
+    worker: Resource;
+    name: string;
+    handlerPath: string;
+    handlerFile: string;
+    linkVars: string[];
+  }[];
+}
+
 export interface AwsPlan {
   bp: Blueprint;
   varNameById: Map<string, string>;
@@ -52,6 +64,7 @@ export interface AwsPlan {
   functions: FunctionPlan[];
   crons: CronPlan[];
   routes: RoutePlan[];
+  bucketNotifies: BucketNotifyPlan[];
   /** Worker resources, by their handler file, that need a generated handler. */
   workerHandlerFiles: string[];
 }
@@ -82,6 +95,9 @@ export function planAws(bp: Blueprint): AwsPlan {
   const isCronInvoked = (w: Resource) => incoming(w.id).some((c) => c.intent === 'invokes');
   const routeEdge = (w: Resource) => outgoing(w.id).find((c) => c.intent === 'handlesRoute');
   const isRouteHandler = (w: Resource) => Boolean(routeEdge(w));
+  const notifyEdge = (w: Resource) =>
+    outgoing(w.id).find((c) => c.intent === 'handlesBucketEvents');
+  const isBucketNotifier = (w: Resource) => Boolean(notifyEdge(w));
 
   const varNameById = new Map<string, string>();
   for (const r of bp.resources) {
@@ -100,7 +116,11 @@ export function planAws(bp: Blueprint): AwsPlan {
       r.kind === 'apigatewayv2' ||
       r.kind === 'nextjs' ||
       r.kind === 'staticsite' ||
-      (r.kind === 'worker' && !isSubscriber(r) && !isCronInvoked(r) && !isRouteHandler(r));
+      (r.kind === 'worker' &&
+        !isSubscriber(r) &&
+        !isCronInvoked(r) &&
+        !isRouteHandler(r) &&
+        !isBucketNotifier(r));
     if (standalone) varNameById.set(r.id, camelCase(r.name));
   }
 
@@ -136,7 +156,12 @@ export function planAws(bp: Blueprint): AwsPlan {
 
   const functions: FunctionPlan[] = bp.resources
     .filter(
-      (r) => r.kind === 'worker' && !isSubscriber(r) && !isCronInvoked(r) && !isRouteHandler(r),
+      (r) =>
+        r.kind === 'worker' &&
+        !isSubscriber(r) &&
+        !isCronInvoked(r) &&
+        !isRouteHandler(r) &&
+        !isBucketNotifier(r),
     )
     .map((w) => ({
       worker: w,
@@ -172,6 +197,25 @@ export function planAws(bp: Blueprint): AwsPlan {
       };
     });
 
+  const bucketNotifyMap = new Map<string, BucketNotifyPlan>();
+  for (const w of bp.resources.filter((r) => r.kind === 'worker' && isBucketNotifier(r))) {
+    const bucketId = notifyEdge(w)!.target;
+    const bucket = byId.get(bucketId);
+    const bucketVar = varNameById.get(bucketId);
+    if (!bucket || !bucketVar) continue;
+    if (!bucketNotifyMap.has(bucketId)) {
+      bucketNotifyMap.set(bucketId, { bucketVar, bucketName: bucket.name, notifiers: [] });
+    }
+    bucketNotifyMap.get(bucketId)!.notifiers.push({
+      worker: w,
+      name: w.name,
+      handlerPath: handlerPathFor(w),
+      handlerFile: handlerFileFor(w),
+      linkVars: linkVarsFor(w.id),
+    });
+  }
+  const bucketNotifies = [...bucketNotifyMap.values()];
+
   const linkVarsById = new Map(bp.resources.map((r) => [r.id, linkVarsFor(r.id)]));
 
   const declared = bp.resources
@@ -183,6 +227,7 @@ export function planAws(bp: Blueprint): AwsPlan {
     ...functions.map((f) => f.handlerFile),
     ...crons.map((c) => c.handlerFile).filter((f): f is string => Boolean(f)),
     ...routes.map((r) => r.handlerFile),
+    ...bucketNotifies.flatMap((b) => b.notifiers.map((n) => n.handlerFile)),
   ]);
 
   return {
@@ -194,6 +239,7 @@ export function planAws(bp: Blueprint): AwsPlan {
     routes,
     functions,
     crons,
+    bucketNotifies,
     workerHandlerFiles,
   };
 }

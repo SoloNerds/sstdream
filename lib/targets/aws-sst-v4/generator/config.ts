@@ -109,6 +109,23 @@ function renderRoute(route: AwsPlan['routes'][number]): string {
   return `${route.apiVar}.route("${route.route}", "${route.handlerPath}");`;
 }
 
+// bucket.notify({ notifications: [{ name, function, events }] }) — S3 object events → Lambda.
+function renderBucketNotify(bn: AwsPlan['bucketNotifies'][number]): string {
+  const entries = bn.notifiers.map((n) => {
+    const fn = n.linkVars.length
+      ? `{ handler: "${n.handlerPath}", link: ${linkArray(n.linkVars)} }`
+      : `"${n.handlerPath}"`;
+    return [
+      `    {`,
+      `      name: "${n.name}",`,
+      `      function: ${fn},`,
+      `      events: ["s3:ObjectCreated:*"],`,
+      `    },`,
+    ].join('\n');
+  });
+  return [`${bn.bucketVar}.notify({`, `  notifications: [`, ...entries, `  ],`, `});`].join('\n');
+}
+
 function renderEmail(r: Resource, plan: AwsPlan): string {
   const v = plan.varNameById.get(r.id);
   const sender = str(r.props.sender) ?? 'noreply@example.com';
@@ -285,6 +302,7 @@ export function generateSstConfig(bp: Blueprint): string {
   for (const fn of plan.functions) statements.push(renderFunction(fn));
   for (const cron of plan.crons) statements.push(renderCron(cron));
   for (const route of plan.routes) statements.push(renderRoute(route));
+  for (const bn of plan.bucketNotifies) statements.push(renderBucketNotify(bn));
   for (const r of byKind('nextjs')) statements.push(renderNextjs(r, plan));
   for (const r of byKind('staticsite')) statements.push(renderStaticSite(r, plan));
 

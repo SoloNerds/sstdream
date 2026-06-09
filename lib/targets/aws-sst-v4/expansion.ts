@@ -58,6 +58,7 @@ function bucketResources(r: Resource): PhysicalResource[] {
     P('S3', 'Public access block', { security: true }),
     P('S3', 'Ownership controls'),
     P('S3', 'CORS configuration'),
+    P('Lambda', 'Event notification', { conditional: 'a worker handles its events' }),
     // NOTE: a Bucket NEVER creates a CloudFront distribution (verified).
   ];
 }

@@ -191,6 +191,20 @@ export async function handler(event: {
 }
 `;
 
+// S3 event handler (bucket.notify → Lambda on object events).
+const s3NotifyHandlerFile = (name: string): string =>
+  `/** S3 event handler for "${name}". Runs on object events (e.g. uploads). */
+export async function handler(event: {
+  Records: { s3: { bucket: { name: string }; object: { key: string } } }[];
+}) {
+  for (const record of event.Records) {
+    const key = record.s3.object.key;
+    console.log("S3 event for object:", key);
+    // TODO: process the object (read it, resize, index it, …)
+  }
+}
+`;
+
 // Verified Anthropic usage (claude-api skill): model id `claude-opus-4-8` (no date
 // suffix), official @anthropic-ai/sdk messages.stream(). Key is server-only via an SST
 // secret; the streaming Route Handler validates input before calling Claude.
@@ -917,6 +931,11 @@ export function generateRuntimeFiles(bp: Blueprint): GeneratedFile[] {
       content: apiRouteHandlerFile(route.route),
       language: 'ts',
     });
+  }
+  for (const bn of plan.bucketNotifies) {
+    for (const n of bn.notifiers) {
+      files.push({ path: n.handlerFile, content: s3NotifyHandlerFile(n.name), language: 'ts' });
+    }
   }
 
   files.push({

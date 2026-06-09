@@ -53,6 +53,13 @@ export const AWS_EDGE_INTENTS: EdgeIntentMeta[] = [
     to: ['apigatewayv2'],
   },
   {
+    intent: 'handlesBucketEvents',
+    label: 'handles events of',
+    description: 'A worker runs on S3 object events (bucket.notify — e.g. process uploads).',
+    from: ['worker'],
+    to: ['bucket'],
+  },
+  {
     intent: 'usesSecret',
     label: 'uses secret',
     description: 'A component links a secret (Resource.<Secret>.value).',

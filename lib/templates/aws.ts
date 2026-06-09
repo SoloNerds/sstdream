@@ -258,6 +258,24 @@ export const AWS_TEMPLATES: TemplateMeta[] = [
     ],
   ),
   aws(
+    'aws-image-pipeline',
+    'Image Pipeline',
+    'Uploads to S3 trigger a worker (bucket.notify) that processes and logs to DynamoDB.',
+    ['Storage', 'Events'],
+    'image-pipeline',
+    [
+      n('nextjs_1', 'nextjs', 'Web', 80, 160),
+      n('bucket_2', 'bucket', 'Uploads', 360, 80),
+      n('worker_3', 'worker', 'Resize', 640, 80),
+      n('dynamo_4', 'dynamo', 'Images', 640, 260),
+    ],
+    [
+      e('edge_5', 'nextjs_1', 'bucket_2', 'uploadsTo'),
+      e('edge_6', 'worker_3', 'bucket_2', 'handlesBucketEvents'),
+      e('edge_7', 'worker_3', 'dynamo_4', 'writesTo'),
+    ],
+  ),
+  aws(
     'aws-marketing',
     'Marketing Site',
     'Leads table + a weekly report cron.',

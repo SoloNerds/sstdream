@@ -163,14 +163,15 @@ export const AWS_RULES: ValidationRule[] = [
           (w) =>
             !bp.connections.some((c) => c.source === w.id && c.intent === 'subscribesTo') &&
             !bp.connections.some((c) => c.target === w.id && c.intent === 'invokes') &&
-            !bp.connections.some((c) => c.source === w.id && c.intent === 'handlesRoute'),
+            !bp.connections.some((c) => c.source === w.id && c.intent === 'handlesRoute') &&
+            !bp.connections.some((c) => c.source === w.id && c.intent === 'handlesBucketEvents'),
         )
         .map((w) => ({
           rule: 'worker-needs-trigger',
           severity: 'warning' as const,
           resourceId: w.id,
-          message: `Worker "${w.name}" is not triggered by a queue, cron, or API route.`,
-          hint: 'Wire it to a Queue/Bus/Topic (subscribesTo), a Cron (invokes), or an HTTP API (handlesRoute).',
+          message: `Worker "${w.name}" is not triggered by a queue, cron, API route, or bucket event.`,
+          hint: 'Wire it to a Queue/Bus/Topic (subscribesTo), a Cron (invokes), an HTTP API (handlesRoute), or a Bucket (handlesBucketEvents).',
         })),
   },
   {
