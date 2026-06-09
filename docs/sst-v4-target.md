@@ -5,8 +5,8 @@
 > document. Do not change a renderer without updating the matching section here.
 
 - **Doc version:** `0.1.0`
-- **Verified against live SST docs on:** `2026-06-08`
-- **SST major:** `4` (Ion / `$config` era)
+- **Verified against live SST docs on:** `2026-06-08` (re-verified; `sst` latest is **v4.15.2**, no v5)
+- **SST major:** `4` (Pulumi AWS **v7** era; the `$config` model continued from v3/"Ion")
 - **Underlying Pulumi AWS provider:** `v7` (SST v3 was v6)
 - **TypeScript:** `5+` required for config types
 - **Provenance:** every fact below was confirmed against `sst.dev/docs/*` on the date
@@ -218,6 +218,33 @@ new sst.aws.Nextjs('Web', { link: [secret] });
 // set out-of-band: `sst secret set MySecret <value> [--stage prod] [--fallback]`
 // runtime: Resource.MySecret.value
 ```
+
+### 4.8 Additional components (verified 2026-06-08)
+
+- **`sst.aws.Email`** (SES) — `new sst.aws.Email("Mailer", { sender })`; `sender` is an
+  email or a domain (domain verifies via `dns`). Link → `Resource.Mailer.sender`; send with
+  `@aws-sdk/client-sesv2` `SendEmailCommand` (`FromEmailAddress: Resource.Mailer.sender`).
+  New SES accounts start in sandbox.
+- **`sst.aws.Postgres`** (RDS) — **requires a `vpc`**: `const vpc = new sst.aws.Vpc("Vpc");
+new sst.aws.Postgres("Db", { vpc })`. Link exposes
+  `Resource.Db.{host,port,username,password,database}` → use the `pg` driver. **Not Aurora.**
+- **`sst.aws.Aurora`** — distinct (Aurora Serverless v2): `new sst.aws.Aurora("Db",
+{ engine: "postgres", vpc })`.
+- **`sst.aws.ApiGatewayV2`** — `const api = new sst.aws.ApiGatewayV2("Api");
+api.route("GET /", "src/get.handler")` (route key = `"METHOD /path"`; optional 3rd-arg
+  config for `link`/`auth`/`memory`).
+- **`sst.aws.Bus`** / **`sst.aws.SnsTopic`** — `new sst.aws.Bus("Bus")` /
+  `new sst.aws.SnsTopic("Topic")`, each with `.subscribe(...)`; link exposes `.arn`/`.name`.
+- **`sst.aws.Router`** / **`sst.aws.StaticSite`** / **`sst.aws.Vpc`** — routing, static
+  hosting, and the network the databases need.
+
+> **Implemented in the generator:** Email, Postgres (with auto-VPC), plus the **AI Chat**
+> integration (`@anthropic-ai/sdk`, model `claude-opus-4-8`). Bus/SnsTopic/Router/StaticSite/
+> ApiGatewayV2 are documented + verified here and queued for the next generator pass.
+
+> **Next.js 16 note:** generated Route Handlers (`app/api/.../route.ts`) export async HTTP
+> methods; dynamic `params`/`searchParams` and `cookies()`/`headers()` are **async** (await
+> them). Our generated routes don't read dynamic params, so they're 16-clean as-is.
 
 ---
 

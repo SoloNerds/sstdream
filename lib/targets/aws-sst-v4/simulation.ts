@@ -11,6 +11,8 @@ const VERB: Record<string, string> = {
   readsFrom: 'reads from',
   usesSecret: 'uses secret',
   usesAI: 'uses AI',
+  queriesDb: 'queries',
+  sendsEmail: 'sends email through',
   linksTo: 'links to',
 };
 
@@ -20,6 +22,8 @@ const LEAF_INTENTS = new Set([
   'readsFrom',
   'usesSecret',
   'usesAI',
+  'queriesDb',
+  'sendsEmail',
   'linksTo',
 ]);
 

@@ -208,11 +208,47 @@ export async function POST(request: Request) {
 }
 `;
 
+// SES email helper — sender comes from the linked Email resource.
+const emailHelperFile = (emailName: string): string =>
+  `import { Resource } from "sst";
+import { SESv2Client, SendEmailCommand } from "@aws-sdk/client-sesv2";
+
+const ses = new SESv2Client();
+
+/** Send a transactional email via Amazon SES. */
+export async function sendEmail(to: string, subject: string, body: string) {
+  await ses.send(
+    new SendEmailCommand({
+      FromEmailAddress: Resource.${emailName}.sender,
+      Destination: { ToAddresses: [to] },
+      Content: { Simple: { Subject: { Data: subject }, Body: { Text: { Data: body } } } },
+    }),
+  );
+}
+`;
+
+// RDS Postgres pool — connection comes from the linked Postgres resource.
+const postgresHelperFile = (dbName: string): string =>
+  `import { Resource } from "sst";
+import { Pool } from "pg";
+
+// Connects to the linked RDS Postgres via the SST Resource (host/port/credentials).
+export const pool = new Pool({
+  host: Resource.${dbName}.host,
+  port: Resource.${dbName}.port,
+  user: Resource.${dbName}.username,
+  password: Resource.${dbName}.password,
+  database: Resource.${dbName}.database,
+});
+`;
+
 function packageAdditions(flags: {
   storage: boolean;
   queue: boolean;
   dynamo: boolean;
   ai: boolean;
+  email: boolean;
+  postgres: boolean;
 }): string {
   const deps: Record<string, string> = { sst: 'latest' };
   if (flags.storage) {
@@ -225,6 +261,8 @@ function packageAdditions(flags: {
     deps['@aws-sdk/lib-dynamodb'] = 'latest';
   }
   if (flags.ai) deps['@anthropic-ai/sdk'] = 'latest';
+  if (flags.email) deps['@aws-sdk/client-sesv2'] = 'latest';
+  if (flags.postgres) deps['pg'] = 'latest';
   const json = {
     dependencies: deps,
     scripts: { 'dev:sst': 'sst dev', deploy: 'sst deploy', remove: 'sst remove' },
@@ -298,6 +336,18 @@ export function generateRuntimeFiles(bp: Blueprint): GeneratedFile[] {
     files.push({ path: 'app/api/chat/route.ts', content: aiChatRouteFile(), language: 'ts' });
   }
 
+  const emailEdge = bp.connections.find((c) => c.intent === 'sendsEmail');
+  const emailRes = emailEdge ? resourceOf(emailEdge.target) : undefined;
+  if (emailRes) {
+    files.push({ path: 'lib/email.ts', content: emailHelperFile(emailRes.name), language: 'ts' });
+  }
+
+  const pgEdge = bp.connections.find((c) => c.intent === 'queriesDb');
+  const pgRes = pgEdge ? resourceOf(pgEdge.target) : undefined;
+  if (pgRes) {
+    files.push({ path: 'lib/db.ts', content: postgresHelperFile(pgRes.name), language: 'ts' });
+  }
+
   const linksDynamo = (linkVars: string[]) => linkVars.some((v) => varToKind.get(v) === 'dynamo');
 
   for (const sub of plan.subscribers) {
@@ -334,6 +384,8 @@ export function generateRuntimeFiles(bp: Blueprint): GeneratedFile[] {
       queue: Boolean(publishQueue),
       dynamo: Boolean(dynamoRes),
       ai: Boolean(aiRes),
+      email: Boolean(emailRes),
+      postgres: Boolean(pgRes),
     }),
     language: 'json',
   });

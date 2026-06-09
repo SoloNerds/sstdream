@@ -46,8 +46,10 @@ export interface AwsPlan {
 const DECL_ORDER: Record<string, number> = {
   secret: 0,
   ai: 0,
+  email: 0,
   bucket: 1,
   dynamo: 2,
+  postgres: 2,
   queue: 3,
   worker: 4,
   nextjs: 5,
@@ -65,8 +67,10 @@ export function planAws(bp: Blueprint): AwsPlan {
     const standalone =
       r.kind === 'secret' ||
       r.kind === 'ai' ||
+      r.kind === 'email' ||
       r.kind === 'bucket' ||
       r.kind === 'dynamo' ||
+      r.kind === 'postgres' ||
       r.kind === 'queue' ||
       r.kind === 'nextjs' ||
       (r.kind === 'worker' && !isSubscriber(r) && !isCronInvoked(r));

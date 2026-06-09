@@ -117,6 +117,16 @@ function breakdownFor(r: Resource): CostBreakdown {
     case 'ai':
       lines = [{ label: 'Anthropic API (usage-based)', usd: 0 }];
       break;
+    case 'email':
+      lines = [{ label: 'SES (~10k emails)', usd: 1 }];
+      break;
+    case 'postgres':
+      lines = [
+        { label: 'RDS Postgres (db.t4g.micro)', usd: 13 },
+        { label: 'Storage (20GB gp3)', usd: 2.3 },
+        { label: 'VPC NAT gateway', usd: 32 },
+      ];
+      break;
     default:
       lines = [];
   }

@@ -62,6 +62,19 @@ function renderQueue(r: Resource, plan: AwsPlan): string {
   return `const ${v} = new sst.aws.Queue("${r.name}");`;
 }
 
+function renderEmail(r: Resource, plan: AwsPlan): string {
+  const v = plan.varNameById.get(r.id);
+  const sender = str(r.props.sender) ?? 'noreply@example.com';
+  return `const ${v} = new sst.aws.Email("${r.name}", {\n  sender: "${sender}",\n});`;
+}
+
+// RDS Postgres requires a Vpc (distinct from sst.aws.Aurora). One shared Vpc is
+// generated automatically when any Postgres is present.
+function renderPostgres(r: Resource, plan: AwsPlan): string {
+  const v = plan.varNameById.get(r.id);
+  return `const ${v} = new sst.aws.Postgres("${r.name}", {\n  vpc,\n});`;
+}
+
 function renderSubscriber(sub: AwsPlan['subscribers'][number]): string {
   // Queue.subscribe is SUBSCRIBER-FIRST: handler/link/timeout go in the first object.
   const p = sub.worker.props;
@@ -141,8 +154,14 @@ export function generateSstConfig(bp: Blueprint): string {
   const statements: string[] = [];
   for (const r of byKind('secret')) statements.push(renderSecret(r, plan));
   for (const r of byKind('ai')) statements.push(renderSecret(r, plan));
+  for (const r of byKind('email')) statements.push(renderEmail(r, plan));
   for (const r of byKind('bucket')) statements.push(renderBucket(r, plan));
   for (const r of byKind('dynamo')) statements.push(renderDynamo(r, plan));
+  const postgresResources = byKind('postgres');
+  if (postgresResources.length) {
+    statements.push('const vpc = new sst.aws.Vpc("Vpc");');
+    for (const r of postgresResources) statements.push(renderPostgres(r, plan));
+  }
   for (const r of byKind('queue')) statements.push(renderQueue(r, plan));
   for (const sub of plan.subscribers) statements.push(renderSubscriber(sub));
   for (const fn of plan.functions) statements.push(renderFunction(fn));

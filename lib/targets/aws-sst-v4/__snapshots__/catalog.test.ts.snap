@@ -107,6 +107,23 @@ exports[`aws-sst-v4 catalog > matches snapshot 1`] = `
       },
     ],
   },
+  "email": {
+    "accent": "bg-orange-600",
+    "category": "config",
+    "component": "sst.aws.Email",
+    "defaultName": "Mailer",
+    "description": "Transactional email via Amazon SES",
+    "kind": "email",
+    "label": "Email",
+    "props": [
+      {
+        "key": "sender",
+        "label": "Sender (email or domain)",
+        "placeholder": "noreply@example.com",
+        "type": "text",
+      },
+    ],
+  },
   "nextjs": {
     "accent": "bg-neutral-800",
     "category": "compute",
@@ -136,6 +153,15 @@ exports[`aws-sst-v4 catalog > matches snapshot 1`] = `
       },
     ],
     "singleton": true,
+  },
+  "postgres": {
+    "accent": "bg-cyan-700",
+    "category": "database",
+    "component": "sst.aws.Postgres",
+    "defaultName": "Database",
+    "description": "RDS Postgres (a VPC is generated automatically)",
+    "kind": "postgres",
+    "label": "Postgres",
   },
   "queue": {
     "accent": "bg-amber-600",

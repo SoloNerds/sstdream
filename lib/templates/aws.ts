@@ -153,6 +153,24 @@ export const AWS_TEMPLATES: TemplateMeta[] = [
     ],
   ),
   aws(
+    'aws-relational-saas',
+    'Relational SaaS',
+    'RDS Postgres (VPC auto-generated), transactional email, Stripe secret.',
+    ['SaaS', 'Database'],
+    'relational-saas',
+    [
+      n('nextjs_1', 'nextjs', 'Web', 80, 180),
+      n('postgres_2', 'postgres', 'Database', 380, 60),
+      n('email_3', 'email', 'Mailer', 380, 180, { sender: 'noreply@example.com' }),
+      n('secret_4', 'secret', 'StripeKey', 80, 340),
+    ],
+    [
+      e('edge_5', 'nextjs_1', 'postgres_2', 'queriesDb'),
+      e('edge_6', 'nextjs_1', 'email_3', 'sendsEmail'),
+      e('edge_7', 'nextjs_1', 'secret_4', 'usesSecret'),
+    ],
+  ),
+  aws(
     'aws-marketing',
     'Marketing Site',
     'Leads table + a weekly report cron.',

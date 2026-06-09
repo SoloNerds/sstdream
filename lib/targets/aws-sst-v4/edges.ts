@@ -60,6 +60,20 @@ export const AWS_EDGE_INTENTS: EdgeIntentMeta[] = [
     to: ['ai'],
   },
   {
+    intent: 'queriesDb',
+    label: 'queries',
+    description: 'App/worker connects to RDS Postgres (link + pg pool helper).',
+    from: ['nextjs', 'worker'],
+    to: ['postgres'],
+  },
+  {
+    intent: 'sendsEmail',
+    label: 'sends email through',
+    description: 'App/worker sends email via SES (link + SESv2 helper).',
+    from: ['nextjs', 'worker'],
+    to: ['email'],
+  },
+  {
     intent: 'linksTo',
     label: 'links to',
     description: 'Generic link: grants access + SDK exposure with no specific helper.',
@@ -80,6 +94,10 @@ const INTENT_BY_PAIR: Record<string, string> = {
   'worker>secret': 'usesSecret',
   'cron>secret': 'usesSecret',
   'nextjs>ai': 'usesAI',
+  'nextjs>postgres': 'queriesDb',
+  'worker>postgres': 'queriesDb',
+  'nextjs>email': 'sendsEmail',
+  'worker>email': 'sendsEmail',
 };
 
 export function awsDefaultIntent(fromKind: string, toKind: string): string | null {
