@@ -66,8 +66,8 @@ export function auditAws(bp: Blueprint): SecurityFinding[] {
     });
   }
 
-  // NAT cost / egress notes.
-  for (const p of byKind('postgres')) {
+  // NAT cost / egress notes (Postgres + Aurora share the generated VPC).
+  for (const p of [...byKind('postgres'), ...byKind('aurora')]) {
     const nat = p.props.nat;
     if (nat === 'managed') {
       out.push({

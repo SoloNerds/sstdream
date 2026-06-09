@@ -37,6 +37,17 @@ function renderDynamo(r: Resource, plan: AwsPlan): string {
 
   const fields: Record<string, string> = { [hashKey]: 'string' };
   if (rangeKey) fields[rangeKey] = 'string';
+
+  // Optional global secondary index — for querying by a non-key attribute.
+  const gsiName = str(r.props.gsiName);
+  const gsiHash = str(r.props.gsiHashKey);
+  const gsiRange = str(r.props.gsiRangeKey);
+  const hasGsi = Boolean(gsiName && gsiHash);
+  if (hasGsi) {
+    fields[gsiHash!] = 'string';
+    if (gsiRange) fields[gsiRange] = 'string';
+  }
+
   const fieldLines = Object.entries(fields)
     .map(([k, t]) => `    ${k}: "${t}",`)
     .join('\n');
@@ -44,14 +55,21 @@ function renderDynamo(r: Resource, plan: AwsPlan): string {
     ? `{ hashKey: "${hashKey}", rangeKey: "${rangeKey}" }`
     : `{ hashKey: "${hashKey}" }`;
 
-  return [
+  const lines = [
     `const ${v} = new sst.aws.Dynamo("${r.name}", {`,
     `  fields: {`,
     fieldLines,
     `  },`,
     `  primaryIndex: ${primaryStr},`,
-    `});`,
-  ].join('\n');
+  ];
+  if (hasGsi) {
+    const gsiStr = gsiRange
+      ? `{ hashKey: "${gsiHash}", rangeKey: "${gsiRange}" }`
+      : `{ hashKey: "${gsiHash}" }`;
+    lines.push(`  globalIndexes: {`, `    ${gsiName}: ${gsiStr},`, `  },`);
+  }
+  lines.push(`});`);
+  return lines.join('\n');
 }
 
 function renderQueue(r: Resource, plan: AwsPlan): string {
@@ -102,6 +120,12 @@ function renderEmail(r: Resource, plan: AwsPlan): string {
 function renderPostgres(r: Resource, plan: AwsPlan): string {
   const v = plan.varNameById.get(r.id);
   return `const ${v} = new sst.aws.Postgres("${r.name}", {\n  vpc,\n});`;
+}
+
+// Aurora Serverless v2 (Postgres) — a separate component from sst.aws.Postgres; also needs a Vpc.
+function renderAurora(r: Resource, plan: AwsPlan): string {
+  const v = plan.varNameById.get(r.id);
+  return `const ${v} = new sst.aws.Aurora("${r.name}", {\n  engine: "postgres",\n  vpc,\n});`;
 }
 
 // SST VPCs have NO NAT by default. Pick the strongest NAT requested across the
@@ -242,15 +266,16 @@ export function generateSstConfig(bp: Blueprint): string {
   for (const r of byKind('cognito')) statements.push(renderCognito(r, plan));
   for (const r of byKind('bucket')) statements.push(renderBucket(r, plan));
   for (const r of byKind('dynamo')) statements.push(renderDynamo(r, plan));
-  const postgresResources = byKind('postgres');
-  if (postgresResources.length) {
-    const nat = pickNat(postgresResources);
+  const vpcResources = [...byKind('postgres'), ...byKind('aurora')];
+  if (vpcResources.length) {
+    const nat = pickNat(vpcResources);
     statements.push(
       nat === 'none'
         ? 'const vpc = new sst.aws.Vpc("Vpc");'
         : `const vpc = new sst.aws.Vpc("Vpc", {\n  nat: "${nat}",\n});`,
     );
-    for (const r of postgresResources) statements.push(renderPostgres(r, plan));
+    for (const r of byKind('postgres')) statements.push(renderPostgres(r, plan));
+    for (const r of byKind('aurora')) statements.push(renderAurora(r, plan));
   }
   for (const r of byKind('queue')) statements.push(renderQueue(r, plan));
   for (const r of byKind('bus')) statements.push(renderBus(r, plan));

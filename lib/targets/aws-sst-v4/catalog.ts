@@ -70,6 +70,20 @@ export const AWS_CATALOG: ResourceCatalog = {
         default: 'sk',
         placeholder: 'sk (optional)',
       },
+      {
+        key: 'gsiName',
+        label: 'GSI name (optional)',
+        type: 'text',
+        placeholder: 'byStatus',
+        help: 'Adds a global secondary index for querying by a non-key attribute.',
+      },
+      { key: 'gsiHashKey', label: 'GSI partition key', type: 'text', placeholder: 'status' },
+      {
+        key: 'gsiRangeKey',
+        label: 'GSI sort key (optional)',
+        type: 'text',
+        placeholder: 'createdAt',
+      },
     ],
   },
   queue: {
@@ -192,6 +206,29 @@ export const AWS_CATALOG: ResourceCatalog = {
       },
     ],
   },
+  aurora: {
+    kind: 'aurora',
+    label: 'Aurora',
+    defaultName: 'Database',
+    component: 'sst.aws.Aurora',
+    description: 'Aurora Postgres Serverless v2 (auto-scaling; a VPC is generated)',
+    accent: 'bg-cyan-800',
+    category: 'database',
+    props: [
+      {
+        key: 'nat',
+        label: 'NAT (internet from private subnets)',
+        type: 'select',
+        default: 'none',
+        options: [
+          { value: 'none', label: 'None — cheapest, no internet egress' },
+          { value: 'ec2', label: 'fck-nat EC2 — ~$4/mo (≈10× cheaper)' },
+          { value: 'managed', label: 'Managed NAT Gateway — ~$32/mo/AZ' },
+        ],
+        help: 'Same VPC/NAT behavior as Postgres — no NAT by default.',
+      },
+    ],
+  },
   email: {
     kind: 'email',
     label: 'Email',
@@ -300,6 +337,7 @@ export const AWS_CATALOG_ORDER = [
   'bucket',
   'dynamo',
   'postgres',
+  'aurora',
   'queue',
   'bus',
   'snstopic',

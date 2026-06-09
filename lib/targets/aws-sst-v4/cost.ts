@@ -147,6 +147,17 @@ function breakdownFor(r: Resource): CostBreakdown {
       else if (nat === 'managed') lines.push({ label: 'NAT Gateway', usd: 32 });
       break;
     }
+    case 'aurora': {
+      lines = [
+        { label: 'Aurora Serverless v2 (0.5 ACU min)', usd: 44 },
+        { label: 'Storage (10GB)', usd: 1 },
+        { label: 'VPC (CloudMap DNS)', usd: 0.5 },
+      ];
+      const aNat = r.props.nat;
+      if (aNat === 'ec2') lines.push({ label: 'fck-nat EC2 (t4g.nano)', usd: 4 });
+      else if (aNat === 'managed') lines.push({ label: 'NAT Gateway', usd: 32 });
+      break;
+    }
     case 'cognito':
       lines = [{ label: 'Cognito (free ≤ 50k MAU)', usd: 0 }];
       break;

@@ -130,6 +130,15 @@ function resourcesFor(
         P('Secrets Manager', 'Master credentials', { security: true }),
         P('SSM', 'Link parameters', { note: 'Resource.<Db>.{host,port,…}' }),
       ];
+    case 'aurora':
+      return [
+        P('RDS', 'Aurora cluster', { paid: true, note: 'Serverless v2' }),
+        P('RDS', 'Cluster instance (writer)', { paid: true }),
+        P('RDS', 'DB subnet group'),
+        P('RDS', 'Cluster parameter group'),
+        P('Secrets Manager', 'Master credentials', { security: true }),
+        P('SSM', 'Link parameters', { note: 'Resource.<Db>.{host,port,…}' }),
+      ];
     case 'cognito':
       return [
         P('Cognito', 'User Pool', { security: true }),
@@ -182,6 +191,7 @@ const ORDER = [
   'nextjs',
   'staticsite',
   'postgres',
+  'aurora',
   'dynamo',
   'bucket',
   'queue',
@@ -214,8 +224,8 @@ export function expandAws(bp: Blueprint): InfraGroup[] {
     if (resources) groups.push({ id: r.id, title: r.name, kind: r.kind, resources });
   }
 
-  const postgres = bp.resources.filter((r) => r.kind === 'postgres');
-  if (postgres.length) groups.push(vpcGroup(postgres));
+  const dbWithVpc = bp.resources.filter((r) => r.kind === 'postgres' || r.kind === 'aurora');
+  if (dbWithVpc.length) groups.push(vpcGroup(dbWithVpc));
 
   return groups;
 }

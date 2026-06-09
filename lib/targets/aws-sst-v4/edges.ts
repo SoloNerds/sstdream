@@ -69,9 +69,9 @@ export const AWS_EDGE_INTENTS: EdgeIntentMeta[] = [
   {
     intent: 'queriesDb',
     label: 'queries',
-    description: 'App/worker connects to RDS Postgres (link + pg pool helper).',
+    description: 'App/worker connects to RDS Postgres / Aurora (link + pg pool helper).',
     from: ['nextjs', 'worker'],
-    to: ['postgres'],
+    to: ['postgres', 'aurora'],
   },
   {
     intent: 'sendsEmail',
@@ -143,6 +143,8 @@ const INTENT_BY_PAIR: Record<string, string> = {
   'nextjs>ai': 'usesAI',
   'nextjs>postgres': 'queriesDb',
   'worker>postgres': 'queriesDb',
+  'nextjs>aurora': 'queriesDb',
+  'worker>aurora': 'queriesDb',
   'nextjs>email': 'sendsEmail',
   'worker>email': 'sendsEmail',
   'nextjs>stripe': 'usesStripe',

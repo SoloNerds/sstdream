@@ -42,6 +42,38 @@ exports[`aws-sst-v4 catalog > matches snapshot 1`] = `
     "kind": "apigatewayv2",
     "label": "HTTP API",
   },
+  "aurora": {
+    "accent": "bg-cyan-800",
+    "category": "database",
+    "component": "sst.aws.Aurora",
+    "defaultName": "Database",
+    "description": "Aurora Postgres Serverless v2 (auto-scaling; a VPC is generated)",
+    "kind": "aurora",
+    "label": "Aurora",
+    "props": [
+      {
+        "default": "none",
+        "help": "Same VPC/NAT behavior as Postgres — no NAT by default.",
+        "key": "nat",
+        "label": "NAT (internet from private subnets)",
+        "options": [
+          {
+            "label": "None — cheapest, no internet egress",
+            "value": "none",
+          },
+          {
+            "label": "fck-nat EC2 — ~$4/mo (≈10× cheaper)",
+            "value": "ec2",
+          },
+          {
+            "label": "Managed NAT Gateway — ~$32/mo/AZ",
+            "value": "managed",
+          },
+        ],
+        "type": "select",
+      },
+    ],
+  },
   "bucket": {
     "accent": "bg-emerald-600",
     "category": "storage",
@@ -139,6 +171,25 @@ exports[`aws-sst-v4 catalog > matches snapshot 1`] = `
         "key": "rangeKey",
         "label": "Sort key",
         "placeholder": "sk (optional)",
+        "type": "text",
+      },
+      {
+        "help": "Adds a global secondary index for querying by a non-key attribute.",
+        "key": "gsiName",
+        "label": "GSI name (optional)",
+        "placeholder": "byStatus",
+        "type": "text",
+      },
+      {
+        "key": "gsiHashKey",
+        "label": "GSI partition key",
+        "placeholder": "status",
+        "type": "text",
+      },
+      {
+        "key": "gsiRangeKey",
+        "label": "GSI sort key (optional)",
+        "placeholder": "createdAt",
         "type": "text",
       },
     ],

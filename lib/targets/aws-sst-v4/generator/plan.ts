@@ -64,6 +64,7 @@ const DECL_ORDER: Record<string, number> = {
   bucket: 1,
   dynamo: 2,
   postgres: 2,
+  aurora: 2,
   queue: 3,
   bus: 3,
   snstopic: 3,
@@ -92,6 +93,7 @@ export function planAws(bp: Blueprint): AwsPlan {
       r.kind === 'bucket' ||
       r.kind === 'dynamo' ||
       r.kind === 'postgres' ||
+      r.kind === 'aurora' ||
       r.kind === 'queue' ||
       r.kind === 'bus' ||
       r.kind === 'snstopic' ||
