@@ -264,6 +264,36 @@ exports[`aws-sst-v4 catalog > matches snapshot 1`] = `
     "kind": "secret",
     "label": "Secret",
   },
+  "staticsite": {
+    "accent": "bg-slate-700",
+    "category": "compute",
+    "component": "sst.aws.StaticSite",
+    "defaultName": "Site",
+    "description": "Static / SPA site on its own CloudFront (S3 + CDN)",
+    "kind": "staticsite",
+    "label": "Static Site",
+    "props": [
+      {
+        "default": ".",
+        "key": "path",
+        "label": "Path",
+        "placeholder": "packages/web",
+        "type": "text",
+      },
+      {
+        "key": "buildCommand",
+        "label": "Build command",
+        "placeholder": "npm run build",
+        "type": "text",
+      },
+      {
+        "key": "buildOutput",
+        "label": "Build output dir",
+        "placeholder": "dist",
+        "type": "text",
+      },
+    ],
+  },
   "stripe": {
     "accent": "bg-indigo-600",
     "category": "config",

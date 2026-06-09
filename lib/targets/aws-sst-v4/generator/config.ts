@@ -161,7 +161,24 @@ function renderNextjs(r: Resource, plan: AwsPlan): string {
   return lines.join('\n');
 }
 
-const OUTPUT_ORDER: Record<string, number> = { nextjs: 0, bucket: 1, dynamo: 2, queue: 3 };
+function renderStaticSite(r: Resource, plan: AwsPlan): string {
+  const v = plan.varNameById.get(r.id);
+  const path = str(r.props.path) ?? '.';
+  const lines = [`const ${v} = new sst.aws.StaticSite("${r.name}", {`, `  path: "${path}",`];
+  const cmd = str(r.props.buildCommand);
+  const out = str(r.props.buildOutput);
+  if (cmd && out) lines.push(`  build: { command: "${cmd}", output: "${out}" },`);
+  lines.push(`});`);
+  return lines.join('\n');
+}
+
+const OUTPUT_ORDER: Record<string, number> = {
+  nextjs: 0,
+  staticsite: 0,
+  bucket: 1,
+  dynamo: 2,
+  queue: 3,
+};
 
 function renderOutputs(bp: Blueprint, plan: AwsPlan): string | null {
   const entries = plan.declared
@@ -169,7 +186,8 @@ function renderOutputs(bp: Blueprint, plan: AwsPlan): string | null {
     .sort((a, b) => OUTPUT_ORDER[a.kind] - OUTPUT_ORDER[b.kind])
     .map((r) => {
       const v = plan.varNameById.get(r.id)!;
-      const prop = r.kind === 'nextjs' || r.kind === 'queue' ? 'url' : 'name';
+      const prop =
+        r.kind === 'nextjs' || r.kind === 'queue' || r.kind === 'staticsite' ? 'url' : 'name';
       return `  ${v}: ${v}.${prop},`;
     });
   if (!entries.length) return null;
@@ -202,6 +220,7 @@ export function generateSstConfig(bp: Blueprint): string {
   for (const fn of plan.functions) statements.push(renderFunction(fn));
   for (const cron of plan.crons) statements.push(renderCron(cron));
   for (const r of byKind('nextjs')) statements.push(renderNextjs(r, plan));
+  for (const r of byKind('staticsite')) statements.push(renderStaticSite(r, plan));
 
   const outputs = renderOutputs(bp, plan);
   if (outputs) statements.push(outputs);

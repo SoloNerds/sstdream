@@ -80,6 +80,14 @@ function resourcesFor(
   switch (r.kind) {
     case 'nextjs':
       return nextjsResources(r);
+    case 'staticsite':
+      return [
+        P('S3', 'Site bucket', { paid: true, note: 'static files' }),
+        P('CloudFront', 'Distribution', { paid: true, note: 'the public URL / CDN' }),
+        P('CloudFront', 'viewer-request Function'),
+        P('CloudFront', 'Origin Access (OAI)', { security: true }),
+        P('CloudFront', 'Cache policy'),
+      ];
     case 'bucket':
       return bucketResources(r);
     case 'dynamo':
@@ -151,6 +159,7 @@ function vpcGroup(postgres: Resource[]): InfraGroup {
 
 const ORDER = [
   'nextjs',
+  'staticsite',
   'postgres',
   'dynamo',
   'bucket',

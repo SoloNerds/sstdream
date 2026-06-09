@@ -17,6 +17,20 @@ export const AWS_CATALOG: ResourceCatalog = {
       { key: 'environment', label: 'Environment variables', type: 'keyvalue' },
     ],
   },
+  staticsite: {
+    kind: 'staticsite',
+    label: 'Static Site',
+    defaultName: 'Site',
+    component: 'sst.aws.StaticSite',
+    description: 'Static / SPA site on its own CloudFront (S3 + CDN)',
+    accent: 'bg-slate-700',
+    category: 'compute',
+    props: [
+      { key: 'path', label: 'Path', type: 'text', default: '.', placeholder: 'packages/web' },
+      { key: 'buildCommand', label: 'Build command', type: 'text', placeholder: 'npm run build' },
+      { key: 'buildOutput', label: 'Build output dir', type: 'text', placeholder: 'dist' },
+    ],
+  },
   bucket: {
     kind: 'bucket',
     label: 'Bucket',
@@ -247,6 +261,7 @@ export const AWS_CATALOG: ResourceCatalog = {
 
 export const AWS_CATALOG_ORDER = [
   'nextjs',
+  'staticsite',
   'bucket',
   'dynamo',
   'postgres',

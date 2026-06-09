@@ -54,6 +54,7 @@ const DECL_ORDER: Record<string, number> = {
   queue: 3,
   worker: 4,
   nextjs: 5,
+  staticsite: 5,
 };
 
 export function planAws(bp: Blueprint): AwsPlan {
@@ -75,6 +76,7 @@ export function planAws(bp: Blueprint): AwsPlan {
       r.kind === 'postgres' ||
       r.kind === 'queue' ||
       r.kind === 'nextjs' ||
+      r.kind === 'staticsite' ||
       (r.kind === 'worker' && !isSubscriber(r) && !isCronInvoked(r));
     if (standalone) varNameById.set(r.id, camelCase(r.name));
   }

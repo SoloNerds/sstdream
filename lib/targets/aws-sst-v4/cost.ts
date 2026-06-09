@@ -73,6 +73,12 @@ function breakdownFor(r: Resource): CostBreakdown {
         ...cloudfrontLines(PROFILE.cdnTransferGb, PROFILE.cdnRequestsPerMonth),
       ];
       break;
+    case 'staticsite':
+      lines = [
+        { label: 'S3 (static assets)', usd: round2(1 * PRICES.s3StorageGbMonth) },
+        ...cloudfrontLines(PROFILE.cdnTransferGb, PROFILE.cdnRequestsPerMonth),
+      ];
+      break;
     case 'bucket':
       lines = s3Lines(
         PROFILE.bucketStorageGb,
