@@ -176,6 +176,21 @@ export async function handler(event: unknown) {
 }
 `;
 
+// HTTP API route handler (API Gateway v2 / Lambda proxy).
+const apiRouteHandlerFile = (route: string): string =>
+  `/** Route handler for "${route}". */
+export async function handler(event: {
+  requestContext: { http: { method: string; path: string } };
+  body?: string;
+}) {
+  return {
+    statusCode: 200,
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ok: true, route: "${route}" }),
+  };
+}
+`;
+
 // Verified Anthropic usage (claude-api skill): model id `claude-opus-4-8` (no date
 // suffix), official @anthropic-ai/sdk messages.stream(). Key is server-only via an SST
 // secret; the streaming Route Handler validates input before calling Claude.
@@ -895,6 +910,13 @@ export function generateRuntimeFiles(bp: Blueprint): GeneratedFile[] {
         language: 'ts',
       });
     }
+  }
+  for (const route of plan.routes) {
+    files.push({
+      path: route.handlerFile,
+      content: apiRouteHandlerFile(route.route),
+      language: 'ts',
+    });
   }
 
   files.push({

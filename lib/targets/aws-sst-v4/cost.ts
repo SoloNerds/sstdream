@@ -113,6 +113,9 @@ function breakdownFor(r: Resource): CostBreakdown {
     case 'snstopic':
       lines = [{ label: 'SNS messages (1M)', usd: 0.5 }];
       break;
+    case 'apigatewayv2':
+      lines = [{ label: 'HTTP API requests (1M)', usd: 1 }];
+      break;
     case 'worker':
       lines = lambdaLines(
         PROFILE.workerInvocationsPerMonth,

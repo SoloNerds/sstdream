@@ -46,6 +46,13 @@ export const AWS_EDGE_INTENTS: EdgeIntentMeta[] = [
     to: ['worker'],
   },
   {
+    intent: 'handlesRoute',
+    label: 'handles route on',
+    description: "A worker handles an HTTP API route (api.route('METHOD /path', handler)).",
+    from: ['worker'],
+    to: ['apigatewayv2'],
+  },
+  {
     intent: 'usesSecret',
     label: 'uses secret',
     description: 'A component links a secret (Resource.<Secret>.value).',
@@ -129,6 +136,7 @@ const INTENT_BY_PAIR: Record<string, string> = {
   'nextjs>snstopic': 'publishesTo',
   'worker>snstopic': 'subscribesTo',
   'cron>worker': 'invokes',
+  'worker>apigatewayv2': 'handlesRoute',
   'nextjs>secret': 'usesSecret',
   'worker>secret': 'usesSecret',
   'cron>secret': 'usesSecret',

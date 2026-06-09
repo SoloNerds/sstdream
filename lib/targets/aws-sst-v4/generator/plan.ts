@@ -32,6 +32,15 @@ export interface CronPlan {
   linkVars: string[];
 }
 
+export interface RoutePlan {
+  worker: Resource;
+  apiVar: string;
+  route: string; // e.g. "POST /webhooks/stripe"
+  handlerPath: string;
+  handlerFile: string;
+  linkVars: string[];
+}
+
 export interface AwsPlan {
   bp: Blueprint;
   varNameById: Map<string, string>;
@@ -42,6 +51,7 @@ export interface AwsPlan {
   subscribers: SubscriberPlan[];
   functions: FunctionPlan[];
   crons: CronPlan[];
+  routes: RoutePlan[];
   /** Worker resources, by their handler file, that need a generated handler. */
   workerHandlerFiles: string[];
 }
@@ -57,6 +67,7 @@ const DECL_ORDER: Record<string, number> = {
   queue: 3,
   bus: 3,
   snstopic: 3,
+  apigatewayv2: 3,
   worker: 4,
   nextjs: 5,
   staticsite: 5,
@@ -68,6 +79,8 @@ export function planAws(bp: Blueprint): AwsPlan {
   const subEdge = (w: Resource) => outgoing(w.id).find((c) => c.intent === 'subscribesTo');
   const isSubscriber = (w: Resource) => Boolean(subEdge(w));
   const isCronInvoked = (w: Resource) => incoming(w.id).some((c) => c.intent === 'invokes');
+  const routeEdge = (w: Resource) => outgoing(w.id).find((c) => c.intent === 'handlesRoute');
+  const isRouteHandler = (w: Resource) => Boolean(routeEdge(w));
 
   const varNameById = new Map<string, string>();
   for (const r of bp.resources) {
@@ -82,16 +95,20 @@ export function planAws(bp: Blueprint): AwsPlan {
       r.kind === 'queue' ||
       r.kind === 'bus' ||
       r.kind === 'snstopic' ||
+      r.kind === 'apigatewayv2' ||
       r.kind === 'nextjs' ||
       r.kind === 'staticsite' ||
-      (r.kind === 'worker' && !isSubscriber(r) && !isCronInvoked(r));
+      (r.kind === 'worker' && !isSubscriber(r) && !isCronInvoked(r) && !isRouteHandler(r));
     if (standalone) varNameById.set(r.id, camelCase(r.name));
   }
 
   const linkVarsFor = (id: string): string[] =>
     uniq(
       outgoing(id)
-        .filter((c) => c.intent !== 'subscribesTo' && c.intent !== 'invokes')
+        .filter(
+          (c) =>
+            c.intent !== 'subscribesTo' && c.intent !== 'invokes' && c.intent !== 'handlesRoute',
+        )
         .map((c) => varNameById.get(c.target))
         .filter((v): v is string => Boolean(v)),
     );
@@ -116,10 +133,23 @@ export function planAws(bp: Blueprint): AwsPlan {
     });
 
   const functions: FunctionPlan[] = bp.resources
-    .filter((r) => r.kind === 'worker' && !isSubscriber(r) && !isCronInvoked(r))
+    .filter(
+      (r) => r.kind === 'worker' && !isSubscriber(r) && !isCronInvoked(r) && !isRouteHandler(r),
+    )
     .map((w) => ({
       worker: w,
       varName: varNameById.get(w.id)!,
+      handlerPath: handlerPathFor(w),
+      handlerFile: handlerFileFor(w),
+      linkVars: linkVarsFor(w.id),
+    }));
+
+  const routes: RoutePlan[] = bp.resources
+    .filter((r) => r.kind === 'worker' && isRouteHandler(r))
+    .map((w) => ({
+      worker: w,
+      apiVar: varNameById.get(routeEdge(w)!.target) ?? camelCase(w.name),
+      route: typeof w.props.route === 'string' && w.props.route ? w.props.route : 'GET /',
       handlerPath: handlerPathFor(w),
       handlerFile: handlerFileFor(w),
       linkVars: linkVarsFor(w.id),
@@ -150,6 +180,7 @@ export function planAws(bp: Blueprint): AwsPlan {
     ...subscribers.map((s) => s.handlerFile),
     ...functions.map((f) => f.handlerFile),
     ...crons.map((c) => c.handlerFile).filter((f): f is string => Boolean(f)),
+    ...routes.map((r) => r.handlerFile),
   ]);
 
   return {
@@ -158,6 +189,7 @@ export function planAws(bp: Blueprint): AwsPlan {
     linkVarsById,
     declared,
     subscribers,
+    routes,
     functions,
     crons,
     workerHandlerFiles,

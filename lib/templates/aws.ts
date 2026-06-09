@@ -241,6 +241,23 @@ export const AWS_TEMPLATES: TemplateMeta[] = [
     ],
   ),
   aws(
+    'aws-webhook-api',
+    'Webhook API',
+    'HTTP API Gateway with a Stripe webhook route handler that logs to DynamoDB.',
+    ['API', 'Payments'],
+    'webhook-api',
+    [
+      n('nextjs_1', 'nextjs', 'Web', 80, 160),
+      n('apigatewayv2_2', 'apigatewayv2', 'Api', 380, 80),
+      n('worker_3', 'worker', 'StripeWebhook', 660, 80, { route: 'POST /webhooks/stripe' }),
+      n('dynamo_4', 'dynamo', 'Events', 660, 260),
+    ],
+    [
+      e('edge_5', 'worker_3', 'apigatewayv2_2', 'handlesRoute'),
+      e('edge_6', 'worker_3', 'dynamo_4', 'writesTo'),
+    ],
+  ),
+  aws(
     'aws-marketing',
     'Marketing Site',
     'Leads table + a weekly report cron.',

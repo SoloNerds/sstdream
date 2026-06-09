@@ -110,7 +110,9 @@ export function simulateAws(bp: Blueprint): SimTrace {
     }
   };
 
-  const entries = bp.resources.filter((r) => r.kind === 'nextjs' || r.kind === 'cron');
+  const entries = bp.resources.filter(
+    (r) => r.kind === 'nextjs' || r.kind === 'cron' || r.kind === 'apigatewayv2',
+  );
   for (const entry of entries) {
     events.push({
       id: eid(),
@@ -119,9 +121,27 @@ export function simulateAws(bp: Blueprint): SimTrace {
       label:
         entry.kind === 'cron'
           ? `${entry.name} fires on schedule`
-          : `${entry.name} receives traffic`,
+          : entry.kind === 'apigatewayv2'
+            ? `${entry.name} receives requests`
+            : `${entry.name} receives traffic`,
     });
     walk(entry.id);
+    if (entry.kind === 'apigatewayv2') {
+      // Route handlers point INTO the API (worker handlesRoute api) — walk them.
+      for (const rh of bp.connections.filter(
+        (c) => c.target === entry.id && c.intent === 'handlesRoute',
+      )) {
+        events.push({
+          id: eid(),
+          edgeId: rh.id,
+          sourceId: entry.id,
+          targetId: rh.source,
+          status: 'ok',
+          label: `${name(entry.id)} routes to ${name(rh.source)}`,
+        });
+        walk(rh.source);
+      }
+    }
   }
 
   for (const w of bp.resources.filter((r) => r.kind === 'worker')) {

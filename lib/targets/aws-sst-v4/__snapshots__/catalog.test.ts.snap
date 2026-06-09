@@ -33,6 +33,15 @@ exports[`aws-sst-v4 catalog > matches snapshot 1`] = `
       },
     ],
   },
+  "apigatewayv2": {
+    "accent": "bg-sky-600",
+    "category": "network",
+    "component": "sst.aws.ApiGatewayV2",
+    "defaultName": "Api",
+    "description": "HTTP API Gateway — workers handle routes (METHOD /path)",
+    "kind": "apigatewayv2",
+    "label": "HTTP API",
+  },
   "bucket": {
     "accent": "bg-emerald-600",
     "category": "storage",
@@ -334,7 +343,7 @@ exports[`aws-sst-v4 catalog > matches snapshot 1`] = `
     "category": "compute",
     "component": "sst.aws.Function",
     "defaultName": "Worker",
-    "description": "Lambda function (queue subscriber / job handler)",
+    "description": "Lambda function (queue subscriber / job / API route handler)",
     "kind": "worker",
     "label": "Worker",
     "props": [
@@ -350,6 +359,13 @@ exports[`aws-sst-v4 catalog > matches snapshot 1`] = `
         "key": "memory",
         "label": "Memory",
         "placeholder": "1024 MB",
+        "type": "text",
+      },
+      {
+        "default": "GET /",
+        "key": "route",
+        "label": "API route (when wired to an HTTP API)",
+        "placeholder": "POST /webhooks/stripe",
         "type": "text",
       },
     ],

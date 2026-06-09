@@ -74,6 +74,23 @@ function renderSnsTopic(r: Resource, plan: AwsPlan): string {
   return `const ${v} = new sst.aws.SnsTopic("${r.name}");`;
 }
 
+function renderApi(r: Resource, plan: AwsPlan): string {
+  return `const ${plan.varNameById.get(r.id)} = new sst.aws.ApiGatewayV2("${r.name}");`;
+}
+
+// api.route("METHOD /path", handler) — handler is a string, or an object when it links.
+function renderRoute(route: AwsPlan['routes'][number]): string {
+  if (route.linkVars.length) {
+    return [
+      `${route.apiVar}.route("${route.route}", {`,
+      `  handler: "${route.handlerPath}",`,
+      `  link: ${linkArray(route.linkVars)},`,
+      `});`,
+    ].join('\n');
+  }
+  return `${route.apiVar}.route("${route.route}", "${route.handlerPath}");`;
+}
+
 function renderEmail(r: Resource, plan: AwsPlan): string {
   const v = plan.varNameById.get(r.id);
   const sender = str(r.props.sender) ?? 'noreply@example.com';
@@ -189,6 +206,7 @@ function renderStaticSite(r: Resource, plan: AwsPlan): string {
 const OUTPUT_ORDER: Record<string, number> = {
   nextjs: 0,
   staticsite: 0,
+  apigatewayv2: 0,
   bucket: 1,
   dynamo: 2,
   queue: 3,
@@ -201,7 +219,12 @@ function renderOutputs(bp: Blueprint, plan: AwsPlan): string | null {
     .map((r) => {
       const v = plan.varNameById.get(r.id)!;
       const prop =
-        r.kind === 'nextjs' || r.kind === 'queue' || r.kind === 'staticsite' ? 'url' : 'name';
+        r.kind === 'nextjs' ||
+        r.kind === 'queue' ||
+        r.kind === 'staticsite' ||
+        r.kind === 'apigatewayv2'
+          ? 'url'
+          : 'name';
       return `  ${v}: ${v}.${prop},`;
     });
   if (!entries.length) return null;
@@ -232,9 +255,11 @@ export function generateSstConfig(bp: Blueprint): string {
   for (const r of byKind('queue')) statements.push(renderQueue(r, plan));
   for (const r of byKind('bus')) statements.push(renderBus(r, plan));
   for (const r of byKind('snstopic')) statements.push(renderSnsTopic(r, plan));
+  for (const r of byKind('apigatewayv2')) statements.push(renderApi(r, plan));
   for (const sub of plan.subscribers) statements.push(renderSubscriber(sub));
   for (const fn of plan.functions) statements.push(renderFunction(fn));
   for (const cron of plan.crons) statements.push(renderCron(cron));
+  for (const route of plan.routes) statements.push(renderRoute(route));
   for (const r of byKind('nextjs')) statements.push(renderNextjs(r, plan));
   for (const r of byKind('staticsite')) statements.push(renderStaticSite(r, plan));
 

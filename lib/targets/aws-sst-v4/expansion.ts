@@ -104,6 +104,17 @@ function resourcesFor(
         P('SNS', 'Topic', { paid: true }),
         P('SNS', 'Subscriptions per subscriber', { conditional: 'a worker subscribes' }),
       ];
+    case 'apigatewayv2':
+      return [
+        P('API Gateway', 'HTTP API', { paid: true }),
+        P('API Gateway', 'Default stage'),
+        P('API Gateway', 'Route + integration', { conditional: 'a worker handles a route' }),
+        P('Lambda', 'Invoke permission', {
+          security: true,
+          conditional: 'a worker handles a route',
+        }),
+        P('CloudWatch', 'Access log group', { paid: true }),
+      ];
     case 'worker':
       return workerResources(r, ctx.isSubscriber(r));
     case 'cron':
@@ -176,6 +187,7 @@ const ORDER = [
   'queue',
   'bus',
   'snstopic',
+  'apigatewayv2',
   'worker',
   'cron',
   'cognito',
