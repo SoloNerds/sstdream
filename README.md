@@ -70,21 +70,36 @@ boolean); SST v4 runs Pulumi AWS provider **v7**.
 
 ## Roadmap
 
-Tracked entirely in this repo's **Milestones**, **Issues**, and **Project board**.
+Tracked entirely in this repo's **Milestones**, **Issues**, and **Project board** —
+**all 11 milestones (M0–M10) are complete.**
 
-| Milestone | Focus                                                                          |
-| --------- | ------------------------------------------------------------------------------ |
-| M0        | SST v4 compatibility lock (this doc) ✅                                        |
-| M1        | Builder shell (Next.js 16, React 19, Tailwind, shadcn, @xyflow/react, Zustand) |
-| M2        | Blueprint schema + multi-target model (Zod)                                    |
-| M3        | Validation engine (SST v4 rules)                                               |
-| M4        | SST v4 generator (AWS)                                                         |
-| M5        | Runtime code generator                                                         |
-| M6        | Exporter (ZIP / copy / README / manifest)                                      |
-| M7        | Simulation engine ("everything talks")                                         |
-| M8        | Cost estimation                                                                |
-| M9        | Recommendations engine                                                         |
-| M10       | Vercel export target                                                           |
+| Milestone | Focus                                                                          | Status |
+| --------- | ------------------------------------------------------------------------------ | ------ |
+| M0        | SST v4 compatibility lock (verified docs)                                      | ✅     |
+| M1        | Builder shell (Next.js 16, React 19, Tailwind, shadcn, @xyflow/react, Zustand) | ✅     |
+| M2        | Blueprint schema + multi-target model (Zod)                                    | ✅     |
+| M3        | Validation engine (SST v4 rules)                                               | ✅     |
+| M4        | SST v4 generator (AWS)                                                         | ✅     |
+| M5        | Runtime code generator                                                         | ✅     |
+| M6        | Exporter (ZIP / copy / README / manifest)                                      | ✅     |
+| M7        | Simulation engine ("everything talks")                                         | ✅     |
+| M8        | Cost estimation                                                                | ✅     |
+| M9        | Recommendations engine                                                         | ✅     |
+| M10       | Vercel export target                                                           | ✅     |
 
 **First proof:** the _AI Processing App_ template — Next.js Web · Bucket Uploads · Queue
-Jobs · Worker ProcessJob · Dynamo AppTable — designed, simulated, and exported end to end.
+Jobs · Worker ProcessJob · Dynamo AppTable — designed, validated, simulated, costed, and
+exported to a deployable SST project end to end. A **Vercel SaaS** template proves the
+second lane.
+
+## Run it
+
+```bash
+yarn install
+yarn dev          # http://localhost:3000/builder
+yarn test         # 69 tests
+yarn lint && yarn typecheck && yarn build
+```
+
+Open `/builder`, pick a lane (AWS / Vercel), **Load template**, then **Simulate**,
+check **Cost** / **Tips**, and **Export** the project (copy files or download the ZIP).
