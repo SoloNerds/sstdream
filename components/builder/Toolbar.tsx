@@ -6,13 +6,13 @@ import { ExportDialog } from './ExportDialog';
 import { useCanvasStore } from '@/lib/canvas/store';
 import { isTargetImplemented } from '@/lib/targets/registry';
 import { blueprintToCanvas, parseBlueprint } from '@/lib/core/blueprint/serialize';
-import { AI_PROCESSING_APP } from '@/lib/templates/ai-processing-app';
-import { VERCEL_SAAS } from '@/lib/templates/vercel-saas';
+import { TemplatePicker } from './TemplatePicker';
 import type { ValidationResult } from '@/lib/core/validation/types';
 
 export function Toolbar({ validation }: { validation: ValidationResult }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [exporting, setExporting] = useState(false);
+  const [picking, setPicking] = useState(false);
   const appName = useCanvasStore((s) => s.app.name);
   const setApp = useCanvasStore((s) => s.setApp);
   const loadSnapshot = useCanvasStore((s) => s.loadSnapshot);
@@ -33,12 +33,6 @@ export function Toolbar({ validation }: { validation: ValidationResult }) {
     }
   };
 
-  const onLoadTemplate = () => {
-    const tpl = useCanvasStore.getState().targetId === 'vercel' ? VERCEL_SAAS : AI_PROCESSING_APP;
-    setApp(tpl.app);
-    loadSnapshot(tpl.snapshot);
-  };
-
   return (
     <>
       <div className="flex items-center gap-2">
@@ -49,8 +43,8 @@ export function Toolbar({ validation }: { validation: ValidationResult }) {
           onChange={(e) => setApp({ name: e.target.value })}
           placeholder="app-name"
         />
-        <Button size="sm" variant="outline" onClick={onLoadTemplate}>
-          Load template
+        <Button size="sm" variant="outline" onClick={() => setPicking(true)}>
+          Templates
         </Button>
         <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()}>
           Import
@@ -83,6 +77,7 @@ export function Toolbar({ validation }: { validation: ValidationResult }) {
         />
       </div>
       {exporting && <ExportDialog onClose={() => setExporting(false)} />}
+      {picking && <TemplatePicker onClose={() => setPicking(false)} />}
     </>
   );
 }
