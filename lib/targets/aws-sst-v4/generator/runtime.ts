@@ -328,6 +328,116 @@ export const cognito = {
 };
 `;
 
+// CRUD server actions — the "complete backend↔frontend wiring" baseline. Full CRUD
+// (incl. read/list) is generated for every data resource a Next.js app connects to, even
+// when only a writesTo edge was drawn. Generic create/get/list/update/remove exports, one
+// file per table — the frontend just imports them. Verified Next.js 16 "use server".
+const crudDynamoActionFile = (tableName: string, hashKey: string, rangeKey?: string): string => {
+  const keyType = rangeKey
+    ? `{ ${hashKey}: string; ${rangeKey}: string }`
+    : `{ ${hashKey}: string }`;
+  const itemType = rangeKey
+    ? `{ ${hashKey}: string; ${rangeKey}: string; [key: string]: unknown }`
+    : `{ ${hashKey}: string; [key: string]: unknown }`;
+  return `"use server";
+
+import { Resource } from "sst";
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import {
+  DynamoDBDocumentClient,
+  PutCommand,
+  GetCommand,
+  ScanCommand,
+  DeleteCommand,
+} from "@aws-sdk/lib-dynamodb";
+
+// CRUD server actions for the "${tableName}" table. Call these from client components
+// or forms — they run on the server. Add 'await requireUser()' at the top to protect them.
+
+const client = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+const TableName = Resource.${tableName}.name;
+
+type Item = ${itemType};
+type Key = ${keyType};
+
+export async function create(item: Item): Promise<Item> {
+  await client.send(new PutCommand({ TableName, Item: item }));
+  return item;
+}
+
+export async function get(key: Key): Promise<Item | null> {
+  const res = await client.send(new GetCommand({ TableName, Key: key }));
+  return (res.Item as Item | undefined) ?? null;
+}
+
+export async function list(): Promise<Item[]> {
+  const res = await client.send(new ScanCommand({ TableName }));
+  return (res.Items as Item[] | undefined) ?? [];
+}
+
+export async function update(item: Item): Promise<Item> {
+  await client.send(new PutCommand({ TableName, Item: item }));
+  return item;
+}
+
+export async function remove(key: Key): Promise<void> {
+  await client.send(new DeleteCommand({ TableName, Key: key }));
+}
+`;
+};
+
+const crudMongoActionFile = (): string =>
+  `"use server";
+
+import { ObjectId } from "mongodb";
+import { getDb } from "../../lib/mongo";
+
+// Example CRUD server actions for a Mongo collection. Rename "items" + duplicate this
+// file per collection. Call these from client components/forms — they run on the server.
+
+const COLLECTION = "items";
+
+export async function create(doc: Record<string, unknown>) {
+  const db = await getDb();
+  const res = await db.collection(COLLECTION).insertOne(doc);
+  return { ...doc, _id: res.insertedId.toString() };
+}
+
+export async function list() {
+  const db = await getDb();
+  const docs = await db.collection(COLLECTION).find().toArray();
+  return docs.map((d) => ({ ...d, _id: d._id.toString() }));
+}
+
+export async function get(id: string) {
+  const db = await getDb();
+  const doc = await db.collection(COLLECTION).findOne({ _id: new ObjectId(id) });
+  return doc ? { ...doc, _id: doc._id.toString() } : null;
+}
+
+export async function update(id: string, patch: Record<string, unknown>) {
+  const db = await getDb();
+  await db.collection(COLLECTION).updateOne({ _id: new ObjectId(id) }, { $set: patch });
+}
+
+export async function remove(id: string) {
+  const db = await getDb();
+  await db.collection(COLLECTION).deleteOne({ _id: new ObjectId(id) });
+}
+`;
+
+// Clerk server guard — drop 'await requireUser()' into any server action/route.
+const authGuardFile = (): string =>
+  `import { auth } from "@clerk/nextjs/server";
+
+/** Require a signed-in user. Call at the top of a server action or route handler. */
+export async function requireUser(): Promise<string> {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Unauthorized");
+  return userId;
+}
+`;
+
 function packageAdditions(flags: {
   storage: boolean;
   queue: boolean;
@@ -501,6 +611,43 @@ export function generateRuntimeFiles(bp: Blueprint): GeneratedFile[] {
       content: cognitoAuthLibFile(cognitoRes.name),
       language: 'ts',
     });
+  }
+
+  // CRUD server actions: full CRUD for every Dynamo table a Next.js app connects to.
+  const appIds = new Set(bp.resources.filter((r) => r.kind === 'nextjs').map((r) => r.id));
+  const crudDynamos = bp.resources.filter(
+    (r) =>
+      r.kind === 'dynamo' &&
+      bp.connections.some(
+        (c) =>
+          appIds.has(c.source) &&
+          c.target === r.id &&
+          (c.intent === 'writesTo' || c.intent === 'readsFrom'),
+      ),
+  );
+  for (const t of crudDynamos) {
+    const hashKey = typeof t.props.hashKey === 'string' && t.props.hashKey ? t.props.hashKey : 'pk';
+    const rangeKey =
+      t.props.rangeKey === undefined
+        ? 'sk'
+        : typeof t.props.rangeKey === 'string' && t.props.rangeKey
+          ? t.props.rangeKey
+          : undefined;
+    files.push({
+      path: `app/actions/${kebabCase(t.name)}.ts`,
+      content: crudDynamoActionFile(t.name, hashKey, rangeKey),
+      language: 'ts',
+    });
+  }
+
+  // Mongo example CRUD actions when the app queries Mongo.
+  if (mongoRes && bp.connections.some((c) => appIds.has(c.source) && c.intent === 'queriesMongo')) {
+    files.push({ path: 'app/actions/items.ts', content: crudMongoActionFile(), language: 'ts' });
+  }
+
+  // Clerk auth guard helper.
+  if (clerkRes) {
+    files.push({ path: 'lib/auth-guard.ts', content: authGuardFile(), language: 'ts' });
   }
 
   files.push({
