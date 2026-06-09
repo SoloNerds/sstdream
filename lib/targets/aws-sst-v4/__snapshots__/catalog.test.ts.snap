@@ -10,6 +10,28 @@ exports[`aws-sst-v4 catalog > matches snapshot 1`] = `
     "description": "S3 bucket for object storage / uploads",
     "kind": "bucket",
     "label": "Bucket",
+    "props": [
+      {
+        "default": "none",
+        "key": "access",
+        "label": "Public access",
+        "options": [
+          {
+            "label": "Private (default)",
+            "value": "none",
+          },
+          {
+            "label": "Public",
+            "value": "public",
+          },
+          {
+            "label": "CloudFront",
+            "value": "cloudfront",
+          },
+        ],
+        "type": "select",
+      },
+    ],
   },
   "cron": {
     "accent": "bg-rose-600",
@@ -19,6 +41,15 @@ exports[`aws-sst-v4 catalog > matches snapshot 1`] = `
     "description": "Scheduled Lambda (CronV2 — not the deprecated Cron)",
     "kind": "cron",
     "label": "Cron",
+    "props": [
+      {
+        "default": "rate(1 day)",
+        "key": "schedule",
+        "label": "Schedule",
+        "placeholder": "rate(1 day) | cron(0 5 * * ? *)",
+        "type": "text",
+      },
+    ],
   },
   "dynamo": {
     "accent": "bg-sky-600",
@@ -28,6 +59,22 @@ exports[`aws-sst-v4 catalog > matches snapshot 1`] = `
     "description": "DynamoDB table",
     "kind": "dynamo",
     "label": "Dynamo",
+    "props": [
+      {
+        "default": "pk",
+        "key": "hashKey",
+        "label": "Partition key",
+        "placeholder": "pk",
+        "type": "text",
+      },
+      {
+        "default": "sk",
+        "key": "rangeKey",
+        "label": "Sort key",
+        "placeholder": "sk (optional)",
+        "type": "text",
+      },
+    ],
   },
   "nextjs": {
     "accent": "bg-neutral-800",
@@ -37,6 +84,26 @@ exports[`aws-sst-v4 catalog > matches snapshot 1`] = `
     "description": "Next.js app on AWS (OpenNext → Lambda/S3/CloudFront)",
     "kind": "nextjs",
     "label": "Next.js Web",
+    "props": [
+      {
+        "default": ".",
+        "key": "path",
+        "label": "Path",
+        "placeholder": ".",
+        "type": "text",
+      },
+      {
+        "key": "domain",
+        "label": "Custom domain",
+        "placeholder": "app.example.com",
+        "type": "text",
+      },
+      {
+        "key": "environment",
+        "label": "Environment variables",
+        "type": "keyvalue",
+      },
+    ],
     "singleton": true,
   },
   "queue": {
@@ -47,6 +114,14 @@ exports[`aws-sst-v4 catalog > matches snapshot 1`] = `
     "description": "SQS queue with a Lambda subscriber",
     "kind": "queue",
     "label": "Queue",
+    "props": [
+      {
+        "default": false,
+        "key": "fifo",
+        "label": "FIFO queue",
+        "type": "boolean",
+      },
+    ],
   },
   "secret": {
     "accent": "bg-stone-600",
@@ -65,6 +140,22 @@ exports[`aws-sst-v4 catalog > matches snapshot 1`] = `
     "description": "Lambda function (queue subscriber / job handler)",
     "kind": "worker",
     "label": "Worker",
+    "props": [
+      {
+        "default": "60 seconds",
+        "key": "timeout",
+        "label": "Timeout",
+        "placeholder": "60 seconds",
+        "type": "text",
+      },
+      {
+        "help": "e.g. "1024 MB"",
+        "key": "memory",
+        "label": "Memory",
+        "placeholder": "1024 MB",
+        "type": "text",
+      },
+    ],
   },
 }
 `;

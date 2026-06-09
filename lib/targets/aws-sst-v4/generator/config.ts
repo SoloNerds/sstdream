@@ -16,31 +16,33 @@ function renderSecret(r: Resource, plan: AwsPlan): string {
   return `const ${plan.varNameById.get(r.id)} = new sst.Secret("${r.name}");`;
 }
 
+function str(value: unknown): string | undefined {
+  return typeof value === 'string' && value ? value : undefined;
+}
+
 function renderBucket(r: Resource, plan: AwsPlan): string {
   const v = plan.varNameById.get(r.id);
-  if (r.props.access === 'public') {
-    return `const ${v} = new sst.aws.Bucket("${r.name}", {\n  access: "public",\n});`;
+  const access = r.props.access;
+  if (access === 'public' || access === 'cloudfront') {
+    return `const ${v} = new sst.aws.Bucket("${r.name}", {\n  access: "${access}",\n});`;
   }
   return `const ${v} = new sst.aws.Bucket("${r.name}");`;
 }
 
 function renderDynamo(r: Resource, plan: AwsPlan): string {
   const v = plan.varNameById.get(r.id);
-  const fields =
-    r.props.fields && typeof r.props.fields === 'object'
-      ? (r.props.fields as Record<string, string>)
-      : { pk: 'string', sk: 'string' };
-  const primary =
-    r.props.primaryIndex && typeof r.props.primaryIndex === 'object'
-      ? (r.props.primaryIndex as { hashKey: string; rangeKey?: string })
-      : { hashKey: 'pk', rangeKey: 'sk' };
+  const hashKey = str(r.props.hashKey) ?? 'pk';
+  // unset → default "sk"; explicitly cleared ("") → no sort key
+  const rangeKey = r.props.rangeKey === undefined ? 'sk' : str(r.props.rangeKey);
 
+  const fields: Record<string, string> = { [hashKey]: 'string' };
+  if (rangeKey) fields[rangeKey] = 'string';
   const fieldLines = Object.entries(fields)
     .map(([k, t]) => `    ${k}: "${t}",`)
     .join('\n');
-  const primaryStr = primary.rangeKey
-    ? `{ hashKey: "${primary.hashKey}", rangeKey: "${primary.rangeKey}" }`
-    : `{ hashKey: "${primary.hashKey}" }`;
+  const primaryStr = rangeKey
+    ? `{ hashKey: "${hashKey}", rangeKey: "${rangeKey}" }`
+    : `{ hashKey: "${hashKey}" }`;
 
   return [
     `const ${v} = new sst.aws.Dynamo("${r.name}", {`,
@@ -53,24 +55,33 @@ function renderDynamo(r: Resource, plan: AwsPlan): string {
 }
 
 function renderQueue(r: Resource, plan: AwsPlan): string {
-  return `const ${plan.varNameById.get(r.id)} = new sst.aws.Queue("${r.name}");`;
+  const v = plan.varNameById.get(r.id);
+  if (r.props.fifo === true) {
+    return `const ${v} = new sst.aws.Queue("${r.name}", {\n  fifo: true,\n});`;
+  }
+  return `const ${v} = new sst.aws.Queue("${r.name}");`;
 }
 
 function renderSubscriber(sub: AwsPlan['subscribers'][number]): string {
   // Queue.subscribe is SUBSCRIBER-FIRST: handler/link/timeout go in the first object.
+  const p = sub.worker.props;
   const lines = [`${sub.queueVar}.subscribe({`, `  handler: "${sub.handlerPath}",`];
   if (sub.linkVars.length) lines.push(`  link: ${linkArray(sub.linkVars)},`);
-  lines.push(`  timeout: "60 seconds",`);
+  if (str(p.memory)) lines.push(`  memory: "${str(p.memory)}",`);
+  lines.push(`  timeout: "${str(p.timeout) ?? '60 seconds'}",`);
   lines.push(`});`);
   return lines.join('\n');
 }
 
 function renderFunction(fn: AwsPlan['functions'][number]): string {
+  const p = fn.worker.props;
   const lines = [
     `const ${fn.varName} = new sst.aws.Function("${fn.worker.name}", {`,
     `  handler: "${fn.handlerPath}",`,
   ];
   if (fn.linkVars.length) lines.push(`  link: ${linkArray(fn.linkVars)},`);
+  if (str(p.timeout)) lines.push(`  timeout: "${str(p.timeout)}",`);
+  if (str(p.memory)) lines.push(`  memory: "${str(p.memory)}",`);
   lines.push(`});`);
   return lines.join('\n');
 }
@@ -92,8 +103,18 @@ function renderCron(cron: AwsPlan['crons'][number]): string {
 function renderNextjs(r: Resource, plan: AwsPlan): string {
   const v = plan.varNameById.get(r.id);
   const links = plan.linkVarsById.get(r.id) ?? [];
-  const lines = [`const ${v} = new sst.aws.Nextjs("${r.name}", {`, `  path: ".",`];
+  const path = str(r.props.path) ?? '.';
+  const lines = [`const ${v} = new sst.aws.Nextjs("${r.name}", {`, `  path: "${path}",`];
+  if (str(r.props.domain)) lines.push(`  domain: "${str(r.props.domain)}",`);
   if (links.length) lines.push(`  link: ${linkArray(links)},`);
+  const env = r.props.environment;
+  if (env && typeof env === 'object' && !Array.isArray(env) && Object.keys(env).length) {
+    lines.push(`  environment: {`);
+    for (const [k, val] of Object.entries(env as Record<string, unknown>)) {
+      lines.push(`    ${k}: "${String(val)}",`);
+    }
+    lines.push(`  },`);
+  }
   lines.push(`});`);
   return lines.join('\n');
 }

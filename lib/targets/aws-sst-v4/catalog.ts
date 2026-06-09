@@ -11,6 +11,11 @@ export const AWS_CATALOG: ResourceCatalog = {
     accent: 'bg-neutral-800',
     category: 'compute',
     singleton: true,
+    props: [
+      { key: 'path', label: 'Path', type: 'text', default: '.', placeholder: '.' },
+      { key: 'domain', label: 'Custom domain', type: 'text', placeholder: 'app.example.com' },
+      { key: 'environment', label: 'Environment variables', type: 'keyvalue' },
+    ],
   },
   bucket: {
     kind: 'bucket',
@@ -20,6 +25,19 @@ export const AWS_CATALOG: ResourceCatalog = {
     description: 'S3 bucket for object storage / uploads',
     accent: 'bg-emerald-600',
     category: 'storage',
+    props: [
+      {
+        key: 'access',
+        label: 'Public access',
+        type: 'select',
+        default: 'none',
+        options: [
+          { value: 'none', label: 'Private (default)' },
+          { value: 'public', label: 'Public' },
+          { value: 'cloudfront', label: 'CloudFront' },
+        ],
+      },
+    ],
   },
   dynamo: {
     kind: 'dynamo',
@@ -29,6 +47,16 @@ export const AWS_CATALOG: ResourceCatalog = {
     description: 'DynamoDB table',
     accent: 'bg-sky-600',
     category: 'database',
+    props: [
+      { key: 'hashKey', label: 'Partition key', type: 'text', default: 'pk', placeholder: 'pk' },
+      {
+        key: 'rangeKey',
+        label: 'Sort key',
+        type: 'text',
+        default: 'sk',
+        placeholder: 'sk (optional)',
+      },
+    ],
   },
   queue: {
     kind: 'queue',
@@ -38,6 +66,7 @@ export const AWS_CATALOG: ResourceCatalog = {
     description: 'SQS queue with a Lambda subscriber',
     accent: 'bg-amber-600',
     category: 'messaging',
+    props: [{ key: 'fifo', label: 'FIFO queue', type: 'boolean', default: false }],
   },
   worker: {
     kind: 'worker',
@@ -47,6 +76,22 @@ export const AWS_CATALOG: ResourceCatalog = {
     description: 'Lambda function (queue subscriber / job handler)',
     accent: 'bg-violet-600',
     category: 'compute',
+    props: [
+      {
+        key: 'timeout',
+        label: 'Timeout',
+        type: 'text',
+        default: '60 seconds',
+        placeholder: '60 seconds',
+      },
+      {
+        key: 'memory',
+        label: 'Memory',
+        type: 'text',
+        placeholder: '1024 MB',
+        help: 'e.g. "1024 MB"',
+      },
+    ],
   },
   cron: {
     kind: 'cron',
@@ -56,6 +101,15 @@ export const AWS_CATALOG: ResourceCatalog = {
     description: 'Scheduled Lambda (CronV2 — not the deprecated Cron)',
     accent: 'bg-rose-600',
     category: 'schedule',
+    props: [
+      {
+        key: 'schedule',
+        label: 'Schedule',
+        type: 'text',
+        default: 'rate(1 day)',
+        placeholder: 'rate(1 day) | cron(0 5 * * ? *)',
+      },
+    ],
   },
   secret: {
     kind: 'secret',

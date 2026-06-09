@@ -5,6 +5,17 @@
 
 export type DeployTarget = 'aws-sst-v4' | 'vercel';
 
+/** An editable property field for a resource (rendered as a form in the panel). */
+export interface PropField {
+  key: string;
+  label: string;
+  type: 'text' | 'number' | 'select' | 'boolean' | 'keyvalue';
+  options?: { value: string; label: string }[];
+  placeholder?: string;
+  default?: string | number | boolean;
+  help?: string;
+}
+
 export interface ResourceKindMeta {
   /** Stable kind id, unique within the target catalog. */
   kind: string;
@@ -19,6 +30,8 @@ export interface ResourceKindMeta {
   category: 'compute' | 'storage' | 'messaging' | 'database' | 'schedule' | 'config' | 'network';
   /** If true, only one instance of this kind is meaningful (e.g. the Next.js app). */
   singleton?: boolean;
+  /** Editable properties surfaced in the properties panel and read by the generator. */
+  props?: PropField[];
 }
 
 export type ResourceCatalog = Record<string, ResourceKindMeta>;

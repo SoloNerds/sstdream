@@ -2,6 +2,7 @@
 
 import { useCanvasStore } from '@/lib/canvas/store';
 import { getTarget } from '@/lib/targets/registry';
+import { PropsForm } from './PropsForm';
 import { useCost } from './useCost';
 
 export function PropertiesPanel() {
@@ -42,6 +43,8 @@ export function PropertiesPanel() {
           onChange={(e) => renameNode(node.id, e.target.value)}
         />
       </label>
+
+      <PropsForm node={node} />
 
       {outgoing.length > 0 && (
         <div className="flex flex-col gap-2">
