@@ -9,6 +9,8 @@ export interface SubscriberPlan {
   worker: Resource;
   /** The queue/bus/topic variable the worker subscribes to. */
   targetVar: string;
+  /** Resource id of the subscribed queue/bus/topic. */
+  targetId: string;
   /** Kind of the subscribed resource — drives the subscribe() call shape. */
   targetKind: 'queue' | 'bus' | 'snstopic';
   handlerPath: string; // e.g. "src/workers/process-job.handler"
@@ -27,6 +29,8 @@ export interface FunctionPlan {
 export interface CronPlan {
   cron: Resource;
   schedule: string;
+  /** Resource id of the invoked worker, when one is wired. */
+  workerId?: string;
   handlerPath?: string;
   handlerFile?: string;
   linkVars: string[];
@@ -68,6 +72,36 @@ export interface AwsPlan {
   routerBuckets: { routerVar: string; bucketVar: string; path: string }[];
   /** Worker resources, by their handler file, that need a generated handler. */
   workerHandlerFiles: string[];
+  /** Resources placed in the generated VPC (they query Postgres/Aurora). */
+  vpcConsumerIds: Set<string>;
+}
+
+/** Resources that query Postgres/Aurora — their functions must join the VPC
+ *  (linking grants credentials, not network reachability). */
+export function vpcConsumerIds(bp: Blueprint): Set<string> {
+  const byId = new Map(bp.resources.map((r) => [r.id, r]));
+  return new Set(
+    bp.connections
+      .filter((c) => {
+        const t = byId.get(c.target);
+        return c.intent === 'queriesDb' && (t?.kind === 'postgres' || t?.kind === 'aurora');
+      })
+      .map((c) => c.source),
+  );
+}
+
+// SST VPCs have NO NAT by default, and private-subnet Lambdas have no internet
+// access without one (the Vpc docs list no default gateway endpoints either).
+// So once a consumer is placed in the VPC, floor NAT at "ec2" (fck-nat, ~$4/mo)
+// or its calls to public endpoints (SES, Dynamo, S3, external APIs) hang.
+// Strongest explicit request still wins: managed > ec2.
+export function effectiveAwsNat(bp: Blueprint): 'none' | 'ec2' | 'managed' {
+  const dbs = bp.resources.filter((r) => r.kind === 'postgres' || r.kind === 'aurora');
+  if (!dbs.length) return 'none';
+  const vals = dbs.map((r) => (typeof r.props.nat === 'string' ? r.props.nat : 'none'));
+  if (vals.includes('managed')) return 'managed';
+  if (vals.includes('ec2')) return 'ec2';
+  return vpcConsumerIds(bp).size ? 'ec2' : 'none';
 }
 
 const DECL_ORDER: Record<string, number> = {
@@ -150,6 +184,7 @@ export function planAws(bp: Blueprint): AwsPlan {
       return {
         worker: w,
         targetVar: varNameById.get(subEdge(w)!.target) ?? camelCase(w.name),
+        targetId: subEdge(w)!.target,
         targetKind,
         handlerPath: handlerPathFor(w),
         handlerFile: handlerFileFor(w),
@@ -194,6 +229,7 @@ export function planAws(bp: Blueprint): AwsPlan {
       return {
         cron: c,
         schedule,
+        workerId: worker?.id,
         handlerPath: worker ? handlerPathFor(worker) : undefined,
         handlerFile: worker ? handlerFileFor(worker) : undefined,
         linkVars: worker ? linkVarsFor(worker.id) : [],
@@ -260,5 +296,6 @@ export function planAws(bp: Blueprint): AwsPlan {
     bucketNotifies,
     routerBuckets,
     workerHandlerFiles,
+    vpcConsumerIds: vpcConsumerIds(bp),
   };
 }

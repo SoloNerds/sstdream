@@ -180,6 +180,17 @@ jobs.subscribe({
 //   jobs.subscribe("src/x.handler", { filters: [...] })
 ```
 
+> **⚠️ Subscriber timeout vs visibility timeout (verified 2026-06-10):** AWS validates
+> that a subscriber Lambda's `timeout` is **≤ the queue's `visibilityTimeout`** when the
+> event-source mapping is created — _"Your function's timeout must be less than or equal
+> to the queue's visibility timeout. Lambda validates this requirement when you create or
+> update an event source mapping and will return an error"_
+> (<https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-configure.html>). The SST
+> default `visibilityTimeout` is `"30 seconds"`, so a queue with a default 60s subscriber
+> **fails `sst deploy`** unless `visibilityTimeout` is raised. AWS recommends ≈ **6×** the
+> function timeout; the generator emits `visibilityTimeout` = 6× the largest subscriber
+> timeout (capped at the SQS max of 12 hours) on any queue that has subscribers.
+
 ### 4.5 `sst.aws.Function`
 
 Source: <https://sst.dev/docs/component/aws/function/>
@@ -261,6 +272,18 @@ api.route("GET /", "src/get.handler")` (route key = `"METHOD /path"`; optional 3
 > edits the bucket policy); `sst.aws.CognitoUserPool` creates **no** Identity Pool (separate
 > component). SST v4 is **pure Pulumi** (no CloudFormation); the authoritative live graph is
 > `sst diff --json` (needs AWS creds) — our generator instead ships a verified static map.
+
+> **DB consumers must join the VPC (verified 2026-06-10):** linking a Postgres/Aurora
+> grants **credentials, not network reachability** — the consumer's function must also be
+> placed in the VPC. `sst.aws.Function` and `sst.aws.Nextjs` both accept `vpc` (a `Vpc`
+> component instance directly, or `{ privateSubnets, securityGroups }`); on `Nextjs` it
+> applies to the server function. The canonical Postgres example passes `vpc` to **both**
+> the database and the consumer: `new sst.aws.Nextjs("MyWeb", { link: [database], vpc })`.
+> `Queue.subscribe`, `ApiGatewayV2.route`, `CronV2`'s `function`, and `Bucket.notify`'s
+> `function` all take the same `FunctionArgs`, so `vpc` is valid there too. Because
+> private-subnet Lambdas have **no internet (or public AWS endpoint) access without NAT**
+> — and the `Vpc` docs list no default gateway endpoints — the generator floors NAT at
+> `"ec2"` (fck-nat, ~$4/mo) whenever any consumer is placed in the generated VPC.
 
 ---
 

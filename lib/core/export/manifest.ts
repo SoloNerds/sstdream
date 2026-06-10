@@ -7,7 +7,7 @@ import type { GeneratedFile } from '@/lib/core/codegen/types';
 import type { DeployTarget } from '@/lib/targets/types';
 
 interface DocsBuilder {
-  readme: (bp: Blueprint, deps: string[]) => string;
+  readme: (bp: Blueprint, deps: string[], devDeps: string[]) => string;
   envExample: (bp: Blueprint) => string;
 }
 
@@ -16,15 +16,20 @@ const DOCS: Partial<Record<DeployTarget, DocsBuilder>> = {
   vercel: { readme: buildVercelReadme, envExample: buildVercelEnvExample },
 };
 
-function depsFrom(files: GeneratedFile[]): string[] {
+function depsFrom(files: GeneratedFile[]): { deps: string[]; devDeps: string[] } {
   const pkg = files.find((f) => f.path === 'package.additions.json');
-  if (!pkg) return [];
+  if (!pkg) return { deps: [], devDeps: [] };
   try {
-    const deps = (JSON.parse(pkg.content) as { dependencies?: Record<string, string> })
-      .dependencies;
-    return Object.keys(deps ?? {}).filter((d) => d !== 'sst');
+    const parsed = JSON.parse(pkg.content) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    return {
+      deps: Object.keys(parsed.dependencies ?? {}).filter((d) => d !== 'sst'),
+      devDeps: Object.keys(parsed.devDependencies ?? {}),
+    };
   } catch {
-    return [];
+    return { deps: [], devDeps: [] };
   }
 }
 
@@ -35,7 +40,8 @@ export function buildExport(bp: Blueprint): GeneratedFile[] {
   const extras: GeneratedFile[] = [];
 
   if (docs) {
-    extras.push({ path: 'README.md', content: docs.readme(bp, depsFrom(code)), language: 'md' });
+    const { deps, devDeps } = depsFrom(code);
+    extras.push({ path: 'README.md', content: docs.readme(bp, deps, devDeps), language: 'md' });
     extras.push({ path: '.env.example', content: docs.envExample(bp), language: 'env' });
   }
   extras.push({

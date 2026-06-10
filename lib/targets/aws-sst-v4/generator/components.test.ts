@@ -18,7 +18,9 @@ describe('Email + Postgres components', () => {
 
   it('auto-generates a Vpc for Postgres (RDS, not Aurora)', () => {
     const config = byPath['sst.config.ts'];
-    expect(config).toContain('const vpc = new sst.aws.Vpc("Vpc");');
+    // The Next.js consumer joins the VPC, so NAT is floored at fck-nat (ec2).
+    expect(config).toContain('const vpc = new sst.aws.Vpc("Vpc", {');
+    expect(config).toContain('nat: "ec2",');
     expect(config).toContain('new sst.aws.Postgres("Database", {');
     expect(config).toContain('vpc,');
     expect(config).not.toContain('sst.aws.Aurora');

@@ -74,7 +74,9 @@ describe('Aurora Serverless v2 (Postgres)', () => {
   it('validates and renders Aurora with the shared VPC', () => {
     expect(validateBlueprint(bp).errors).toHaveLength(0);
     const c = config(bp);
-    expect(c).toContain('const vpc = new sst.aws.Vpc("Vpc");');
+    // The consumer joins the VPC, so NAT is floored at fck-nat (ec2).
+    expect(c).toContain('const vpc = new sst.aws.Vpc("Vpc", {');
+    expect(c).toContain('nat: "ec2",');
     expect(c).toContain('new sst.aws.Aurora("Db", {');
     expect(c).toContain('engine: "postgres"');
     expect(c).toContain('vpc,');

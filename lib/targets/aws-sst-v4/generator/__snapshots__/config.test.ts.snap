@@ -28,7 +28,9 @@ export default $config({
       primaryIndex: { hashKey: "pk", rangeKey: "sk" },
     });
 
-    const jobs = new sst.aws.Queue("Jobs");
+    const jobs = new sst.aws.Queue("Jobs", {
+      visibilityTimeout: "360 seconds",
+    });
 
     jobs.subscribe({
       handler: "src/workers/process-job.handler",

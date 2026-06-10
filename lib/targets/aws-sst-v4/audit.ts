@@ -1,5 +1,6 @@
 import type { Blueprint } from '@/lib/core/blueprint/types';
 import type { SecurityFinding } from '@/lib/core/audit/types';
+import { effectiveAwsNat } from './generator/plan';
 
 // Verified security/ops facts (resource-expansion sweep): OpenNext server/image Lambdas
 // get PUBLIC Function URLs by default (protection: "none"); Bucket access: "public" is
@@ -67,23 +68,38 @@ export function auditAws(bp: Blueprint): SecurityFinding[] {
   }
 
   // NAT cost / egress notes (Postgres + Aurora share the generated VPC).
-  for (const p of [...byKind('postgres'), ...byKind('aurora')]) {
-    const nat = p.props.nat;
-    if (nat === 'managed') {
+  // Judged on the EFFECTIVE NAT: the generator floors NAT at "ec2" when app
+  // code joins the VPC, so the raw nat prop may understate what ships.
+  const dbs = [...byKind('postgres'), ...byKind('aurora')];
+  if (dbs.length) {
+    const nat = effectiveAwsNat(bp);
+    for (const p of dbs.filter((d) => d.props.nat === 'managed')) {
       out.push({
         level: 'info',
         title: 'Managed NAT gateway is pricey',
         detail: '~$32/mo per AZ. fck-nat (nat: "ec2") gives the same egress for ~$4/mo.',
         resourceId: p.id,
       });
-    } else if (nat === undefined || nat === 'none') {
+    }
+    const explicit = dbs.some((d) => d.props.nat === 'ec2' || d.props.nat === 'managed');
+    if (nat === 'ec2' && !explicit) {
       out.push({
         level: 'info',
-        title: `"${p.name}" VPC has no internet egress`,
+        title: 'fck-nat added automatically',
         detail:
-          'With no NAT, Lambdas inside the VPC cannot reach the public internet (RDS access still works). Add fck-nat (nat: "ec2") if they must call external APIs.',
-        resourceId: p.id,
+          'App code joins the VPC to reach the database, and in-VPC Lambdas have no internet egress without NAT — so the export ships fck-nat (nat: "ec2", ~$4/mo). Pick "managed" on the database node for heavier egress.',
+        resourceId: dbs[0].id,
       });
+    } else if (nat === 'none') {
+      for (const p of dbs) {
+        out.push({
+          level: 'info',
+          title: `"${p.name}" VPC has no internet egress`,
+          detail:
+            'With no NAT, Lambdas inside the VPC cannot reach the public internet (RDS access still works). Add fck-nat (nat: "ec2") if they must call external APIs.',
+          resourceId: p.id,
+        });
+      }
     }
   }
 

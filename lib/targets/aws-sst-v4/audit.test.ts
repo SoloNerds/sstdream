@@ -46,7 +46,7 @@ describe('AWS security & ops audit', () => {
     expect(t).toContain('Keep server keys out of the client');
   });
 
-  it('notes managed NAT cost, and no-egress for a default (no-NAT) VPC', () => {
+  it('notes managed NAT cost, the auto-added fck-nat floor, and no-egress for a consumer-less VPC', () => {
     const managed = draftBlueprint(
       {
         nodes: [
@@ -66,6 +66,21 @@ describe('AWS security & ops audit', () => {
       NOW,
     );
     expect(titles(managed)).toContain('Managed NAT gateway is pricey');
-    expect(titles('aws-relational-saas').some((t) => /no internet egress/.test(t))).toBe(true);
+    // relational-saas has a queriesDb consumer → the export floors NAT at fck-nat,
+    // so the audit reports the auto-add instead of a (now false) no-egress finding.
+    const saas = titles('aws-relational-saas');
+    expect(saas).toContain('fck-nat added automatically');
+    expect(saas.some((t) => /no internet egress/.test(t))).toBe(false);
+
+    const standalone = draftBlueprint(
+      {
+        nodes: [{ id: 'p1', kind: 'postgres', name: 'Db', props: {}, position: { x: 0, y: 0 } }],
+        edges: [],
+      },
+      'aws-sst-v4',
+      APP,
+      NOW,
+    );
+    expect(titles(standalone).some((t) => /no internet egress/.test(t))).toBe(true);
   });
 });

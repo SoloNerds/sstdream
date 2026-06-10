@@ -1,6 +1,6 @@
 import type { Blueprint, Resource } from '@/lib/core/blueprint/types';
 import { indent } from '@/lib/core/codegen/strings';
-import { planAws, type AwsPlan } from './plan';
+import { effectiveAwsNat, planAws, type AwsPlan } from './plan';
 
 // sst.config.ts renderer. Verified against docs/sst-v4-target.md@0.1.0 (2026-06-08):
 // $config + triple-slash ref, no provider imports, resources in run(), links,
@@ -72,12 +72,35 @@ function renderDynamo(r: Resource, plan: AwsPlan): string {
   return lines.join('\n');
 }
 
+// SST duration strings: "30 seconds" | "1.5 minutes" | "1 hour" → seconds.
+function parseSeconds(value: string | undefined): number | undefined {
+  const m = /^(\d+(?:\.\d+)?)\s+(second|minute|hour)s?$/.exec(value ?? '');
+  if (!m) return undefined;
+  const n = Number(m[1]);
+  return m[2] === 'hour' ? n * 3600 : m[2] === 'minute' ? n * 60 : n;
+}
+
 function renderQueue(r: Resource, plan: AwsPlan): string {
   const v = plan.varNameById.get(r.id);
-  if (r.props.fifo === true) {
-    return `const ${v} = new sst.aws.Queue("${r.name}", {\n  fifo: true,\n});`;
+  const args: string[] = [];
+  if (r.props.fifo === true) args.push(`  fifo: true,`);
+  // AWS rejects the event-source mapping if a subscriber's timeout exceeds the
+  // queue's visibilityTimeout (default 30s); AWS recommends ~6× the function
+  // timeout. SQS caps visibility at 12 hours.
+  const subTimeouts = plan.subscribers
+    .filter((s) => s.targetId === r.id)
+    .map((s) => {
+      const raw = str(s.worker.props.timeout);
+      // Unparseable free text still renders verbatim as the subscriber timeout,
+      // so assume the Lambda max (900s) to keep visibility >= timeout.
+      return raw ? (parseSeconds(raw) ?? 900) : 60;
+    });
+  if (subTimeouts.length) {
+    const visibility = Math.min(Math.ceil(Math.max(...subTimeouts)) * 6, 43_200);
+    args.push(`  visibilityTimeout: "${visibility} seconds",`);
   }
-  return `const ${v} = new sst.aws.Queue("${r.name}");`;
+  if (!args.length) return `const ${v} = new sst.aws.Queue("${r.name}");`;
+  return [`const ${v} = new sst.aws.Queue("${r.name}", {`, ...args, `});`].join('\n');
 }
 
 function renderBus(r: Resource, plan: AwsPlan): string {
@@ -96,25 +119,30 @@ function renderApi(r: Resource, plan: AwsPlan): string {
   return `const ${plan.varNameById.get(r.id)} = new sst.aws.ApiGatewayV2("${r.name}");`;
 }
 
-// api.route("METHOD /path", handler) — handler is a string, or an object when it links.
-function renderRoute(route: AwsPlan['routes'][number]): string {
-  if (route.linkVars.length) {
-    return [
+// api.route("METHOD /path", handler) — handler is a string, or an object when
+// it links or joins the VPC.
+function renderRoute(route: AwsPlan['routes'][number], plan: AwsPlan): string {
+  const vpc = plan.vpcConsumerIds.has(route.worker.id);
+  if (route.linkVars.length || vpc) {
+    const lines = [
       `${route.apiVar}.route("${route.route}", {`,
       `  handler: "${route.handlerPath}",`,
-      `  link: ${linkArray(route.linkVars)},`,
-      `});`,
-    ].join('\n');
+    ];
+    if (route.linkVars.length) lines.push(`  link: ${linkArray(route.linkVars)},`);
+    if (vpc) lines.push(`  vpc,`);
+    lines.push(`});`);
+    return lines.join('\n');
   }
   return `${route.apiVar}.route("${route.route}", "${route.handlerPath}");`;
 }
 
 // bucket.notify({ notifications: [{ name, function, events }] }) — S3 object events → Lambda.
-function renderBucketNotify(bn: AwsPlan['bucketNotifies'][number]): string {
+function renderBucketNotify(bn: AwsPlan['bucketNotifies'][number], plan: AwsPlan): string {
   const entries = bn.notifiers.map((n) => {
-    const fn = n.linkVars.length
-      ? `{ handler: "${n.handlerPath}", link: ${linkArray(n.linkVars)} }`
-      : `"${n.handlerPath}"`;
+    const parts = [`handler: "${n.handlerPath}"`];
+    if (n.linkVars.length) parts.push(`link: ${linkArray(n.linkVars)}`);
+    if (plan.vpcConsumerIds.has(n.worker.id)) parts.push(`vpc`);
+    const fn = parts.length > 1 ? `{ ${parts.join(', ')} }` : `"${n.handlerPath}"`;
     return [
       `    {`,
       `      name: "${n.name}",`,
@@ -157,15 +185,6 @@ function renderAurora(r: Resource, plan: AwsPlan): string {
   return `const ${v} = new sst.aws.Aurora("${r.name}", {\n  engine: "postgres",\n  vpc,\n});`;
 }
 
-// SST VPCs have NO NAT by default. Pick the strongest NAT requested across the
-// Postgres nodes that share the generated VPC: managed > ec2 (fck-nat) > none.
-function pickNat(resources: Resource[]): 'none' | 'ec2' | 'managed' {
-  const vals = resources.map((r) => str(r.props.nat) ?? 'none');
-  if (vals.includes('managed')) return 'managed';
-  if (vals.includes('ec2')) return 'ec2';
-  return 'none';
-}
-
 // Cognito user pool + a web client. Linked → Resource.<Pool>.id; the pool/client
 // ids are injected into the Next.js app as NEXT_PUBLIC_COGNITO_* env (see renderNextjs).
 function renderCognito(r: Resource, plan: AwsPlan): string {
@@ -173,12 +192,13 @@ function renderCognito(r: Resource, plan: AwsPlan): string {
   return `const ${v} = new sst.aws.CognitoUserPool("${r.name}");\nconst ${v}Client = ${v}.addClient("Web");`;
 }
 
-function renderSubscriber(sub: AwsPlan['subscribers'][number]): string {
+function renderSubscriber(sub: AwsPlan['subscribers'][number], plan: AwsPlan): string {
   const p = sub.worker.props;
   const cfg = [`  handler: "${sub.handlerPath}",`];
   if (sub.linkVars.length) cfg.push(`  link: ${linkArray(sub.linkVars)},`);
   if (str(p.memory)) cfg.push(`  memory: "${str(p.memory)}",`);
   cfg.push(`  timeout: "${str(p.timeout) ?? '60 seconds'}",`);
+  if (plan.vpcConsumerIds.has(sub.worker.id)) cfg.push(`  vpc,`);
   // Queue.subscribe is SUBSCRIBER-FIRST; Bus / SnsTopic.subscribe are NAME-FIRST.
   if (sub.targetKind === 'queue') {
     return [`${sub.targetVar}.subscribe({`, ...cfg, `});`].join('\n');
@@ -186,7 +206,7 @@ function renderSubscriber(sub: AwsPlan['subscribers'][number]): string {
   return [`${sub.targetVar}.subscribe("${sub.worker.name}", {`, ...cfg, `});`].join('\n');
 }
 
-function renderFunction(fn: AwsPlan['functions'][number]): string {
+function renderFunction(fn: AwsPlan['functions'][number], plan: AwsPlan): string {
   const p = fn.worker.props;
   const lines = [
     `const ${fn.varName} = new sst.aws.Function("${fn.worker.name}", {`,
@@ -195,16 +215,19 @@ function renderFunction(fn: AwsPlan['functions'][number]): string {
   if (fn.linkVars.length) lines.push(`  link: ${linkArray(fn.linkVars)},`);
   if (str(p.timeout)) lines.push(`  timeout: "${str(p.timeout)}",`);
   if (str(p.memory)) lines.push(`  memory: "${str(p.memory)}",`);
+  if (plan.vpcConsumerIds.has(fn.worker.id)) lines.push(`  vpc,`);
   lines.push(`});`);
   return lines.join('\n');
 }
 
-function renderCron(cron: AwsPlan['crons'][number]): string {
+function renderCron(cron: AwsPlan['crons'][number], plan: AwsPlan): string {
+  const vpc = cron.workerId ? plan.vpcConsumerIds.has(cron.workerId) : false;
   const lines = [`new sst.aws.CronV2("${cron.cron.name}", {`, `  schedule: "${cron.schedule}",`];
-  if (cron.handlerPath && cron.linkVars.length) {
+  if (cron.handlerPath && (cron.linkVars.length || vpc)) {
     lines.push(`  function: {`);
     lines.push(`    handler: "${cron.handlerPath}",`);
-    lines.push(`    link: ${linkArray(cron.linkVars)},`);
+    if (cron.linkVars.length) lines.push(`    link: ${linkArray(cron.linkVars)},`);
+    if (vpc) lines.push(`    vpc,`);
     lines.push(`  },`);
   } else if (cron.handlerPath) {
     lines.push(`  function: "${cron.handlerPath}",`);
@@ -220,6 +243,8 @@ function renderNextjs(r: Resource, plan: AwsPlan): string {
   const lines = [`const ${v} = new sst.aws.Nextjs("${r.name}", {`, `  path: "${path}",`];
   if (str(r.props.domain)) lines.push(`  domain: "${str(r.props.domain)}",`);
   if (links.length) lines.push(`  link: ${linkArray(links)},`);
+  // Canonical SST Postgres pattern: vpc goes to BOTH the database and its consumers.
+  if (plan.vpcConsumerIds.has(r.id)) lines.push(`  vpc,`);
 
   const envEntries: string[] = [];
   const env = r.props.environment;
@@ -305,7 +330,7 @@ export function generateSstConfig(bp: Blueprint): string {
   for (const r of byKind('dynamo')) statements.push(renderDynamo(r, plan));
   const vpcResources = [...byKind('postgres'), ...byKind('aurora')];
   if (vpcResources.length) {
-    const nat = pickNat(vpcResources);
+    const nat = effectiveAwsNat(bp);
     statements.push(
       nat === 'none'
         ? 'const vpc = new sst.aws.Vpc("Vpc");'
@@ -319,11 +344,11 @@ export function generateSstConfig(bp: Blueprint): string {
   for (const r of byKind('snstopic')) statements.push(renderSnsTopic(r, plan));
   for (const r of byKind('apigatewayv2')) statements.push(renderApi(r, plan));
   for (const r of byKind('router')) statements.push(renderRouter(r, plan));
-  for (const sub of plan.subscribers) statements.push(renderSubscriber(sub));
-  for (const fn of plan.functions) statements.push(renderFunction(fn));
-  for (const cron of plan.crons) statements.push(renderCron(cron));
-  for (const route of plan.routes) statements.push(renderRoute(route));
-  for (const bn of plan.bucketNotifies) statements.push(renderBucketNotify(bn));
+  for (const sub of plan.subscribers) statements.push(renderSubscriber(sub, plan));
+  for (const fn of plan.functions) statements.push(renderFunction(fn, plan));
+  for (const cron of plan.crons) statements.push(renderCron(cron, plan));
+  for (const route of plan.routes) statements.push(renderRoute(route, plan));
+  for (const bn of plan.bucketNotifies) statements.push(renderBucketNotify(bn, plan));
   for (const rb of plan.routerBuckets) statements.push(renderRouteBucket(rb));
   for (const r of byKind('nextjs')) statements.push(renderNextjs(r, plan));
   for (const r of byKind('staticsite')) statements.push(renderStaticSite(r, plan));

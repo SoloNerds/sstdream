@@ -1,5 +1,6 @@
 import type { Blueprint, Resource } from '@/lib/core/blueprint/types';
 import type { InfraGroup, PhysicalResource } from '@/lib/core/expansion/types';
+import { effectiveAwsNat } from './generator/plan';
 
 // Verified resource-expansion map (resource-expansion sweep, 2026-06-09 vs live SST
 // docs). Maps each logical node to the underlying AWS resources `sst deploy` creates.
@@ -170,9 +171,9 @@ function resourcesFor(
   }
 }
 
-function vpcGroup(postgres: Resource[]): InfraGroup {
-  const vals = postgres.map((r) => str(r.props.nat) ?? 'none');
-  const nat = vals.includes('managed') ? 'managed' : vals.includes('ec2') ? 'ec2' : 'none';
+// `nat` is the effective NAT (effectiveAwsNat) — floored at "ec2" when app code
+// joins the VPC — so this view matches the generated sst.config.ts and the cost panel.
+function vpcGroup(nat: 'none' | 'ec2' | 'managed'): InfraGroup {
   const resources = [
     P('VPC', 'VPC'),
     P('VPC', 'Public subnets ×2'),
@@ -234,7 +235,7 @@ export function expandAws(bp: Blueprint): InfraGroup[] {
   }
 
   const dbWithVpc = bp.resources.filter((r) => r.kind === 'postgres' || r.kind === 'aurora');
-  if (dbWithVpc.length) groups.push(vpcGroup(dbWithVpc));
+  if (dbWithVpc.length) groups.push(vpcGroup(effectiveAwsNat(bp)));
 
   return groups;
 }

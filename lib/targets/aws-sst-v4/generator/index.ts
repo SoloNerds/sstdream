@@ -15,11 +15,16 @@ export function generateAws(bp: Blueprint): GeneratedFile[] {
   };
   const files = [config, ...generateRuntimeFiles(bp)];
   const additions = files.find((f) => f.path === 'package.additions.json');
-  const deps = additions
-    ? ((JSON.parse(additions.content) as { dependencies?: Record<string, string> }).dependencies ??
-      {})
+  const parsed = additions
+    ? (JSON.parse(additions.content) as {
+        dependencies?: Record<string, string>;
+        devDependencies?: Record<string, string>;
+      })
     : {};
-  return [...files, ...generateScaffold(bp, files, deps)];
+  return [
+    ...files,
+    ...generateScaffold(bp, files, parsed.dependencies ?? {}, parsed.devDependencies ?? {}),
+  ];
 }
 
 export { generateSstConfig } from './config';

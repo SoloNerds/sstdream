@@ -25,10 +25,25 @@ describe('AWS infrastructure expansion', () => {
     expect(bucket.resources.some((r) => r.service === 'S3')).toBe(true);
   });
 
-  it('Postgres adds a shared VPC group with CloudMap and NO NAT by default', () => {
+  it('Postgres adds a shared VPC group; a DB consumer floors NAT to fck-nat (matches the export)', () => {
     const vpc = expandAws(fromTpl('aws-relational-saas')).find((g) => g.kind === 'vpc')!;
     expect(vpc).toBeTruthy();
     expect(vpc.resources.some((r) => r.service === 'Cloud Map')).toBe(true);
+    // relational-saas has a queriesDb consumer → generated config ships nat: "ec2".
+    expect(vpc.resources.some((r) => /fck-nat/i.test(r.name))).toBe(true);
+  });
+
+  it('a consumer-less Postgres keeps the no-NAT default in the VPC group', () => {
+    const bp = draftBlueprint(
+      {
+        nodes: [{ id: 'p1', kind: 'postgres', name: 'Db', props: {}, position: { x: 0, y: 0 } }],
+        edges: [],
+      },
+      'aws-sst-v4',
+      { name: 'natapp', region: 'us-east-1', packageManager: 'yarn' },
+      NOW,
+    );
+    const vpc = expandAws(bp).find((g) => g.kind === 'vpc')!;
     expect(vpc.resources.some((r) => /NAT/i.test(r.name))).toBe(false);
   });
 

@@ -11,7 +11,11 @@ import { collectAwsEnv } from '../env';
 const sortObj = (o: Record<string, string>): Record<string, string> =>
   Object.fromEntries(Object.entries(o).sort(([a], [b]) => a.localeCompare(b)));
 
-function packageJson(bp: Blueprint, deps: Record<string, string>): string {
+function packageJson(
+  bp: Blueprint,
+  deps: Record<string, string>,
+  devDeps: Record<string, string>,
+): string {
   const dependencies = sortObj({
     next: 'latest',
     react: 'latest',
@@ -38,6 +42,7 @@ function packageJson(bp: Blueprint, deps: Record<string, string>): string {
       '@types/react': 'latest',
       '@types/react-dom': 'latest',
       typescript: 'latest',
+      ...devDeps,
     }),
   };
   return `${JSON.stringify(pkg, null, 2)}\n`;
@@ -236,6 +241,7 @@ export function generateScaffold(
   bp: Blueprint,
   files: GeneratedFile[],
   deps: Record<string, string>,
+  devDeps: Record<string, string> = {},
 ): GeneratedFile[] {
   const pageRoutes = files
     .map((f) => /^app\/([^/]+)\/page\.tsx$/.exec(f.path)?.[1])
@@ -243,7 +249,7 @@ export function generateScaffold(
   const hasChat = files.some((f) => f.path === 'app/api/chat/route.ts');
 
   return [
-    { path: 'package.json', content: packageJson(bp, deps), language: 'json' },
+    { path: 'package.json', content: packageJson(bp, deps, devDeps), language: 'json' },
     { path: 'tsconfig.json', content: tsconfigJson(), language: 'json' },
     { path: 'next.config.ts', content: nextConfig(), language: 'ts' },
     { path: '.gitignore', content: gitignore(), language: 'text' },

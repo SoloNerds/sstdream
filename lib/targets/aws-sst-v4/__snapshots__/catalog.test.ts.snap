@@ -53,7 +53,7 @@ exports[`aws-sst-v4 catalog > matches snapshot 1`] = `
     "props": [
       {
         "default": "none",
-        "help": "Same VPC/NAT behavior as Postgres — no NAT by default.",
+        "help": "Same VPC/NAT behavior as Postgres — no NAT by default; the export auto-adds fck-nat when app code queries this database.",
         "key": "nat",
         "label": "NAT (internet from private subnets)",
         "options": [
@@ -293,7 +293,7 @@ exports[`aws-sst-v4 catalog > matches snapshot 1`] = `
     "props": [
       {
         "default": "none",
-        "help": "SST VPCs have no NAT by default. Add one only if Lambdas in the VPC must reach the public internet. fck-nat (nat: "ec2") is a cheap t4g.nano NAT instance.",
+        "help": "SST VPCs have no NAT by default. When app code queries this database it joins the VPC, and the export auto-adds fck-nat (nat: "ec2", ~$4/mo) so those Lambdas keep internet egress. Pick managed only for heavy egress.",
         "key": "nat",
         "label": "NAT (internet from private subnets)",
         "options": [

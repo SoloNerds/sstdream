@@ -666,8 +666,12 @@ function packageAdditions(flags: {
   if (flags.clerk) deps['@clerk/nextjs'] = 'latest';
   if (flags.bus) deps['@aws-sdk/client-eventbridge'] = 'latest';
   if (flags.topic) deps['@aws-sdk/client-sns'] = 'latest';
+  const devDeps: Record<string, string> = {};
+  // pg ships no types — without @types/pg the exported project fails `next build` (TS7016).
+  if (flags.postgres) devDeps['@types/pg'] = 'latest';
   const json = {
     dependencies: deps,
+    ...(Object.keys(devDeps).length ? { devDependencies: devDeps } : {}),
     scripts: { 'dev:sst': 'sst dev', deploy: 'sst deploy', remove: 'sst remove' },
   };
   return `${JSON.stringify(json, null, 2)}\n`;

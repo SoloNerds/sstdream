@@ -1,5 +1,6 @@
 import type { Blueprint, Resource } from '@/lib/core/blueprint/types';
 import type { CostBreakdown, CostEstimate, CostLine } from '@/lib/core/cost/types';
+import { effectiveAwsNat } from './generator/plan';
 
 // AWS cost model — rough monthly estimates for a single "moderate traffic" profile,
 // us-east-1 on-demand. Numbers are illustrative ballparks for design-time guidance,
@@ -63,7 +64,9 @@ function cloudfrontLines(transferGb: number, requests: number): CostLine[] {
   ];
 }
 
-function breakdownFor(r: Resource): CostBreakdown {
+// `nat` is the effective NAT for the resource's shared VPC ('none' suppresses
+// the line — the one generated VPC's NAT is attributed to a single DB node).
+function breakdownFor(r: Resource, nat: 'none' | 'ec2' | 'managed'): CostBreakdown {
   let lines: CostLine[] = [];
   switch (r.kind) {
     case 'nextjs':
@@ -145,7 +148,6 @@ function breakdownFor(r: Resource): CostBreakdown {
         { label: 'Storage (20GB gp3)', usd: 2.3 },
         { label: 'VPC (CloudMap DNS)', usd: 0.5 },
       ];
-      const nat = r.props.nat;
       if (nat === 'ec2') lines.push({ label: 'fck-nat EC2 (t4g.nano)', usd: 4 });
       else if (nat === 'managed') lines.push({ label: 'NAT Gateway', usd: 32 });
       break;
@@ -156,9 +158,8 @@ function breakdownFor(r: Resource): CostBreakdown {
         { label: 'Storage (10GB)', usd: 1 },
         { label: 'VPC (CloudMap DNS)', usd: 0.5 },
       ];
-      const aNat = r.props.nat;
-      if (aNat === 'ec2') lines.push({ label: 'fck-nat EC2 (t4g.nano)', usd: 4 });
-      else if (aNat === 'managed') lines.push({ label: 'NAT Gateway', usd: 32 });
+      if (nat === 'ec2') lines.push({ label: 'fck-nat EC2 (t4g.nano)', usd: 4 });
+      else if (nat === 'managed') lines.push({ label: 'NAT Gateway', usd: 32 });
       break;
     }
     case 'cognito':
@@ -180,7 +181,13 @@ function breakdownFor(r: Resource): CostBreakdown {
 }
 
 export function estimateAwsCost(bp: Blueprint): CostEstimate {
-  const perResource = bp.resources.map(breakdownFor);
+  // One shared VPC → one NAT; charge it on the first DB node only. The
+  // generator floors NAT at "ec2" when consumers join the VPC (see plan.ts).
+  const nat = effectiveAwsNat(bp);
+  const firstVpcNode = bp.resources.find((r) => r.kind === 'postgres' || r.kind === 'aurora');
+  const perResource = bp.resources.map((r) =>
+    breakdownFor(r, r.id === firstVpcNode?.id ? nat : 'none'),
+  );
   const totalMonthlyUsd = round2(perResource.reduce((sum, r) => sum + r.monthlyUsd, 0));
   return {
     perResource,
@@ -191,7 +198,7 @@ export function estimateAwsCost(bp: Blueprint): CostEstimate {
       'S3: 5GB storage, 100k PUT, 1M GET',
       'DynamoDB on-demand: 1M writes, 1M reads, 5GB',
       'SQS: 1M requests; CloudFront: 50GB out, 1M requests',
-      'VPCs have NO NAT by default; fck-nat (ec2) ≈ $4/mo, managed gateway ≈ $32/mo/AZ',
+      'VPCs have NO NAT by default; fck-nat (ec2) ≈ $4/mo (added when app code joins the VPC to reach the DB), managed gateway ≈ $32/mo/AZ',
     ],
     disclaimer:
       'Rough design-time ballpark (us-east-1 on-demand). Not a billing forecast — your real costs depend on actual traffic, region, and free-tier usage.',

@@ -4,7 +4,11 @@ import { collectAwsEnv, type AwsEnvVar } from './env';
 // Per-lane export docs (AWS / SST v4). README install/deploy with npm + yarn,
 // and a minimal .env.example. See docs/architecture-targets.md (per-lane docs).
 
-function depCommands(pm: 'npm' | 'yarn' | 'pnpm' | 'bun', deps: string[]): string {
+function depCommands(
+  pm: 'npm' | 'yarn' | 'pnpm' | 'bun',
+  deps: string[],
+  devDeps: string[],
+): string {
   const add =
     pm === 'npm'
       ? 'npm install'
@@ -13,15 +17,24 @@ function depCommands(pm: 'npm' | 'yarn' | 'pnpm' | 'bun', deps: string[]): strin
         : pm === 'pnpm'
           ? 'pnpm add'
           : 'bun add';
+  const addDev =
+    pm === 'npm'
+      ? 'npm install -D'
+      : pm === 'yarn'
+        ? 'yarn add -D'
+        : pm === 'pnpm'
+          ? 'pnpm add -D'
+          : 'bun add -d';
   const run = pm === 'npm' ? 'npx' : pm === 'yarn' ? 'yarn' : pm === 'pnpm' ? 'pnpm' : 'bunx';
   const lines = [`${add} sst`];
   if (deps.length) lines.push(`${add} ${deps.join(' ')}`);
+  if (devDeps.length) lines.push(`${addDev} ${devDeps.join(' ')}`);
   lines.push(`${run} sst install`);
   lines.push(`${run} sst dev`);
   return lines.join('\n');
 }
 
-export function buildAwsReadme(bp: Blueprint, deps: string[]): string {
+export function buildAwsReadme(bp: Blueprint, deps: string[], devDeps: string[] = []): string {
   const pm = bp.app.packageManager;
   const run = pm === 'npm' ? 'npx' : pm === 'yarn' ? 'yarn' : pm === 'pnpm' ? 'pnpm' : 'bunx';
   const install =
@@ -77,10 +90,10 @@ ${run} sst deploy --stage production
 <details><summary>Adding this to an <strong>existing</strong> app instead?</summary>
 
 Skip \`package.json\`/\`tsconfig.json\`/\`next.config.ts\`/\`app/layout.tsx\`/\`app/page.tsx\`, and merge
-\`package.additions.json\` (deps + scripts) into your own \`package.json\`:
+\`package.additions.json\` (deps + devDeps + scripts) into your own \`package.json\`:
 
 \`\`\`bash
-${depCommands(pm, deps)}
+${depCommands(pm, deps, devDeps)}
 \`\`\`
 </details>
 
