@@ -1,6 +1,7 @@
 import type { Blueprint, Resource } from '@/lib/core/blueprint/types';
 import type { Diagnostic, ValidationRule } from '@/lib/core/validation/types';
 import { camelCase } from '@/lib/core/codegen/strings';
+import { parseSeconds } from './generator/config';
 
 // AWS / SST v4 design-level validation rules. Code-shape guarantees (no legacy
 // imports, resources-in-run, Queue.subscribe subscriber-first, CronV2 not Cron)
@@ -206,6 +207,10 @@ export const AWS_RULES: ValidationRule[] = [
         .filter((r) => r.kind === 'queue' || r.kind === 'bus' || r.kind === 'snstopic')
         .filter(
           (q) => !bp.connections.some((c) => c.target === q.id && c.intent === 'subscribesTo'),
+        )
+        // A DLQ legitimately has no subscriber — failed messages just land there.
+        .filter(
+          (q) => !bp.connections.some((c) => c.target === q.id && c.intent === 'deadLettersTo'),
         )
         .map((q) => {
           const word = q.kind === 'queue' ? 'Queue' : q.kind === 'bus' ? 'Event bus' : 'SNS topic';
@@ -491,6 +496,79 @@ export const AWS_RULES: ValidationRule[] = [
             severity: 'error',
             resourceId: r.id,
             message: `Static site "${r.name}" has a half-configured build — set both the command and the output dir (or clear both).`,
+          });
+        }
+      }
+      return out;
+    },
+  },
+  {
+    // dlq references the target's .arn — a cycle cannot be declared.
+    id: 'queue-dlq-no-cycle',
+    run: (bp) => {
+      const next = new Map(
+        bp.connections.filter((c) => c.intent === 'deadLettersTo').map((c) => [c.source, c.target]),
+      );
+      const out: Diagnostic[] = [];
+      const flagged = new Set<string>();
+      for (const start of next.keys()) {
+        const seen = new Set<string>([start]);
+        let cur = next.get(start);
+        while (cur) {
+          if (seen.has(cur)) {
+            if (!flagged.has(start)) {
+              flagged.add(start);
+              const r = bp.resources.find((x) => x.id === start);
+              out.push({
+                rule: 'queue-dlq-no-cycle',
+                severity: 'error',
+                resourceId: start,
+                message: `Queue "${r?.name ?? start}" is part of a dead-letter cycle — DLQ chains must end somewhere.`,
+              });
+            }
+            break;
+          }
+          seen.add(cur);
+          cur = next.get(cur);
+        }
+      }
+      return out;
+    },
+  },
+  {
+    // AWS hard-rejects the event-source mapping when a subscriber's timeout
+    // exceeds the queue's visibilityTimeout; an explicit prop must cover it.
+    id: 'queue-visibility-covers-subscribers',
+    run: (bp) => {
+      const byId = resourceMap(bp);
+      const out: Diagnostic[] = [];
+      for (const queue of bp.resources.filter((r) => r.kind === 'queue')) {
+        const explicit = queue.props.visibilityTimeout;
+        if (typeof explicit !== 'string' || !explicit) continue;
+        const visibility = parseSeconds(explicit);
+        if (visibility === undefined) {
+          out.push({
+            rule: 'queue-visibility-covers-subscribers',
+            severity: 'error',
+            resourceId: queue.id,
+            message: `Queue "${queue.name}" visibilityTimeout "${explicit}" is invalid — use an SST duration like "360 seconds".`,
+          });
+          continue;
+        }
+        const subTimeouts = bp.connections
+          .filter((c) => c.target === queue.id && c.intent === 'subscribesTo')
+          .map((c) => {
+            const t = byId.get(c.source)?.props.timeout;
+            const raw = typeof t === 'string' && t ? t : undefined;
+            return raw ? (parseSeconds(raw) ?? 900) : 60;
+          });
+        if (subTimeouts.length && visibility < Math.max(...subTimeouts)) {
+          out.push({
+            rule: 'queue-visibility-covers-subscribers',
+            severity: 'error',
+            resourceId: queue.id,
+            message: `Queue "${queue.name}" visibilityTimeout (${visibility}s) is below its largest subscriber timeout (${Math.max(...subTimeouts)}s) — AWS rejects the event-source mapping.`,
+            hint: 'Raise the visibility timeout (AWS recommends ~6× the subscriber timeout) or clear it to auto-compute.',
           });
         }
       }

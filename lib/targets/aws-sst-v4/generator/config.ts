@@ -86,7 +86,7 @@ function renderDynamo(r: Resource, plan: AwsPlan): string {
 }
 
 // SST duration strings: "30 seconds" | "1.5 minutes" | "1 hour" → seconds.
-function parseSeconds(value: string | undefined): number | undefined {
+export function parseSeconds(value: string | undefined): number | undefined {
   const m = /^(\d+(?:\.\d+)?)\s+(second|minute|hour)s?$/.exec(value ?? '');
   if (!m) return undefined;
   const n = Number(m[1]);
@@ -99,19 +99,31 @@ function renderQueue(r: Resource, plan: AwsPlan): string {
   if (r.props.fifo === true) args.push(`  fifo: true,`);
   // AWS rejects the event-source mapping if a subscriber's timeout exceeds the
   // queue's visibilityTimeout (default 30s); AWS recommends ~6× the function
-  // timeout. SQS caps visibility at 12 hours.
-  const subTimeouts = plan.subscribers
-    .filter((s) => s.targetId === r.id)
-    .map((s) => {
-      const raw = str(s.worker.props.timeout);
-      // Unparseable free text still renders verbatim as the subscriber timeout,
-      // so assume the Lambda max (900s) to keep visibility >= timeout.
-      return raw ? (parseSeconds(raw) ?? 900) : 60;
-    });
-  if (subTimeouts.length) {
-    const visibility = Math.min(Math.ceil(Math.max(...subTimeouts)) * 6, 43_200);
-    args.push(`  visibilityTimeout: "${visibility} seconds",`);
+  // timeout. SQS caps visibility at 12 hours. An explicit prop wins (the
+  // queue-visibility-covers-subscribers rule guards adequacy).
+  const explicit = str(r.props.visibilityTimeout);
+  if (explicit) {
+    args.push(`  visibilityTimeout: ${q(explicit)},`);
+  } else {
+    const subTimeouts = plan.subscribers
+      .filter((s) => s.targetId === r.id)
+      .map((s) => {
+        const raw = str(s.worker.props.timeout);
+        // Unparseable free text still renders verbatim as the subscriber timeout,
+        // so assume the Lambda max (900s) to keep visibility >= timeout.
+        return raw ? (parseSeconds(raw) ?? 900) : 60;
+      });
+    if (subTimeouts.length) {
+      const visibility = Math.min(Math.ceil(Math.max(...subTimeouts)) * 6, 43_200);
+      args.push(`  visibilityTimeout: "${visibility} seconds",`);
+    }
   }
+  // queue → queue edge = dead-letter queue (verified: dlq accepts an ARN).
+  const dlqEdge = plan.bp.connections.find(
+    (c) => c.source === r.id && c.intent === 'deadLettersTo',
+  );
+  const dlqVar = dlqEdge ? plan.varNameById.get(dlqEdge.target) : undefined;
+  if (dlqVar) args.push(`  dlq: ${dlqVar}.arn,`);
   if (!args.length) return `const ${v} = new sst.aws.Queue(${q(r.name)});`;
   return [`const ${v} = new sst.aws.Queue(${q(r.name)}, {`, ...args, `});`].join('\n');
 }
@@ -352,7 +364,32 @@ export function generateSstConfig(bp: Blueprint): string {
     for (const r of byKind('postgres')) statements.push(renderPostgres(r, plan));
     for (const r of byKind('aurora')) statements.push(renderAurora(r, plan));
   }
-  for (const r of byKind('queue')) statements.push(renderQueue(r, plan));
+  // DLQ targets must be declared before the queues that reference their .arn.
+  {
+    const queues = byKind('queue');
+    const queueIds = new Set(queues.map((r) => r.id));
+    const dlqTargetOf = new Map(
+      bp.connections
+        .filter((c) => c.intent === 'deadLettersTo' && queueIds.has(c.source))
+        .map((c) => [c.source, c.target]),
+    );
+    const placed = new Set<string>();
+    let remaining = queues;
+    while (remaining.length) {
+      const ready = remaining.filter((r) => {
+        const t = dlqTargetOf.get(r.id);
+        return !t || placed.has(t) || !queueIds.has(t);
+      });
+      // Cycles are a validation error; emit in input order so generation still
+      // terminates for previews of invalid designs.
+      const batch = ready.length ? ready : [remaining[0]];
+      for (const r of batch) {
+        statements.push(renderQueue(r, plan));
+        placed.add(r.id);
+      }
+      remaining = remaining.filter((r) => !placed.has(r.id));
+    }
+  }
   for (const r of byKind('bus')) statements.push(renderBus(r, plan));
   for (const r of byKind('snstopic')) statements.push(renderSnsTopic(r, plan));
   for (const r of byKind('apigatewayv2')) statements.push(renderApi(r, plan));

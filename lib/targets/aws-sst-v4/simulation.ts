@@ -19,6 +19,7 @@ const VERB: Record<string, string> = {
   usesCognito: 'authenticates with',
   usesAuth: 'authenticates with',
   routesBucket: 'routes to',
+  deadLettersTo: 'dead-letters to',
   routedBy: 'served by',
 };
 
@@ -37,6 +38,7 @@ const LEAF_INTENTS = new Set([
   'usesAuth',
   'routesBucket',
   'routedBy',
+  'deadLettersTo',
 ]);
 
 export function simulateAws(bp: Blueprint): SimTrace {

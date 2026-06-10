@@ -75,6 +75,13 @@ export const AWS_EDGE_INTENTS: EdgeIntentMeta[] = [
     to: ['router'],
   },
   {
+    intent: 'deadLettersTo',
+    label: 'dead-letters to',
+    description: 'Messages that fail repeatedly land in this queue (dlq: <queue>.arn).',
+    from: ['queue'],
+    to: ['queue'],
+  },
+  {
     intent: 'usesSecret',
     label: 'uses secret',
     description: 'A component links a secret (Resource.<Secret>.value).',
@@ -152,6 +159,7 @@ const INTENT_BY_PAIR: Record<string, string> = {
   'nextjs>snstopic': 'publishesTo',
   'worker>snstopic': 'subscribesTo',
   'cron>worker': 'invokes',
+  'queue>queue': 'deadLettersTo',
   'worker>apigatewayv2': 'handlesRoute',
   'router>bucket': 'routesBucket',
   'staticsite>router': 'routedBy',
@@ -178,7 +186,7 @@ const INTENT_BY_PAIR: Record<string, string> = {
 
 // Unmapped pairs return null so the canvas refuses the connection outright —
 // the old catch-all 'linksTo' silently generated nothing (or a broken link).
+// The pair map is consulted before the same-kind guard (queue→queue is a DLQ).
 export function awsDefaultIntent(fromKind: string, toKind: string): string | null {
-  if (fromKind === toKind) return null;
   return INTENT_BY_PAIR[`${fromKind}>${toKind}`] ?? null;
 }

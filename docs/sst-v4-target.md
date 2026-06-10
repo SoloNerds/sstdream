@@ -189,7 +189,11 @@ jobs.subscribe({
 > default `visibilityTimeout` is `"30 seconds"`, so a queue with a default 60s subscriber
 > **fails `sst deploy`** unless `visibilityTimeout` is raised. AWS recommends ≈ **6×** the
 > function timeout; the generator emits `visibilityTimeout` = 6× the largest subscriber
-> timeout (capped at the SQS max of 12 hours) on any queue that has subscribers.
+> timeout (capped at the SQS max of 12 hours) on any queue that has subscribers — an
+> explicit `visibilityTimeout` prop wins, gated by a rule that it covers the subscribers.
+> **DLQ:** a queue→queue edge emits `dlq: <target>.arn` (the verified ARN form above);
+> DLQ targets are declared before the queues that reference them, cycles are a
+> validation error, and DLQs are exempt from the no-subscriber warning.
 
 ### 4.5 `sst.aws.Function`
 

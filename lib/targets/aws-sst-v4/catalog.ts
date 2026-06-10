@@ -105,10 +105,19 @@ export const AWS_CATALOG: ResourceCatalog = {
     label: 'Queue',
     defaultName: 'Queue',
     component: 'sst.aws.Queue',
-    description: 'SQS queue with a Lambda subscriber',
+    description: 'SQS queue with a Lambda subscriber (connect queue → queue for a DLQ)',
     accent: 'bg-amber-600',
     category: 'messaging',
-    props: [{ key: 'fifo', label: 'FIFO queue', type: 'boolean', default: false }],
+    props: [
+      { key: 'fifo', label: 'FIFO queue', type: 'boolean', default: false },
+      {
+        key: 'visibilityTimeout',
+        label: 'Visibility timeout',
+        type: 'text',
+        placeholder: '360 seconds',
+        help: 'Defaults to 6× the largest subscriber timeout (AWS requires ≥ the subscriber timeout). Set to override.',
+      },
+    ],
   },
   bus: {
     kind: 'bus',

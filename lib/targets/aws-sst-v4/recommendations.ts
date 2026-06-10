@@ -121,13 +121,51 @@ export function awsRecommendations(bp: Blueprint): Recommendation[] {
           };
         },
       });
-    } else {
+    } else if (
+      !bp.connections.some((c) => c.source === q.id && c.intent === 'deadLettersTo') &&
+      !bp.connections.some((c) => c.target === q.id && c.intent === 'deadLettersTo')
+    ) {
       recs.push({
         id: `dlq-${q.id}`,
         kind: 'reliability',
         resourceId: q.id,
         title: `Add a dead-letter queue for ${q.name}`,
-        detail: `Capture messages that fail repeatedly so they aren't lost — configure dlq on the queue.`,
+        detail: `Capture messages that fail repeatedly so they aren't lost — one click adds a DLQ queue (queue → queue).`,
+        apply: (input) => {
+          if (input.connections.some((c) => c.source === q.id && c.intent === 'deadLettersTo')) {
+            return input;
+          }
+          const queue = input.resources.find((r) => r.id === q.id);
+          if (!queue) return input;
+          const taken = new Set(input.resources.map((r) => r.name));
+          const dname = uniqueName(`${queue.name}Dlq`, taken);
+          const did = mintId(input, 'queue');
+          const withNode: Blueprint = {
+            ...input,
+            resources: [
+              ...input.resources,
+              {
+                id: did,
+                kind: 'queue',
+                name: dname,
+                props: {},
+                position: { x: queue.position.x + 220, y: queue.position.y + 120 },
+              },
+            ],
+          };
+          return {
+            ...withNode,
+            connections: [
+              ...withNode.connections,
+              {
+                id: mintId(withNode, 'edge'),
+                source: q.id,
+                target: did,
+                intent: 'deadLettersTo',
+              },
+            ],
+          };
+        },
       });
     }
   }

@@ -319,7 +319,7 @@ exports[`aws-sst-v4 catalog > matches snapshot 1`] = `
     "category": "messaging",
     "component": "sst.aws.Queue",
     "defaultName": "Queue",
-    "description": "SQS queue with a Lambda subscriber",
+    "description": "SQS queue with a Lambda subscriber (connect queue → queue for a DLQ)",
     "kind": "queue",
     "label": "Queue",
     "props": [
@@ -328,6 +328,13 @@ exports[`aws-sst-v4 catalog > matches snapshot 1`] = `
         "key": "fifo",
         "label": "FIFO queue",
         "type": "boolean",
+      },
+      {
+        "help": "Defaults to 6× the largest subscriber timeout (AWS requires ≥ the subscriber timeout). Set to override.",
+        "key": "visibilityTimeout",
+        "label": "Visibility timeout",
+        "placeholder": "360 seconds",
+        "type": "text",
       },
     ],
   },
