@@ -43,6 +43,17 @@ describe('runnable project scaffold + AGENTS.md', () => {
     expect(agents).toContain('import { Resource } from "sst"');
   });
 
+  it('AGENTS.md renders the design graph as a data-flow section', () => {
+    const agents = gen('aws-marketplace')['AGENTS.md'];
+    expect(agents).toContain('## Data flow (the design graph)');
+    // One line per connection: source, intent label, target, raw intent.
+    expect(agents).toContain('- **Web** writes to **Listings** (`writesTo`)');
+    expect(agents).toContain('- **FulfillOrder** subscribes to **Orders** (`subscribesTo`)');
+    expect(agents).toContain('- **Web** uses secret **StripeKey** (`usesSecret`)');
+    // The machine-readable design is pointed at explicitly for AI consumers.
+    expect(agents).toContain('sstdream.design.json');
+  });
+
   it('wraps the layout in ClerkProvider when Clerk auth is present', () => {
     expect(gen('aws-clerk-saas')['app/layout.tsx']).toContain('ClerkProvider');
   });

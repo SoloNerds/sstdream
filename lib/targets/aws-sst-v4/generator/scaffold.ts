@@ -2,6 +2,7 @@ import type { Blueprint } from '@/lib/core/blueprint/types';
 import type { GeneratedFile } from '@/lib/core/codegen/types';
 import { kebabCase } from '@/lib/core/codegen/strings';
 import { AWS_CATALOG } from '../catalog';
+import { AWS_EDGE_INTENTS } from '../edges';
 import { collectAwsEnv } from '../env';
 
 // "New project" scaffold: turns the generated infra/runtime files into a complete,
@@ -171,6 +172,23 @@ function agentsMd(bp: Blueprint, files: GeneratedFile[]): string {
     })
     .join('\n');
 
+  // The graph itself — what an AI needs to extend the app without mis-wiring
+  // it. One line per connection: who talks to what, and what that intent means.
+  const intentMeta = new Map(AWS_EDGE_INTENTS.map((i) => [i.intent, i]));
+  const byId = new Map(bp.resources.map((r) => [r.id, r]));
+  const dataFlow = bp.connections
+    .map((c) => {
+      const src = byId.get(c.source);
+      const tgt = byId.get(c.target);
+      if (!src || !tgt) return null;
+      const meta = intentMeta.get(c.intent);
+      const label = meta?.label ?? c.intent;
+      const why = meta?.description ? ` — ${meta.description}` : '';
+      return `- **${src.name}** ${label} **${tgt.name}** (\`${c.intent}\`)${why}`;
+    })
+    .filter((line): line is string => Boolean(line))
+    .join('\n');
+
   const secrets = bp.resources.filter((r) => r.kind === 'secret' || r.kind === 'ai');
   const secretLines = secrets.length
     ? secrets.map((s) => `  - \`sst secret set ${s.name} <value>\``).join('\n')
@@ -203,6 +221,14 @@ function agentsMd(bp: Blueprint, files: GeneratedFile[]): string {
 ## Resources
 
 ${resources}
+
+## Data flow (the design graph)
+
+${dataFlow || '- (no connections — resources are standalone)'}
+
+> The full machine-readable design is \`sstdream.design.json\` (nodes, edges, intents,
+> props). Parse it before structural changes; keep it in sync by re-importing into
+> SSTDREAM and re-exporting.
 
 ## Secrets & environment
 
