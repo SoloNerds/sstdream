@@ -119,8 +119,11 @@ export async function publishMessage(message: Record<string, unknown>) {
 }
 `;
 
-const dynamoFile = (tableName: string): string =>
-  `import { Resource } from "sst";
+const dynamoFile = (tableName: string, hashKey: string, rangeKey?: string): string => {
+  const keyType = rangeKey
+    ? `{ ${hashKey}: string; ${rangeKey}: string }`
+    : `{ ${hashKey}: string }`;
+  return `import { Resource } from "sst";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, PutCommand, GetCommand } from "@aws-sdk/lib-dynamodb";
 
@@ -131,30 +134,72 @@ export async function putItem(item: Record<string, unknown>) {
   await client.send(new PutCommand({ TableName, Item: item }));
 }
 
-export async function getItem(key: { pk: string; sk: string }) {
+export async function getItem(key: ${keyType}) {
   const result = await client.send(new GetCommand({ TableName, Key: key }));
   return result.Item;
 }
 `;
+};
 
-const subscriberHandlerFile = (name: string, writesToDynamo: boolean): string => {
-  const importLine = writesToDynamo ? `import { putItem } from "../../lib/dynamo";\n\n` : '';
-  const writeBlock = writesToDynamo
-    ? `
-    // TODO: replace with your processing logic
-    await putItem({
-      pk: \`job#\${message.id ?? "unknown"}\`,
-      sk: new Date().toISOString(),
-      ...message,
-    });`
-    : `
-    // TODO: replace with your processing logic`;
+/** The table a subscriber writes its example item to (keys + helper import path). */
+interface SubscriberTable {
+  importPath: string; // e.g. "../../lib/dynamo"
+  hashKey: string;
+  rangeKey?: string;
+}
+
+// Per-source event shapes (verified, docs/sst-v4-target.md §5): SQS delivers
+// Records[].body; SNS delivers Records[].Sns.Message; EventBridge delivers ONE
+// event object with the payload under `detail` — no Records array.
+const subscriberHandlerFile = (
+  name: string,
+  targetKind: 'queue' | 'bus' | 'snstopic',
+  table?: SubscriberTable,
+): string => {
+  const importLine = table ? `import { putItem } from "${table.importPath}";\n\n` : '';
+  const writeBlock = (indent: string) =>
+    table
+      ? `
+${indent}// TODO: replace with your processing logic
+${indent}await putItem({
+${indent}  ${table.hashKey}: \`job#\${message.id ?? "unknown"}\`,${
+          table.rangeKey ? `\n${indent}  ${table.rangeKey}: new Date().toISOString(),` : ''
+        }
+${indent}  ...message,
+${indent}});`
+      : `
+${indent}// TODO: replace with your processing logic`;
+
+  if (targetKind === 'bus') {
+    return `${importLine}/** EventBridge subscriber for the "${name}" worker. */
+export async function handler(event: {
+  source?: string;
+  "detail-type"?: string;
+  detail?: Record<string, unknown>;
+}) {
+  const message = event.detail ?? {};
+  console.log("Processing event", event["detail-type"], message);
+${writeBlock('  ')}
+}
+`;
+  }
+  if (targetKind === 'snstopic') {
+    return `${importLine}/** SNS subscriber for the "${name}" worker. */
+export async function handler(event: { Records: { Sns: { Message: string } }[] }) {
+  for (const record of event.Records) {
+    const message = JSON.parse(record.Sns.Message) as Record<string, unknown>;
+    console.log("Processing message", message);
+${writeBlock('    ')}
+  }
+}
+`;
+  }
   return `${importLine}/** SQS subscriber for the "${name}" worker. */
 export async function handler(event: { Records: { body: string }[] }) {
   for (const record of event.Records) {
     const message = JSON.parse(record.body) as Record<string, unknown>;
     console.log("Processing message", message);
-${writeBlock}
+${writeBlock('    ')}
   }
 }
 `;
@@ -680,11 +725,6 @@ function packageAdditions(flags: {
 export function generateRuntimeFiles(bp: Blueprint): GeneratedFile[] {
   const plan = planAws(bp);
   const byId = new Map(bp.resources.map((r) => [r.id, r]));
-  const varToKind = new Map<string, string>();
-  for (const r of bp.resources) {
-    const v = plan.varNameById.get(r.id);
-    if (v) varToKind.set(v, r.kind);
-  }
   const resourceOf = (id: string): Resource | undefined => byId.get(id);
 
   const files: GeneratedFile[] = [];
@@ -711,6 +751,29 @@ export function generateRuntimeFiles(bp: Blueprint): GeneratedFile[] {
         (c) => c.target === r.id && (c.intent === 'writesTo' || c.intent === 'readsFrom'),
       ),
   );
+
+  // unset → default "sk"; explicitly cleared ("") → no sort key (mirrors renderDynamo).
+  const tableKeys = (t: Resource): { hashKey: string; rangeKey?: string } => ({
+    hashKey: typeof t.props.hashKey === 'string' && t.props.hashKey ? t.props.hashKey : 'pk',
+    rangeKey:
+      t.props.rangeKey === undefined
+        ? 'sk'
+        : typeof t.props.rangeKey === 'string' && t.props.rangeKey
+          ? t.props.rangeKey
+          : undefined,
+  });
+
+  // The dynamo table a worker WRITES — only writesTo qualifies for the example
+  // putItem (a readsFrom-only link must not generate writes into a read-only
+  // table), and NOT the first table in the design: multi-table designs must
+  // not cross-wire a subscriber's example item.
+  const workerWriteTableOf = (w: Resource): Resource | undefined => {
+    const edge = bp.connections.find(
+      (c) =>
+        c.source === w.id && c.intent === 'writesTo' && resourceOf(c.target)?.kind === 'dynamo',
+    );
+    return edge ? resourceOf(edge.target) : undefined;
+  };
 
   if (uploadBucket) {
     files.push({ path: 'lib/storage.ts', content: storageFile(uploadBucket.name), language: 'ts' });
@@ -742,7 +805,12 @@ export function generateRuntimeFiles(bp: Blueprint): GeneratedFile[] {
   }
 
   if (dynamoRes) {
-    files.push({ path: 'lib/dynamo.ts', content: dynamoFile(dynamoRes.name), language: 'ts' });
+    const k = tableKeys(dynamoRes);
+    files.push({
+      path: 'lib/dynamo.ts',
+      content: dynamoFile(dynamoRes.name, k.hashKey, k.rangeKey),
+      language: 'ts',
+    });
   }
 
   const aiEdge = bp.connections.find((c) => c.intent === 'usesAI');
@@ -901,15 +969,48 @@ export function generateRuntimeFiles(bp: Blueprint): GeneratedFile[] {
     language: 'json',
   });
 
-  const linksDynamo = (linkVars: string[]) => linkVars.some((v) => varToKind.get(v) === 'dynamo');
-
+  // Each subscriber writes to ITS linked table; tables other than the primary
+  // (lib/dynamo.ts) get their own key-typed helper file. Distinct tables can
+  // share a kebab slug ("AuditLog"/"AuditLOG") — disambiguate deterministically.
+  const helperSlugById = new Map<string, string>();
+  const usedHelperSlugs = new Set<string>();
+  const helperSlugFor = (table: Resource): string => {
+    const existing = helperSlugById.get(table.id);
+    if (existing) return existing;
+    let slug = kebabCase(table.name);
+    if (usedHelperSlugs.has(slug)) {
+      let i = 2;
+      while (usedHelperSlugs.has(`${slug}-${i}`)) i += 1;
+      slug = `${slug}-${i}`;
+    }
+    usedHelperSlugs.add(slug);
+    helperSlugById.set(table.id, slug);
+    return slug;
+  };
+  const emittedHelperFor = new Set<string>();
   for (const sub of plan.subscribers) {
+    const table = workerWriteTableOf(sub.worker);
+    let subTable: SubscriberTable | undefined;
+    if (table) {
+      const k = tableKeys(table);
+      if (dynamoRes && table.id === dynamoRes.id) {
+        subTable = { importPath: '../../lib/dynamo', ...k };
+      } else {
+        const slug = helperSlugFor(table);
+        if (!emittedHelperFor.has(table.id)) {
+          emittedHelperFor.add(table.id);
+          files.push({
+            path: `lib/dynamo-${slug}.ts`,
+            content: dynamoFile(table.name, k.hashKey, k.rangeKey),
+            language: 'ts',
+          });
+        }
+        subTable = { importPath: `../../lib/dynamo-${slug}`, ...k };
+      }
+    }
     files.push({
       path: sub.handlerFile,
-      content: subscriberHandlerFile(
-        sub.worker.name,
-        linksDynamo(sub.linkVars) && Boolean(dynamoRes),
-      ),
+      content: subscriberHandlerFile(sub.worker.name, sub.targetKind, subTable),
       language: 'ts',
     });
   }

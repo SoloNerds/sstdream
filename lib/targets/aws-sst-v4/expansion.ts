@@ -64,20 +64,35 @@ function bucketResources(r: Resource): PhysicalResource[] {
   ];
 }
 
-function workerResources(r: Resource, isSubscriber: boolean): PhysicalResource[] {
+// Only SQS uses a poll-based event-source mapping; SNS pushes via a topic
+// subscription + invoke permission, EventBridge via a rule target + permission.
+function workerResources(
+  r: Resource,
+  subscriberKind: 'queue' | 'bus' | 'snstopic' | undefined,
+): PhysicalResource[] {
   const out = [
     P('Lambda', 'Function', { paid: true }),
     P('IAM', 'Execution role', { security: true }),
     P('CloudWatch', 'Log group', { paid: true }),
   ];
-  if (isSubscriber)
+  if (subscriberKind === 'queue')
     out.push(P('Lambda', 'SQS event-source mapping', { note: 'consumes its queue' }));
+  else if (subscriberKind === 'snstopic')
+    out.push(
+      P('SNS', 'Topic subscription + invoke permission', { note: 'SNS pushes to the Lambda' }),
+    );
+  else if (subscriberKind === 'bus')
+    out.push(
+      P('EventBridge', 'Rule target + invoke permission', {
+        note: 'the bus rule invokes the Lambda',
+      }),
+    );
   return out;
 }
 
 function resourcesFor(
   r: Resource,
-  ctx: { isSubscriber: (w: Resource) => boolean },
+  ctx: { subscriberKindOf: (w: Resource) => 'queue' | 'bus' | 'snstopic' | undefined },
 ): PhysicalResource[] | null {
   switch (r.kind) {
     case 'nextjs':
@@ -125,7 +140,7 @@ function resourcesFor(
         P('Route53', 'DNS records', { conditional: 'custom domain' }),
       ];
     case 'worker':
-      return workerResources(r, ctx.isSubscriber(r));
+      return workerResources(r, ctx.subscriberKindOf(r));
     case 'cron':
       return [
         P('EventBridge', 'Scheduler schedule', { note: 'EventBridge Scheduler (not a Rule)' }),
@@ -221,8 +236,12 @@ const ORDER = [
 ];
 
 export function expandAws(bp: Blueprint): InfraGroup[] {
-  const isSubscriber = (w: Resource) =>
-    bp.connections.some((c) => c.source === w.id && c.intent === 'subscribesTo');
+  const byId = new Map(bp.resources.map((r) => [r.id, r]));
+  const subscriberKindOf = (w: Resource): 'queue' | 'bus' | 'snstopic' | undefined => {
+    const edge = bp.connections.find((c) => c.source === w.id && c.intent === 'subscribesTo');
+    const kind = edge ? byId.get(edge.target)?.kind : undefined;
+    return kind === 'queue' || kind === 'bus' || kind === 'snstopic' ? kind : undefined;
+  };
 
   const sorted = [...bp.resources].sort(
     (a, b) => (ORDER.indexOf(a.kind) + 1 || 99) - (ORDER.indexOf(b.kind) + 1 || 99),
@@ -230,7 +249,7 @@ export function expandAws(bp: Blueprint): InfraGroup[] {
 
   const groups: InfraGroup[] = [];
   for (const r of sorted) {
-    const resources = resourcesFor(r, { isSubscriber });
+    const resources = resourcesFor(r, { subscriberKindOf });
     if (resources) groups.push({ id: r.id, title: r.name, kind: r.kind, resources });
   }
 

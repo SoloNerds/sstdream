@@ -46,7 +46,7 @@ describe('SNS Topic (sst.aws.SnsTopic)', () => {
           id: 't2',
           kind: 'snstopic',
           name: 'Topic',
-          props: { fifo: true },
+          props: {},
           position: { x: 1, y: 0 },
         },
         { id: 'w3', kind: 'worker', name: 'Sub', props: {}, position: { x: 2, y: 0 } },
@@ -62,11 +62,10 @@ describe('SNS Topic (sst.aws.SnsTopic)', () => {
   );
   const byPath = files(bp);
 
-  it('declares a FIFO topic + name-first subscribe, and an SNS publish helper', () => {
+  it('declares a standard topic + name-first subscribe, and an SNS publish helper', () => {
     expect(validateBlueprint(bp).errors).toHaveLength(0);
     const config = byPath['sst.config.ts'];
-    expect(config).toContain('new sst.aws.SnsTopic("Topic", {');
-    expect(config).toContain('fifo: true');
+    expect(config).toContain('new sst.aws.SnsTopic("Topic");');
     expect(config).toContain('topic.subscribe("Sub", {');
     expect(byPath['lib/topic.ts']).toContain('PublishCommand');
     expect(byPath['lib/topic.ts']).toContain('Resource.Topic.arn');

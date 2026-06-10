@@ -47,9 +47,15 @@ describe('AWS infrastructure expansion', () => {
     expect(vpc.resources.some((r) => /NAT/i.test(r.name))).toBe(false);
   });
 
-  it('a worker subscriber expands with an SQS event-source mapping', () => {
+  it('a queue subscriber expands with an SQS event-source mapping', () => {
     const worker = expandAws(fromTpl('aws-cms')).find((g) => g.kind === 'worker')!;
     expect(worker.resources.some((r) => /event-source mapping/i.test(r.name))).toBe(true);
+  });
+
+  it('a bus subscriber gets an EventBridge rule target, NOT an SQS event-source mapping', () => {
+    const worker = expandAws(fromTpl('aws-events')).find((g) => g.kind === 'worker')!;
+    expect(worker.resources.some((r) => /event-source mapping/i.test(r.name))).toBe(false);
+    expect(worker.resources.some((r) => /Rule target/i.test(r.name))).toBe(true);
   });
 
   it('nat: "managed" surfaces a NAT Gateway in the VPC group', () => {

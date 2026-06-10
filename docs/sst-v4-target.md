@@ -300,6 +300,19 @@ const name = Resource.Uploads.name; // <Name> = component name in sst.config.ts
 - SST generates `sst-env.d.ts` for typed autocomplete.
 - AWS SDK clients needed per resource: S3 → `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner`; SQS → `@aws-sdk/client-sqs`; Dynamo → `@aws-sdk/client-dynamodb` (or `lib-dynamodb`).
 
+> **Subscriber event shapes are NOT uniform (verified 2026-06-10):** generated handlers
+> must branch on the event source.
+>
+> - **SQS (Queue):** `{ Records: [{ body: string }] }` — payload is `JSON.parse(record.body)`.
+> - **SNS (SnsTopic):** `{ Records: [{ Sns: { Message: string } }] }` — payload is
+>   `JSON.parse(record.Sns.Message)` (sample event quoted at
+>   <https://docs.aws.amazon.com/lambda/latest/dg/with-sns.html>). Lambda triggers support
+>   **standard topics only — FIFO topics can't target Lambda**.
+> - **EventBridge (Bus):** ONE event object — `{ version, id, "detail-type", source,
+account, time, region, resources, detail }`, **no Records array**; the published
+>   payload arrives under `detail`
+>   (<https://docs.aws.amazon.com/eventbridge/latest/ref/eventbridge-events.html>).
+
 ---
 
 ## 6. Validator rules (corrected)

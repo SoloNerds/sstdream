@@ -10,3 +10,6 @@ next-env.d.ts
 .vercel
 npm-debug.log*
 yarn-error.log*
+
+# Claude Code agent worktrees
+.claude/worktrees/

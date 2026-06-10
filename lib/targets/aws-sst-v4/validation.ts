@@ -175,6 +175,76 @@ export const AWS_RULES: ValidationRule[] = [
         })),
   },
   {
+    // The generator wires exactly ONE trigger per worker (plan.ts resolves the
+    // first match); extra triggers would be silently dropped or cross-wired.
+    id: 'worker-single-trigger',
+    run: (bp) => {
+      const out: Diagnostic[] = [];
+      for (const w of bp.resources.filter((r) => r.kind === 'worker')) {
+        const outgoing = bp.connections.filter((c) => c.source === w.id);
+        const subs = outgoing.filter((c) => c.intent === 'subscribesTo').length;
+        const routes = outgoing.filter((c) => c.intent === 'handlesRoute').length;
+        const buckets = outgoing.filter((c) => c.intent === 'handlesBucketEvents').length;
+        const cron = bp.connections.some((c) => c.target === w.id && c.intent === 'invokes');
+        const roles = [subs > 0, routes > 0, buckets > 0, cron].filter(Boolean).length;
+        if (roles > 1 || subs > 1 || routes > 1 || buckets > 1) {
+          out.push({
+            rule: 'worker-single-trigger',
+            severity: 'error',
+            resourceId: w.id,
+            message: `Worker "${w.name}" has multiple triggers — the export wires exactly one (subscriber, API route, bucket events, or cron) and would drop the rest.`,
+            hint: 'Give each trigger its own worker node.',
+          });
+        }
+      }
+      return out;
+    },
+  },
+  {
+    // CronV2 has a single `function:` — plan.ts wires the FIRST invokes edge
+    // and any extra target would vanish from the export.
+    id: 'cron-single-function',
+    run: (bp) => {
+      const out: Diagnostic[] = [];
+      for (const c of bp.resources.filter((r) => r.kind === 'cron')) {
+        const invokes = bp.connections.filter((e) => e.source === c.id && e.intent === 'invokes');
+        if (invokes.length > 1) {
+          out.push({
+            rule: 'cron-single-function',
+            severity: 'error',
+            resourceId: c.id,
+            message: `Cron "${c.name}" invokes ${invokes.length} workers — the export wires exactly one and would drop the rest.`,
+            hint: 'Add one cron node per worker (CronV2 has a single function).',
+          });
+        }
+      }
+      return out;
+    },
+  },
+  {
+    // Verified (docs/sst-v4-target.md §5): SNS Lambda triggers support STANDARD
+    // topics only — subscribing a worker to a FIFO topic fails at deploy.
+    id: 'snstopic-fifo-no-lambda',
+    run: (bp) => {
+      const byId = resourceMap(bp);
+      const out: Diagnostic[] = [];
+      for (const c of bp.connections.filter((e) => e.intent === 'subscribesTo')) {
+        const topic = byId.get(c.target);
+        if (topic?.kind === 'snstopic' && topic.props.fifo === true) {
+          const worker = byId.get(c.source);
+          out.push({
+            rule: 'snstopic-fifo-no-lambda',
+            severity: 'error',
+            resourceId: topic.id,
+            message: `FIFO topic "${topic.name}" has a Lambda subscriber${worker ? ` ("${worker.name}")` : ''} — AWS only supports standard topics as Lambda triggers.`,
+            hint: 'Turn off fifo, or have the worker consume via a Queue subscribed to the topic.',
+          });
+        }
+      }
+      return out;
+    },
+  },
+  {
     id: 'routed-bucket-cloudfront',
     run: (bp) =>
       bp.connections
