@@ -697,27 +697,29 @@ function packageAdditions(flags: {
   bus: boolean;
   topic: boolean;
 }): string {
-  const deps: Record<string, string> = { sst: 'latest' };
+  // Verified major ranges (npm registry, 2026-06-10) — 'latest' undermined the
+  // verified-at-version pitch and made exports time bombs.
+  const deps: Record<string, string> = { sst: '^4.15.0' };
   if (flags.storage) {
-    deps['@aws-sdk/client-s3'] = 'latest';
-    deps['@aws-sdk/s3-request-presigner'] = 'latest';
+    deps['@aws-sdk/client-s3'] = '^3.0.0';
+    deps['@aws-sdk/s3-request-presigner'] = '^3.0.0';
   }
-  if (flags.queue) deps['@aws-sdk/client-sqs'] = 'latest';
+  if (flags.queue) deps['@aws-sdk/client-sqs'] = '^3.0.0';
   if (flags.dynamo) {
-    deps['@aws-sdk/client-dynamodb'] = 'latest';
-    deps['@aws-sdk/lib-dynamodb'] = 'latest';
+    deps['@aws-sdk/client-dynamodb'] = '^3.0.0';
+    deps['@aws-sdk/lib-dynamodb'] = '^3.0.0';
   }
-  if (flags.ai) deps['@anthropic-ai/sdk'] = 'latest';
-  if (flags.email) deps['@aws-sdk/client-sesv2'] = 'latest';
-  if (flags.postgres) deps['pg'] = 'latest';
-  if (flags.stripe) deps['stripe'] = 'latest';
-  if (flags.mongodb) deps['mongodb'] = 'latest';
-  if (flags.clerk) deps['@clerk/nextjs'] = 'latest';
-  if (flags.bus) deps['@aws-sdk/client-eventbridge'] = 'latest';
-  if (flags.topic) deps['@aws-sdk/client-sns'] = 'latest';
+  if (flags.ai) deps['@anthropic-ai/sdk'] = '^0.104.0';
+  if (flags.email) deps['@aws-sdk/client-sesv2'] = '^3.0.0';
+  if (flags.postgres) deps['pg'] = '^8.0.0';
+  if (flags.stripe) deps['stripe'] = '^22.0.0';
+  if (flags.mongodb) deps['mongodb'] = '^7.0.0';
+  if (flags.clerk) deps['@clerk/nextjs'] = '^7.0.0';
+  if (flags.bus) deps['@aws-sdk/client-eventbridge'] = '^3.0.0';
+  if (flags.topic) deps['@aws-sdk/client-sns'] = '^3.0.0';
   const devDeps: Record<string, string> = {};
   // pg ships no types — without @types/pg the exported project fails `next build` (TS7016).
-  if (flags.postgres) devDeps['@types/pg'] = 'latest';
+  if (flags.postgres) devDeps['@types/pg'] = '^8.0.0';
   const json = {
     dependencies: deps,
     ...(Object.keys(devDeps).length ? { devDependencies: devDeps } : {}),

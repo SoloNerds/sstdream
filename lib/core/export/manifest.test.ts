@@ -29,6 +29,38 @@ describe('export manifest — AI Processing App', () => {
     expect(readme).toContain('package.additions.json'); // existing-app merge path
   });
 
+  it('README opens with the day-0 AWS credentials prerequisite + stage note (#126)', () => {
+    const readme = byPath['README.md'];
+    expect(readme).toContain('## 1. AWS credentials (one-time)');
+    expect(readme).toContain('aws configure');
+    expect(readme).toContain('Each stage is an isolated copy');
+    // No email node in this design — no SES sandbox caveat.
+    expect(readme).not.toContain('SES sandbox');
+  });
+
+  it('ships a CI deploy workflow wired to the app region (#126)', () => {
+    const wf = byPath['.github/workflows/deploy.yml'];
+    expect(wf).toContain('aws-actions/configure-aws-credentials@v4');
+    expect(wf).toContain(`aws-region: ${bp.app.region}`);
+    expect(wf).toContain('sst deploy --stage production');
+    expect(byPath['README.md']).toContain('.github/workflows/deploy.yml');
+  });
+
+  it('pins verified dependency ranges instead of latest (#126)', () => {
+    const additions = JSON.parse(byPath['package.additions.json']) as {
+      dependencies: Record<string, string>;
+    };
+    expect(additions.dependencies['sst']).toBe('^4.15.0');
+    expect(Object.values(additions.dependencies).every((v) => v !== 'latest')).toBe(true);
+    const pkg = JSON.parse(byPath['package.json']) as {
+      dependencies: Record<string, string>;
+      scripts: Record<string, string>;
+    };
+    expect(pkg.dependencies['next']).toBe('^16.0.0');
+    // The lint script shipped without an eslint dependency — it is gone.
+    expect(pkg.scripts.lint).toBeUndefined();
+  });
+
   it('the embedded design.json re-imports to the identical blueprint', () => {
     const reparsed = parseBlueprint(byPath['sstdream.design.json']);
     expect(reparsed).toEqual(bp);

@@ -19,6 +19,7 @@ describe('runtime code generator — AI Processing App', () => {
     const paths = files.map((f) => f.path).sort();
     expect(paths).toEqual(
       [
+        '.github/workflows/deploy.yml',
         '.gitignore',
         'AGENTS.md',
         'app/actions/create-upload-url.ts',

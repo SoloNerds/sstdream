@@ -17,10 +17,11 @@ function packageJson(
   deps: Record<string, string>,
   devDeps: Record<string, string>,
 ): string {
+  // Verified major ranges (npm registry, 2026-06-10).
   const dependencies = sortObj({
-    next: 'latest',
-    react: 'latest',
-    'react-dom': 'latest',
+    next: '^16.0.0',
+    react: '^19.0.0',
+    'react-dom': '^19.0.0',
     ...deps,
   });
   const pkg = {
@@ -28,21 +29,21 @@ function packageJson(
     version: '0.1.0',
     private: true,
     type: 'module',
+    // No lint script: the scaffold ships no eslint config/dependency.
     scripts: {
       dev: 'next dev',
       build: 'next build',
       start: 'next start',
-      lint: 'eslint',
       'sst:dev': 'sst dev',
       deploy: 'sst deploy',
       remove: 'sst remove',
     },
     dependencies,
     devDependencies: sortObj({
-      '@types/node': 'latest',
-      '@types/react': 'latest',
-      '@types/react-dom': 'latest',
-      typescript: 'latest',
+      '@types/node': '^25.0.0',
+      '@types/react': '^19.0.0',
+      '@types/react-dom': '^19.0.0',
+      typescript: '^6.0.0',
       ...devDeps,
     }),
   };
@@ -157,6 +158,49 @@ ${list}
     </main>
   );
 }
+`;
+}
+
+// CI deploy workflow — simple access-key auth so a first-time user can paste
+// two GitHub secrets and ship; the comments point at the OIDC upgrade path.
+function deployWorkflow(bp: Blueprint): string {
+  const pm = bp.app.packageManager;
+  const install =
+    pm === 'npm'
+      ? 'npm install'
+      : pm === 'yarn'
+        ? 'yarn install'
+        : pm === 'pnpm'
+          ? 'pnpm install'
+          : 'bun install';
+  const extraSetup =
+    pm === 'pnpm'
+      ? '      - uses: pnpm/action-setup@v4\n'
+      : pm === 'bun'
+        ? '      - uses: oven-sh/setup-bun@v2\n'
+        : '';
+  return `name: Deploy
+# Add repo secrets AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY (IAM user), or
+# switch to OIDC with aws-actions/configure-aws-credentials role-to-assume.
+on:
+  push:
+    branches: [main]
+concurrency: deploy-production
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+${extraSetup}      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: \${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: \${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${bp.app.region}
+      - run: ${install}
+      - run: npx sst deploy --stage production
 `;
 }
 
@@ -282,5 +326,6 @@ export function generateScaffold(
     { path: 'app/layout.tsx', content: layoutFile(bp), language: 'tsx' },
     { path: 'app/page.tsx', content: pageFile(bp, pageRoutes, hasChat), language: 'tsx' },
     { path: 'AGENTS.md', content: agentsMd(bp, files), language: 'md' },
+    { path: '.github/workflows/deploy.yml', content: deployWorkflow(bp), language: 'text' },
   ];
 }

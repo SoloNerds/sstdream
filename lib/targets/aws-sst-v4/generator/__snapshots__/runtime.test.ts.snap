@@ -2,6 +2,29 @@
 
 exports[`runtime code generator — AI Processing App > produces the full reference fileset (snapshot) 1`] = `
 {
+  ".github/workflows/deploy.yml": "name: Deploy
+# Add repo secrets AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY (IAM user), or
+# switch to OIDC with aws-actions/configure-aws-credentials role-to-assume.
+on:
+  push:
+    branches: [main]
+concurrency: deploy-production
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: \${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: \${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      - run: yarn install
+      - run: npx sst deploy --stage production
+",
   ".gitignore": "node_modules/
 .next/
 .sst/
@@ -181,12 +204,12 @@ export default nextConfig;
 ",
   "package.additions.json": "{
   "dependencies": {
-    "sst": "latest",
-    "@aws-sdk/client-s3": "latest",
-    "@aws-sdk/s3-request-presigner": "latest",
-    "@aws-sdk/client-sqs": "latest",
-    "@aws-sdk/client-dynamodb": "latest",
-    "@aws-sdk/lib-dynamodb": "latest"
+    "sst": "^4.15.0",
+    "@aws-sdk/client-s3": "^3.0.0",
+    "@aws-sdk/s3-request-presigner": "^3.0.0",
+    "@aws-sdk/client-sqs": "^3.0.0",
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/lib-dynamodb": "^3.0.0"
   },
   "scripts": {
     "dev:sst": "sst dev",
@@ -204,27 +227,26 @@ export default nextConfig;
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
     "sst:dev": "sst dev",
     "deploy": "sst deploy",
     "remove": "sst remove"
   },
   "dependencies": {
-    "@aws-sdk/client-dynamodb": "latest",
-    "@aws-sdk/client-s3": "latest",
-    "@aws-sdk/client-sqs": "latest",
-    "@aws-sdk/lib-dynamodb": "latest",
-    "@aws-sdk/s3-request-presigner": "latest",
-    "next": "latest",
-    "react": "latest",
-    "react-dom": "latest",
-    "sst": "latest"
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/client-s3": "^3.0.0",
+    "@aws-sdk/client-sqs": "^3.0.0",
+    "@aws-sdk/lib-dynamodb": "^3.0.0",
+    "@aws-sdk/s3-request-presigner": "^3.0.0",
+    "next": "^16.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "sst": "^4.15.0"
   },
   "devDependencies": {
-    "@types/node": "latest",
-    "@types/react": "latest",
-    "@types/react-dom": "latest",
-    "typescript": "latest"
+    "@types/node": "^25.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^6.0.0"
   }
 }
 ",
