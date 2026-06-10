@@ -35,6 +35,19 @@ describe('canvas store', () => {
     expect(state().edges).toHaveLength(1);
   });
 
+  it('removes an edge by id, leaving the nodes in place', () => {
+    const web = state().addNode('nextjs', { x: 0, y: 0 });
+    const bucket = state().addNode('bucket', { x: 1, y: 1 });
+    const id = state().addEdge(web, bucket);
+    expect(id).not.toBeNull();
+    state().removeEdge(id!);
+    expect(state().edges).toHaveLength(0);
+    expect(state().nodes).toHaveLength(2);
+    // removing an unknown edge id is a no-op
+    state().removeEdge('edge_999');
+    expect(state().edges).toHaveLength(0);
+  });
+
   it('removes a node and all edges touching it, clearing selection', () => {
     const web = state().addNode('nextjs', { x: 0, y: 0 });
     const bucket = state().addNode('bucket', { x: 1, y: 1 });

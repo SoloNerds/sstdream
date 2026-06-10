@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ReactFlow,
   Background,
@@ -11,6 +11,7 @@ import {
   type Edge,
   type Connection,
   type NodeChange,
+  type EdgeChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useCanvasStore } from '@/lib/canvas/store';
@@ -37,8 +38,14 @@ export function Canvas() {
   const selectedId = useCanvasStore((s) => s.selectedId);
   const addNode = useCanvasStore((s) => s.addNode);
   const moveNode = useCanvasStore((s) => s.moveNode);
+  const removeNode = useCanvasStore((s) => s.removeNode);
   const addEdge = useCanvasStore((s) => s.addEdge);
+  const removeEdge = useCanvasStore((s) => s.removeEdge);
   const select = useCanvasStore((s) => s.select);
+
+  // React Flow's selection model: edge selection lives here (the store only
+  // tracks the selected node), so keyboard Delete/Backspace can target edges.
+  const [selectedEdgeIds, setSelectedEdgeIds] = useState<ReadonlySet<string>>(new Set());
 
   const cost = useCost();
   const costById = useMemo(
@@ -92,6 +99,7 @@ export function Canvas() {
       source: e.source,
       target: e.target,
       type: 'smoothstep',
+      selected: selectedEdgeIds.has(e.id),
       label: e.intent,
       labelBgPadding: [6, 3] as [number, number],
       labelBgBorderRadius: 4,
@@ -106,10 +114,40 @@ export function Canvas() {
       for (const change of changes) {
         if (change.type === 'position' && change.position) {
           moveNode(change.id, change.position);
+        } else if (change.type === 'remove') {
+          removeNode(change.id);
+        } else if (change.type === 'select') {
+          if (change.selected) select(change.id);
+          else if (useCanvasStore.getState().selectedId === change.id) select(null);
         }
       }
     },
-    [moveNode],
+    [moveNode, removeNode, select],
+  );
+
+  const onEdgesChange = useCallback(
+    (changes: EdgeChange[]) => {
+      for (const change of changes) {
+        if (change.type === 'remove') {
+          removeEdge(change.id);
+          setSelectedEdgeIds((prev) => {
+            if (!prev.has(change.id)) return prev;
+            const next = new Set(prev);
+            next.delete(change.id);
+            return next;
+          });
+        } else if (change.type === 'select') {
+          setSelectedEdgeIds((prev) => {
+            if (prev.has(change.id) === change.selected) return prev;
+            const next = new Set(prev);
+            if (change.selected) next.add(change.id);
+            else next.delete(change.id);
+            return next;
+          });
+        }
+      }
+    },
+    [removeEdge],
   );
 
   const onConnect = useCallback(
@@ -146,9 +184,11 @@ export function Canvas() {
         edges={rfEdges}
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onNodeClick={(_, node) => select(node.id)}
         onPaneClick={() => select(null)}
+        deleteKeyCode={['Backspace', 'Delete']}
         fitView
         proOptions={{ hideAttribution: true }}
       >

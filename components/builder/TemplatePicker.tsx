@@ -13,6 +13,12 @@ export function TemplatePicker({ onClose }: { onClose: () => void }) {
   const templates = getTemplates(targetId);
 
   const pick = (t: TemplateMeta) => {
+    if (
+      useCanvasStore.getState().nodes.length > 0 &&
+      !window.confirm(`Loading "${t.name}" replaces the current canvas. Continue?`)
+    ) {
+      return;
+    }
     setApp(t.app);
     loadSnapshot(t.snapshot);
     onClose();

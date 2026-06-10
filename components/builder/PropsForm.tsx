@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useCanvasStore } from '@/lib/canvas/store';
 import { getTarget } from '@/lib/targets/registry';
 import type { PropField } from '@/lib/targets/types';
@@ -8,6 +9,12 @@ import type { CanvasNode } from '@/lib/canvas/types';
 const inputClass =
   'w-full rounded-md border border-neutral-300 bg-transparent px-2 py-1 text-sm dark:border-neutral-700';
 
+/**
+ * Rows live in local draft state so empty-key rows ("+ add variable") survive
+ * until the user types a key; only rows with a key are committed via onChange.
+ * The parent keys this component by node id + field key, so switching nodes
+ * remounts it and re-seeds the draft from the stored value.
+ */
 function KeyValueEditor({
   value,
   onChange,
@@ -15,9 +22,11 @@ function KeyValueEditor({
   value: Record<string, string>;
   onChange: (next: Record<string, string>) => void;
 }) {
-  const rows = Object.entries(value);
-  const commit = (next: [string, string][]) =>
+  const [rows, setRows] = useState<[string, string][]>(() => Object.entries(value));
+  const update = (next: [string, string][]) => {
+    setRows(next);
     onChange(Object.fromEntries(next.filter(([k]) => k.length > 0)));
+  };
 
   return (
     <div className="flex flex-col gap-1">
@@ -27,18 +36,18 @@ function KeyValueEditor({
             className={inputClass}
             value={k}
             placeholder="KEY"
-            onChange={(e) => commit(rows.map((r, idx) => (idx === i ? [e.target.value, r[1]] : r)))}
+            onChange={(e) => update(rows.map((r, idx) => (idx === i ? [e.target.value, r[1]] : r)))}
           />
           <input
             className={inputClass}
             value={v}
             placeholder="value"
-            onChange={(e) => commit(rows.map((r, idx) => (idx === i ? [r[0], e.target.value] : r)))}
+            onChange={(e) => update(rows.map((r, idx) => (idx === i ? [r[0], e.target.value] : r)))}
           />
           <button
             type="button"
             className="px-1 text-neutral-400 hover:text-red-600"
-            onClick={() => commit(rows.filter((_, idx) => idx !== i))}
+            onClick={() => update(rows.filter((_, idx) => idx !== i))}
           >
             ×
           </button>
@@ -47,7 +56,7 @@ function KeyValueEditor({
       <button
         type="button"
         className="self-start text-xs text-indigo-600 hover:underline"
-        onClick={() => commit([...rows, ['', '']])}
+        onClick={() => setRows([...rows, ['', '']])}
       >
         + add variable
       </button>
@@ -65,7 +74,7 @@ function Field({ field, node }: { field: PropField; node: CanvasNode }) {
     return (
       <label className="flex flex-col gap-1">
         <span className="text-xs text-neutral-500">{field.label}</span>
-        <KeyValueEditor value={value} onChange={set} />
+        <KeyValueEditor key={`${node.id}:${field.key}`} value={value} onChange={set} />
       </label>
     );
   }

@@ -25,6 +25,12 @@ export function Toolbar({ validation }: { validation: ValidationResult }) {
         alert(`The "${bp.target.deploy}" lane is not implemented yet.`);
         return;
       }
+      if (
+        useCanvasStore.getState().nodes.length > 0 &&
+        !window.confirm('Importing replaces the current canvas. Continue?')
+      ) {
+        return;
+      }
       useCanvasStore.setState({ targetId: bp.target.deploy });
       setApp({ name: bp.app.name, region: bp.app.region, packageManager: bp.app.packageManager });
       loadSnapshot(blueprintToCanvas(bp));
@@ -61,7 +67,19 @@ export function Toolbar({ validation }: { validation: ValidationResult }) {
         >
           Export
         </Button>
-        <Button size="sm" variant="ghost" onClick={reset}>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => {
+            if (
+              useCanvasStore.getState().nodes.length > 0 &&
+              !window.confirm('Clear the canvas? This removes every node and connection.')
+            ) {
+              return;
+            }
+            reset();
+          }}
+        >
           Clear
         </Button>
         <input

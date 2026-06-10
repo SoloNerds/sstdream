@@ -30,15 +30,19 @@ export function BuilderShell() {
   const validation = useValidation();
   const [tab, setTab] = useState<'properties' | 'simulation' | 'cost' | 'advice'>('properties');
   const [view, setView] = useState<'design' | 'infra'>('design');
+  const [recoveryKey, setRecoveryKey] = useState<string | null>(null);
 
   // Restore the last design from localStorage on mount.
   useEffect(() => {
-    const bp = loadBlueprint();
-    if (bp && isTargetImplemented(bp.target.deploy)) {
+    const result = loadBlueprint();
+    if (result.status === 'loaded' && isTargetImplemented(result.blueprint.target.deploy)) {
+      const bp = result.blueprint;
       const s = useCanvasStore.getState();
       useCanvasStore.setState({ targetId: bp.target.deploy });
       s.setApp({ name: bp.app.name, region: bp.app.region, packageManager: bp.app.packageManager });
       s.loadSnapshot(blueprintToCanvas(bp));
+    } else if (result.status === 'unreadable') {
+      setRecoveryKey(result.recoveryKey);
     }
   }, []);
 
@@ -76,6 +80,13 @@ export function BuilderShell() {
             aria-label="Deploy lane"
             value={targetId}
             onChange={(e) => {
+              const { nodes } = useCanvasStore.getState();
+              if (
+                nodes.length > 0 &&
+                !window.confirm('Switching lanes clears the current canvas. Continue?')
+              ) {
+                return;
+              }
               useCanvasStore.setState({ targetId: e.target.value as DeployTarget });
               useCanvasStore.getState().reset();
             }}
@@ -109,6 +120,28 @@ export function BuilderShell() {
           <ThemeToggle />
         </div>
       </header>
+      {recoveryKey && (
+        <div
+          role="alert"
+          className="flex items-center justify-between gap-4 border-b border-amber-300 bg-amber-50 px-4 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200"
+        >
+          <span>
+            Your previous design could not be loaded (it may be corrupt or from a different
+            version). The raw data was preserved in this browser under the localStorage key{' '}
+            <code className="rounded bg-amber-100 px-1 font-mono dark:bg-amber-900">
+              {recoveryKey}
+            </code>
+            .
+          </span>
+          <button
+            type="button"
+            onClick={() => setRecoveryKey(null)}
+            className="shrink-0 rounded border border-amber-400 px-2 py-0.5 hover:bg-amber-100 dark:border-amber-600 dark:hover:bg-amber-900"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       <div className="flex min-h-0 flex-1">
         <aside className="w-64 shrink-0 overflow-y-auto border-r border-neutral-200 dark:border-neutral-800">
           <Palette />
