@@ -20,7 +20,6 @@ const VERB: Record<string, string> = {
   usesAuth: 'authenticates with',
   routesBucket: 'routes to',
   routedBy: 'served by',
-  linksTo: 'links to',
 };
 
 const LEAF_INTENTS = new Set([
@@ -38,7 +37,6 @@ const LEAF_INTENTS = new Set([
   'usesAuth',
   'routesBucket',
   'routedBy',
-  'linksTo',
 ]);
 
 export function simulateAws(bp: Blueprint): SimTrace {

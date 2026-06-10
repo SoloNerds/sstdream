@@ -20,7 +20,7 @@ describe('Router (sst.aws.Router)', () => {
     expect(config).toContain('router: router.url');
   });
 
-  it('warns when a routed bucket is not access: cloudfront', () => {
+  it('errors when a routed bucket is not access: cloudfront (would ship a 403ing site)', () => {
     const bad = draftBlueprint(
       {
         nodes: [
@@ -33,8 +33,6 @@ describe('Router (sst.aws.Router)', () => {
       APP,
       NOW,
     );
-    expect(validateBlueprint(bad).warnings.map((w) => w.rule)).toContain(
-      'routed-bucket-cloudfront',
-    );
+    expect(validateBlueprint(bad).errors.map((w) => w.rule)).toContain('routed-bucket-cloudfront');
   });
 });

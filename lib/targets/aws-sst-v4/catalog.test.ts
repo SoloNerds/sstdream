@@ -26,8 +26,11 @@ describe('aws-sst-v4 edge intents', () => {
     expect(awsDefaultIntent('worker', 'dynamo')).toBe('writesTo');
   });
 
-  it('falls back to linksTo for unmapped but distinct kinds', () => {
-    expect(awsDefaultIntent('bucket', 'dynamo')).toBe('linksTo');
+  it('returns null for unmapped pairs — the canvas refuses meaningless connections', () => {
+    // The old catch-all 'linksTo' silently generated nothing (or a broken link).
+    expect(awsDefaultIntent('bucket', 'dynamo')).toBeNull();
+    expect(awsDefaultIntent('router', 'staticsite')).toBeNull();
+    expect(awsDefaultIntent('worker', 'stripe')).toBeNull();
   });
 
   it('returns null for a self connection', () => {

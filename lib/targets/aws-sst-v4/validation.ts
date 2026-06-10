@@ -1,5 +1,6 @@
 import type { Blueprint, Resource } from '@/lib/core/blueprint/types';
 import type { Diagnostic, ValidationRule } from '@/lib/core/validation/types';
+import { camelCase } from '@/lib/core/codegen/strings';
 
 // AWS / SST v4 design-level validation rules. Code-shape guarantees (no legacy
 // imports, resources-in-run, Queue.subscribe subscriber-first, CronV2 not Cron)
@@ -8,6 +9,69 @@ import type { Diagnostic, ValidationRule } from '@/lib/core/validation/types';
 
 const NAME_RE = /^[A-Z][A-Za-z0-9]*$/;
 const APP_NAME_RE = /^[a-z][a-z0-9-]*$/;
+// Generated runtime code uses table keys as TS identifiers (types, variables).
+const IDENT_RE = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+const SCHEDULE_RE = /^(rate|cron|at)\(.+\)$/;
+const ROUTE_RE = /^(GET|POST|PUT|PATCH|DELETE|ANY|OPTIONS|HEAD) \/[\w\-./{}+]*$|^\$default$/;
+// Env-var names land in identifier position (process.env.<name>) and .env files.
+const ENV_NAME_RE = /^[A-Z_][A-Z0-9_]*$/;
+// camelCase(resource name) becomes a `const` in sst.config.ts — JS reserved
+// words and generator-owned names would emit broken or shadowed declarations.
+const RESERVED_VARS = new Set([
+  'vpc',
+  'implements',
+  'interface',
+  'package',
+  'private',
+  'protected',
+  'public',
+  'eval',
+  'arguments',
+  'function',
+  'class',
+  'const',
+  'let',
+  'var',
+  'return',
+  'delete',
+  'new',
+  'void',
+  'this',
+  'super',
+  'switch',
+  'case',
+  'catch',
+  'finally',
+  'for',
+  'while',
+  'do',
+  'if',
+  'else',
+  'in',
+  'instanceof',
+  'typeof',
+  'export',
+  'import',
+  'default',
+  'extends',
+  'static',
+  'yield',
+  'await',
+  'enum',
+  'null',
+  'true',
+  'false',
+  'with',
+  'debugger',
+  'break',
+  'continue',
+  'throw',
+  'try',
+]);
+
+// Locals/imports the generated create-form.tsx declares — a table key with one
+// of these names would redeclare them in the same scope.
+const FORM_LOCALS = new Set(['router', 'pending', 'create', 'get', 'list', 'update', 'remove']);
 
 function resourceMap(bp: Blueprint): Map<string, Resource> {
   return new Map(bp.resources.map((r) => [r.id, r]));
@@ -201,6 +265,239 @@ export const AWS_RULES: ValidationRule[] = [
     },
   },
   {
+    // Resources whose kind isn't in the catalog (hand-edited imports, lane
+    // mixups) used to vanish silently from the export.
+    id: 'known-resource-kind',
+    run: (bp, ctx) =>
+      bp.resources
+        .filter((r) => !(r.kind in ctx.target.catalog))
+        .map((r) => ({
+          rule: 'known-resource-kind',
+          severity: 'error' as const,
+          resourceId: r.id,
+          message: `"${r.name}" has unknown resource kind "${r.kind}" — the export would silently drop it.`,
+          hint: 'Re-create the node from the palette, or fix the kind in the imported design.',
+        })),
+  },
+  {
+    // camelCase(name) becomes a `const` in sst.config.ts: reserved words emit
+    // unparseable code; two names that camelCase identically collide.
+    id: 'var-name-collision',
+    run: (bp) => {
+      // Mirror plan.ts: only these kinds (plus untriggered workers) become
+      // `const` declarations in sst.config.ts.
+      const DECLARED = new Set([
+        'secret',
+        'ai',
+        'email',
+        'cognito',
+        'bucket',
+        'dynamo',
+        'postgres',
+        'aurora',
+        'queue',
+        'bus',
+        'snstopic',
+        'apigatewayv2',
+        'router',
+        'nextjs',
+        'staticsite',
+      ]);
+      const isTriggered = (w: Resource) =>
+        bp.connections.some(
+          (c) =>
+            (c.source === w.id &&
+              (c.intent === 'subscribesTo' ||
+                c.intent === 'handlesRoute' ||
+                c.intent === 'handlesBucketEvents')) ||
+            (c.target === w.id && c.intent === 'invokes'),
+        );
+      const declares = (r: Resource) =>
+        DECLARED.has(r.kind) || (r.kind === 'worker' && !isTriggered(r));
+
+      const out: Diagnostic[] = [];
+      const seen = new Map<string, Resource>();
+      const claim = (v: string, r: Resource) => {
+        if (RESERVED_VARS.has(v)) {
+          out.push({
+            rule: 'var-name-collision',
+            severity: 'error',
+            resourceId: r.id,
+            message: `"${r.name}" would generate the variable "${v}", which is reserved.`,
+            hint: 'Rename the resource (e.g. "ApiFunction" instead of "Function").',
+          });
+          return;
+        }
+        const prev = seen.get(v);
+        if (prev && prev.id !== r.id) {
+          out.push({
+            rule: 'var-name-collision',
+            severity: 'error',
+            resourceId: r.id,
+            message: `"${r.name}" and "${prev.name}" both generate the variable "${v}" — the export would not compile.`,
+            hint: 'Rename one of them.',
+          });
+        } else {
+          seen.set(v, r);
+        }
+      };
+      for (const r of bp.resources.filter(declares)) {
+        claim(camelCase(r.name), r);
+        // renderCognito also declares `<var>Client = <var>.addClient("Web")`.
+        if (r.kind === 'cognito') claim(`${camelCase(r.name)}Client`, r);
+      }
+      return out;
+    },
+  },
+  {
+    // hashKey/rangeKey become TS identifiers AND local variables in the
+    // generated CRUD form (GSI names/keys are always emitted quoted — exempt).
+    id: 'dynamo-keys-identifier-safe',
+    run: (bp) => {
+      const out: Diagnostic[] = [];
+      const KEYS = ['hashKey', 'rangeKey'] as const;
+      for (const r of bp.resources.filter((x) => x.kind === 'dynamo')) {
+        for (const k of KEYS) {
+          const v = r.props[k];
+          if (typeof v !== 'string' || !v) continue;
+          const bad =
+            !IDENT_RE.test(v) || RESERVED_VARS.has(v) || FORM_LOCALS.has(v) || v === 'setPending';
+          if (bad) {
+            out.push({
+              rule: 'dynamo-keys-identifier-safe',
+              severity: 'error',
+              resourceId: r.id,
+              message: `Table "${r.name}" ${k} "${v}" cannot be used as a variable in the generated code.`,
+              hint: 'Use letters/digits/underscore, starting with a letter, avoiding reserved words (e.g. userId).',
+            });
+          }
+        }
+      }
+      return out;
+    },
+  },
+  {
+    // Half-configured GSIs silently degraded to "no GSI" in the export.
+    id: 'gsi-complete',
+    run: (bp) => {
+      const out: Diagnostic[] = [];
+      for (const r of bp.resources.filter((x) => x.kind === 'dynamo')) {
+        const name = typeof r.props.gsiName === 'string' && r.props.gsiName;
+        const hash = typeof r.props.gsiHashKey === 'string' && r.props.gsiHashKey;
+        const range = typeof r.props.gsiRangeKey === 'string' && r.props.gsiRangeKey;
+        if ((name || hash || range) && !(name && hash)) {
+          out.push({
+            rule: 'gsi-complete',
+            severity: 'error',
+            resourceId: r.id,
+            message: `Table "${r.name}" has a half-configured GSI — set both the index name and its hash key (or clear all GSI fields).`,
+          });
+        }
+      }
+      return out;
+    },
+  },
+  {
+    // baseUrlEnv/keyEnv are emitted as process.env.<name> and .env lines.
+    id: 'env-var-name-format',
+    run: (bp) => {
+      const out: Diagnostic[] = [];
+      for (const r of bp.resources.filter((x) => x.kind === 'externalApi')) {
+        for (const k of ['baseUrlEnv', 'keyEnv'] as const) {
+          const v = r.props[k];
+          if (typeof v === 'string' && v && !ENV_NAME_RE.test(v)) {
+            out.push({
+              rule: 'env-var-name-format',
+              severity: 'error',
+              resourceId: r.id,
+              message: `"${r.name}" ${k} "${v}" is not a valid env var name — generated code would not compile.`,
+              hint: 'Use UPPER_SNAKE_CASE (e.g. API_BASE_URL).',
+            });
+          }
+        }
+      }
+      return out;
+    },
+  },
+  {
+    // Free-text schedules that aren't rate()/cron()/at() fail `sst deploy`.
+    id: 'cron-schedule-format',
+    run: (bp) => {
+      const out: Diagnostic[] = [];
+      for (const c of bp.resources.filter((r) => r.kind === 'cron')) {
+        const schedule = typeof c.props.schedule === 'string' ? c.props.schedule : '';
+        if (schedule && !SCHEDULE_RE.test(schedule)) {
+          out.push({
+            rule: 'cron-schedule-format',
+            severity: 'error',
+            resourceId: c.id,
+            message: `Cron "${c.name}" schedule "${schedule}" is invalid — AWS accepts rate(...), cron(...), or at(...).`,
+            hint: 'e.g. rate(1 day), cron(0 12 * * ? *), at(2026-01-01T00:00:00)',
+          });
+        }
+      }
+      return out;
+    },
+  },
+  {
+    // Route keys must be "METHOD /path" (or $default); duplicates on one API
+    // overwrite each other at deploy.
+    id: 'route-format-and-unique',
+    run: (bp) => {
+      const out: Diagnostic[] = [];
+      const seen = new Map<string, Resource>();
+      for (const w of bp.resources.filter((r) => r.kind === 'worker')) {
+        const edge = bp.connections.find((c) => c.source === w.id && c.intent === 'handlesRoute');
+        if (!edge) continue;
+        const route = typeof w.props.route === 'string' && w.props.route ? w.props.route : 'GET /';
+        if (!ROUTE_RE.test(route)) {
+          out.push({
+            rule: 'route-format-and-unique',
+            severity: 'error',
+            resourceId: w.id,
+            message: `Worker "${w.name}" route "${route}" is invalid — use "METHOD /path" (e.g. "POST /webhooks") or "$default".`,
+          });
+          continue;
+        }
+        const key = `${edge.target}::${route}`;
+        const prev = seen.get(key);
+        if (prev) {
+          out.push({
+            rule: 'route-format-and-unique',
+            severity: 'error',
+            resourceId: w.id,
+            message: `Workers "${prev.name}" and "${w.name}" both handle "${route}" on the same API — routes must be unique.`,
+            hint: 'Change one route (workers default to "GET /").',
+          });
+        } else {
+          seen.set(key, w);
+        }
+      }
+      return out;
+    },
+  },
+  {
+    // StaticSite build needs BOTH command and output; one without the other
+    // silently degraded to "no build" in the export.
+    id: 'staticsite-build-complete',
+    run: (bp) => {
+      const out: Diagnostic[] = [];
+      for (const r of bp.resources.filter((x) => x.kind === 'staticsite')) {
+        const cmd = typeof r.props.buildCommand === 'string' && r.props.buildCommand;
+        const dir = typeof r.props.buildOutput === 'string' && r.props.buildOutput;
+        if ((cmd && !dir) || (!cmd && dir)) {
+          out.push({
+            rule: 'staticsite-build-complete',
+            severity: 'error',
+            resourceId: r.id,
+            message: `Static site "${r.name}" has a half-configured build — set both the command and the output dir (or clear both).`,
+          });
+        }
+      }
+      return out;
+    },
+  },
+  {
     // CronV2 has a single `function:` — plan.ts wires the FIRST invokes edge
     // and any extra target would vanish from the export.
     id: 'cron-single-function',
@@ -253,7 +550,8 @@ export const AWS_RULES: ValidationRule[] = [
         .filter((b) => b && b.props.access !== 'cloudfront')
         .map((b) => ({
           rule: 'routed-bucket-cloudfront',
-          severity: 'warning' as const,
+          // error: a Router serving a private bucket ships a 403ing site.
+          severity: 'error' as const,
           resourceId: b!.id,
           message: `Bucket "${b!.name}" is routed by a Router but its access isn't "cloudfront".`,
           hint: 'Set the bucket access to CloudFront so the Router can serve it.',

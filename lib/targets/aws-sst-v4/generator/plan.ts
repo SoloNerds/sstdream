@@ -232,7 +232,8 @@ export function planAws(bp: Blueprint): AwsPlan {
         workerId: worker?.id,
         handlerPath: worker ? handlerPathFor(worker) : undefined,
         handlerFile: worker ? handlerFileFor(worker) : undefined,
-        linkVars: worker ? linkVarsFor(worker.id) : [],
+        // The cron node's own links (cron→secret) merge with the worker's.
+        linkVars: uniq([...(worker ? linkVarsFor(worker.id) : []), ...linkVarsFor(c.id)]),
       };
     });
 

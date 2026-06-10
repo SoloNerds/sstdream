@@ -84,8 +84,9 @@ export const AWS_EDGE_INTENTS: EdgeIntentMeta[] = [
   {
     intent: 'usesAI',
     label: 'uses AI',
-    description: 'App streams Claude via a server route; links the Anthropic API-key secret.',
-    from: ['nextjs'],
+    description:
+      'App/worker calls Claude; links the Anthropic API-key secret (apps also get a chat route).',
+    from: ['nextjs', 'worker'],
     to: ['ai'],
   },
   {
@@ -126,8 +127,8 @@ export const AWS_EDGE_INTENTS: EdgeIntentMeta[] = [
   {
     intent: 'usesCognito',
     label: 'authenticates with',
-    description: 'App uses a Cognito user pool; injects NEXT_PUBLIC_COGNITO_* from outputs.',
-    from: ['nextjs'],
+    description: 'App/worker uses a Cognito user pool; apps get NEXT_PUBLIC_COGNITO_* injected.',
+    from: ['nextjs', 'worker'],
     to: ['cognito'],
   },
   {
@@ -136,13 +137,6 @@ export const AWS_EDGE_INTENTS: EdgeIntentMeta[] = [
     description: 'App uses Clerk — generates middleware.ts + Clerk env keys.',
     from: ['nextjs'],
     to: ['clerk'],
-  },
-  {
-    intent: 'linksTo',
-    label: 'links to',
-    description: 'Generic link: grants access + SDK exposure with no specific helper.',
-    from: [],
-    to: [],
   },
 ];
 
@@ -165,6 +159,7 @@ const INTENT_BY_PAIR: Record<string, string> = {
   'worker>secret': 'usesSecret',
   'cron>secret': 'usesSecret',
   'nextjs>ai': 'usesAI',
+  'worker>ai': 'usesAI',
   'nextjs>postgres': 'queriesDb',
   'worker>postgres': 'queriesDb',
   'nextjs>aurora': 'queriesDb',
@@ -177,10 +172,13 @@ const INTENT_BY_PAIR: Record<string, string> = {
   'nextjs>externalApi': 'callsApi',
   'worker>externalApi': 'callsApi',
   'nextjs>cognito': 'usesCognito',
+  'worker>cognito': 'usesCognito',
   'nextjs>clerk': 'usesAuth',
 };
 
+// Unmapped pairs return null so the canvas refuses the connection outright —
+// the old catch-all 'linksTo' silently generated nothing (or a broken link).
 export function awsDefaultIntent(fromKind: string, toKind: string): string | null {
   if (fromKind === toKind) return null;
-  return INTENT_BY_PAIR[`${fromKind}>${toKind}`] ?? 'linksTo';
+  return INTENT_BY_PAIR[`${fromKind}>${toKind}`] ?? null;
 }

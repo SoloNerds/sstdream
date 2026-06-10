@@ -221,9 +221,12 @@ export async function handler(event: unknown) {
 }
 `;
 
-// HTTP API route handler (API Gateway v2 / Lambda proxy).
-const apiRouteHandlerFile = (route: string): string =>
-  `/** Route handler for "${route}". */
+// HTTP API route handler (API Gateway v2 / Lambda proxy). The route is free
+// text: JSON.stringify it in code position and keep `*\/` out of the comment.
+const apiRouteHandlerFile = (route: string): string => {
+  const quoted = JSON.stringify(route);
+  const comment = route.split('*/').join('* /');
+  return `/** Route handler for ${comment}. */
 export async function handler(event: {
   requestContext: { http: { method: string; path: string } };
   body?: string;
@@ -231,10 +234,11 @@ export async function handler(event: {
   return {
     statusCode: 200,
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ ok: true, route: "${route}" }),
+    body: JSON.stringify({ ok: true, route: ${quoted} }),
   };
 }
 `;
+};
 
 // S3 event handler (bucket.notify → Lambda on object events).
 const s3NotifyHandlerFile = (name: string): string =>
@@ -262,7 +266,7 @@ import Anthropic from "@anthropic-ai/sdk";
 // It is never sent to the browser.
 export const anthropic = new Anthropic({ apiKey: Resource.${secretName}.value });
 
-export const CHAT_MODEL = "${model}";
+export const CHAT_MODEL = ${JSON.stringify(model)};
 `;
 
 const aiChatRouteFile = (): string =>
@@ -813,15 +817,19 @@ export function generateRuntimeFiles(bp: Blueprint): GeneratedFile[] {
     });
   }
 
-  const aiEdge = bp.connections.find((c) => c.intent === 'usesAI');
-  const aiRes = aiEdge ? resourceOf(aiEdge.target) : undefined;
+  const aiEdges = bp.connections.filter((c) => c.intent === 'usesAI');
+  const aiRes = aiEdges.length ? resourceOf(aiEdges[0].target) : undefined;
+  // Workers link the key + helper; the chat route only makes sense in an app.
+  const aiFromApp = aiEdges.some((c) => resourceOf(c.source)?.kind === 'nextjs');
   if (aiRes) {
     const model =
       typeof aiRes.props.model === 'string' && aiRes.props.model
         ? aiRes.props.model
         : 'claude-opus-4-8';
     files.push({ path: 'lib/ai.ts', content: aiHelperFile(aiRes.name, model), language: 'ts' });
-    files.push({ path: 'app/api/chat/route.ts', content: aiChatRouteFile(), language: 'ts' });
+    if (aiFromApp) {
+      files.push({ path: 'app/api/chat/route.ts', content: aiChatRouteFile(), language: 'ts' });
+    }
   }
 
   const emailEdge = bp.connections.find((c) => c.intent === 'sendsEmail');

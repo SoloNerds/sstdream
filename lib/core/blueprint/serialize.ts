@@ -1,6 +1,7 @@
 import { BLUEPRINT_VERSION, BlueprintSchema } from './schema';
 import { migrateBlueprint } from './migrate';
 import type { Blueprint } from './types';
+import { getTarget } from '@/lib/targets/registry';
 import type { DeployTarget } from '@/lib/targets/types';
 
 export interface CanvasNodeData {
@@ -128,6 +129,18 @@ export function canvasToBlueprint(
 }
 
 export function blueprintToCanvas(bp: Blueprint): CanvasSnapshot {
+  // Legacy designs may carry the removed catch-all 'linksTo' intent (it used
+  // to be the default for unmapped pairs and silently generated nothing).
+  // Heal on load: adopt the pair's real default intent, or drop the edge when
+  // the pair is no longer connectable.
+  const byId = new Map(bp.resources.map((r) => [r.id, r]));
+  const heal = (c: Blueprint['connections'][number]): string | null => {
+    if (c.intent !== 'linksTo') return c.intent;
+    const src = byId.get(c.source);
+    const tgt = byId.get(c.target);
+    if (!src || !tgt) return null;
+    return getTarget(bp.target.deploy).defaultIntent(src.kind, tgt.kind);
+  };
   return {
     nodes: bp.resources.map((r) => ({
       id: r.id,
@@ -136,12 +149,10 @@ export function blueprintToCanvas(bp: Blueprint): CanvasSnapshot {
       props: r.props,
       position: r.position,
     })),
-    edges: bp.connections.map((c) => ({
-      id: c.id,
-      source: c.source,
-      target: c.target,
-      intent: c.intent,
-    })),
+    edges: bp.connections.flatMap((c) => {
+      const intent = heal(c);
+      return intent ? [{ id: c.id, source: c.source, target: c.target, intent }] : [];
+    }),
   };
 }
 
