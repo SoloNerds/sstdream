@@ -294,11 +294,7 @@ describe('kebab-path-collision (#143)', () => {
     // both -> "process-job"; distinct camelCase (aProcessJob / aPROcessJob) so
     // var-name-collision does NOT catch them.
     const bp = mk(
-      [
-        n('q', 'queue', 'Jobs'),
-        n('w1', 'worker', 'ProcessJob'),
-        n('w2', 'worker', 'PROcessJob'),
-      ],
+      [n('q', 'queue', 'Jobs'), n('w1', 'worker', 'ProcessJob'), n('w2', 'worker', 'PROcessJob')],
       [e('e1', 'w1', 'q', 'subscribesTo'), e('e2', 'w2', 'q', 'subscribesTo')],
     );
     expect(rulesOf(bp, 'var-name-collision')).toHaveLength(0);

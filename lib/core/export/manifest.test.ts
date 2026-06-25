@@ -88,7 +88,10 @@ describe('export gate is a buildExport invariant (#143)', () => {
   it('throws (does not emit) when the design has validation errors', () => {
     // A bucket named "Public" generates `const public` — a reserved-word error.
     const invalid = draftBlueprint(
-      { nodes: [{ id: 'b', kind: 'bucket', name: 'Public', props: {}, position: { x: 0, y: 0 } }], edges: [] },
+      {
+        nodes: [{ id: 'b', kind: 'bucket', name: 'Public', props: {}, position: { x: 0, y: 0 } }],
+        edges: [],
+      },
       'aws-sst-v4',
       APP,
       NOW,
@@ -100,7 +103,10 @@ describe('export gate is a buildExport invariant (#143)', () => {
   it('still emits for a warning-only design (warnings do not block)', () => {
     // A single bucket with no consumer is a warning, not an error.
     const warnOnly = draftBlueprint(
-      { nodes: [{ id: 'b', kind: 'bucket', name: 'Uploads', props: {}, position: { x: 0, y: 0 } }], edges: [] },
+      {
+        nodes: [{ id: 'b', kind: 'bucket', name: 'Uploads', props: {}, position: { x: 0, y: 0 } }],
+        edges: [],
+      },
       'aws-sst-v4',
       APP,
       NOW,
