@@ -194,6 +194,14 @@ function resourcesFor(
       }
       return out;
     }
+    case 'realtime':
+      return [
+        P('IoT', 'Custom authorizer', { security: true, note: 'validates every WS connect' }),
+        P('Lambda', 'Authorizer function', { note: 'src/realtime-authorizer' }),
+        P('Lambda', 'Subscriber function', { note: 'src/realtime-subscriber' }),
+        P('IoT', 'Topic rule (subscribe)'),
+        P('IAM', 'IoT invoke permission', { security: true }),
+      ];
     case 'task':
       return [
         P('ECS', 'Fargate task definition', { note: 'run on demand via task.run()' }),
@@ -266,6 +274,7 @@ const ORDER = [
   'queue',
   'bus',
   'snstopic',
+  'realtime',
   'apigatewayv2',
   'router',
   'worker',

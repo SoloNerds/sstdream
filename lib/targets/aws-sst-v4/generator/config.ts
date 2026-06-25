@@ -329,6 +329,21 @@ function renderCron(cron: AwsPlan['crons'][number], plan: AwsPlan): string {
   return lines.join('\n');
 }
 
+// IoT-backed WebSocket pub/sub. authorizer is REQUIRED (no anonymous connect). We
+// also wire a starter subscriber. IoT is account-shared, so every topic/filter is
+// prefixed with `${$app.name}/${$app.stage}/` (verified caveat).
+function renderRealtime(r: Resource, plan: AwsPlan): string {
+  const v = plan.varNameById.get(r.id);
+  return [
+    `const ${v} = new sst.aws.Realtime(${q(r.name)}, {`,
+    `  authorizer: "src/realtime-authorizer.handler",`,
+    `});`,
+    `${v}.subscribe("src/realtime-subscriber.handler", {`,
+    '  filter: `${$app.name}/${$app.stage}/#`,',
+    `});`,
+  ].join('\n');
+}
+
 function renderNextjs(r: Resource, plan: AwsPlan): string {
   const v = plan.varNameById.get(r.id);
   const links = plan.linkVarsById.get(r.id) ?? [];
@@ -479,6 +494,7 @@ export function generateSstConfig(bp: Blueprint): string {
   }
   for (const r of byKind('bus')) statements.push(renderBus(r, plan));
   for (const r of byKind('snstopic')) statements.push(renderSnsTopic(r, plan));
+  for (const r of byKind('realtime')) statements.push(renderRealtime(r, plan));
   for (const r of byKind('apigatewayv2')) statements.push(renderApi(r, plan));
   for (const r of byKind('router')) statements.push(renderRouter(r, plan));
   for (const sub of plan.subscribers) statements.push(renderSubscriber(sub, plan));

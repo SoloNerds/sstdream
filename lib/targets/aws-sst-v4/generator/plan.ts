@@ -131,6 +131,7 @@ const DECL_ORDER: Record<string, number> = {
   queue: 3,
   bus: 3,
   snstopic: 3,
+  realtime: 3,
   apigatewayv2: 3,
   router: 3,
   worker: 4,
@@ -169,6 +170,7 @@ export function planAws(bp: Blueprint): AwsPlan {
       r.kind === 'queue' ||
       r.kind === 'bus' ||
       r.kind === 'snstopic' ||
+      r.kind === 'realtime' ||
       r.kind === 'apigatewayv2' ||
       r.kind === 'router' ||
       r.kind === 'nextjs' ||

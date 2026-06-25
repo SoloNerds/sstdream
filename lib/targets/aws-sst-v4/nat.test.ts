@@ -243,6 +243,46 @@ describe('VPC NAT options + corrected Postgres cost', () => {
     expect(taskCost.lines.some((l) => /per-run/.test(l.label))).toBe(true);
   });
 
+  it('Realtime emits the authorizer + subscriber + app/stage-prefixed subscribe + publish helper', () => {
+    const bp = draftBlueprint(
+      {
+        nodes: [
+          { id: 'nextjs_1', kind: 'nextjs', name: 'Web', props: {}, position: { x: 0, y: 0 } },
+          {
+            id: 'realtime_2',
+            kind: 'realtime',
+            name: 'Realtime',
+            props: {},
+            position: { x: 200, y: 0 },
+          },
+        ],
+        edges: [{ id: 'e1', source: 'nextjs_1', target: 'realtime_2', intent: 'usesRealtime' }],
+      },
+      'aws-sst-v4',
+      { name: 'chat-app', region: 'us-east-1', packageManager: 'yarn' },
+      NOW,
+    );
+    const files = generateFiles(bp);
+    const cfg = files.find((f) => f.path === 'sst.config.ts')!.content;
+    expect(cfg).toContain('new sst.aws.Realtime("Realtime", {');
+    expect(cfg).toContain('authorizer: "src/realtime-authorizer.handler"');
+    // Account-shared IoT → topics MUST be app/stage prefixed.
+    expect(cfg).toContain('filter: `${$app.name}/${$app.stage}/#`');
+    expect(cfg).toMatch(/link: \[[^\]]*realtime/);
+    // Authorizer uses the verified sst/aws/realtime helper.
+    const auth = files.find((f) => f.path === 'src/realtime-authorizer.ts')!.content;
+    expect(auth).toContain('import { realtime } from "sst/aws/realtime"');
+    expect(auth).toContain('realtime.authorizer(');
+    // Publish helper uses the IoT Data Plane SDK against the linked endpoint.
+    const pub = files.find((f) => f.path === 'lib/realtime.ts')!.content;
+    expect(pub).toContain('IoTDataPlaneClient');
+    expect(pub).toContain('Resource.Realtime.endpoint');
+    const pkg = JSON.parse(files.find((f) => f.path === 'package.additions.json')!.content) as {
+      dependencies: Record<string, string>;
+    };
+    expect(pkg.dependencies['@aws-sdk/client-iot-data-plane']).toBe('^3.0.0');
+  });
+
   it('an aurora-only consumer design prices the floored NAT on the aurora node', () => {
     const bp = draftBlueprint(
       {

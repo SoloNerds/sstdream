@@ -401,6 +401,41 @@ export const redis = new Cluster(
 );
 `;
 
+// IoT Realtime. authorizer (required) validates the connect token + returns topic
+// ACLs; the subscriber receives matched messages; the publish helper sends over the
+// IoT Data Plane SDK (there is no sst publish helper). Topics are app/stage-prefixed.
+const realtimeAuthorizerFile = (): string =>
+  `import { Resource } from "sst";
+import { realtime } from "sst/aws/realtime";
+
+export const handler = realtime.authorizer(async (token) => {
+  const prefix = \`\${Resource.App.name}/\${Resource.App.stage}\`;
+  // TODO: validate \`token\` (throw/return empty to deny). Return this client's ACLs.
+  return { subscribe: [\`\${prefix}/#\`], publish: [\`\${prefix}/#\`] };
+});
+`;
+
+const realtimeSubscriberFile = (): string =>
+  `/** IoT Realtime subscriber — IoT delivers each matched message here. */
+export const handler = async (event: unknown) => {
+  console.log("realtime message", event);
+};
+`;
+
+const realtimePublishFile = (realtimeName: string): string =>
+  `import { Resource } from "sst";
+import { IoTDataPlaneClient, PublishCommand } from "@aws-sdk/client-iot-data-plane";
+
+const iot = new IoTDataPlaneClient({ endpoint: \`https://\${Resource.${realtimeName}.endpoint}\` });
+
+/** Publish to a Realtime topic. Prefix with \`\${app}/\${stage}/\` to scope it. */
+export async function publish(topic: string, payload: unknown) {
+  await iot.send(
+    new PublishCommand({ topic, payload: Buffer.from(JSON.stringify(payload)) }),
+  );
+}
+`;
+
 // ECS Fargate container starter. node:22-slim, installs deps (sst for Resource
 // access), runs the server. SST builds this Dockerfile from services/<name>/.
 const serviceDockerfile = (port: number): string =>
@@ -820,6 +855,7 @@ function packageAdditions(flags: {
   email: boolean;
   postgres: boolean;
   redis: boolean;
+  realtime: boolean;
   stripe: boolean;
   mongodb: boolean;
   clerk: boolean;
@@ -842,6 +878,7 @@ function packageAdditions(flags: {
   if (flags.email) deps['@aws-sdk/client-sesv2'] = '^3.0.0';
   if (flags.postgres) deps['pg'] = '^8.0.0';
   if (flags.redis) deps['ioredis'] = '^5.0.0';
+  if (flags.realtime) deps['@aws-sdk/client-iot-data-plane'] = '^3.0.0';
   if (flags.stripe) deps['stripe'] = '^22.0.0';
   if (flags.mongodb) deps['mongodb'] = '^7.0.0';
   if (flags.clerk) deps['@clerk/nextjs'] = '^7.0.0';
@@ -980,6 +1017,26 @@ export function generateRuntimeFiles(bp: Blueprint): GeneratedFile[] {
   const redisRes = redisEdge ? resourceOf(redisEdge.target) : undefined;
   if (redisRes) {
     files.push({ path: 'lib/redis.ts', content: redisHelperFile(redisRes.name), language: 'ts' });
+  }
+
+  // IoT Realtime: the authorizer + a starter subscriber whenever a Realtime node
+  // exists; the publish helper only when something is wired to publish to it.
+  const realtimeRes = bp.resources.find((r) => r.kind === 'realtime');
+  if (realtimeRes) {
+    files.push(
+      { path: 'src/realtime-authorizer.ts', content: realtimeAuthorizerFile(), language: 'ts' },
+      { path: 'src/realtime-subscriber.ts', content: realtimeSubscriberFile(), language: 'ts' },
+    );
+    const usesRealtime = bp.connections.some(
+      (c) => c.intent === 'usesRealtime' && c.target === realtimeRes.id,
+    );
+    if (usesRealtime) {
+      files.push({
+        path: 'lib/realtime.ts',
+        content: realtimePublishFile(realtimeRes.name),
+        language: 'ts',
+      });
+    }
   }
 
   // ECS Fargate services: each gets its own container folder (Dockerfile + a tiny
@@ -1245,6 +1302,7 @@ export function generateRuntimeFiles(bp: Blueprint): GeneratedFile[] {
       email: Boolean(emailRes),
       postgres: Boolean(pgRes),
       redis: Boolean(redisRes),
+      realtime: bp.connections.some((c) => c.intent === 'usesRealtime'),
       stripe: Boolean(stripeRes),
       mongodb: Boolean(mongoRes),
       clerk: Boolean(clerkRes),

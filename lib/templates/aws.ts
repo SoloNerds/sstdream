@@ -340,6 +340,22 @@ export const AWS_TEMPLATES: TemplateMeta[] = [
     ],
   ),
   aws(
+    'aws-realtime-chat',
+    'Realtime Chat (WebSockets)',
+    'Live WebSocket pub/sub over AWS IoT: a custom authorizer guards every connection, the Next.js app publishes messages, and a subscriber Lambda processes them. History persists in DynamoDB.',
+    ['Realtime', 'Flagship', 'WebSockets'],
+    'realtime-chat',
+    [
+      n('nextjs_1', 'nextjs', 'Web', 80, 180),
+      n('realtime_2', 'realtime', 'Realtime', 400, 80),
+      n('dynamo_3', 'dynamo', 'Messages', 400, 300),
+    ],
+    [
+      e('edge_4', 'nextjs_1', 'realtime_2', 'usesRealtime'),
+      e('edge_5', 'nextjs_1', 'dynamo_3', 'writesTo'),
+    ],
+  ),
+  aws(
     'aws-batch-task',
     'On-Demand Job Runner (Fargate Task)',
     'A Next.js app kicks off a one-off Fargate Task (heavy batch work — video transcode, report build) with task.run(), and the task writes results to S3. No idle cost: the container only runs when invoked.',
