@@ -73,24 +73,35 @@ const tsconfigJson = (): string =>
   )}\n`;
 
 const nextConfig = (bp: Blueprint): string => {
-  // Workflows REQUIRE the config wrapped with withWorkflow() so the
-  // 'use workflow' / 'use step' directives are transformed at build time.
-  if (bp.resources.some((r) => r.kind === 'workflow')) {
-    return `import type { NextConfig } from "next";
-import { withWorkflow } from "workflow/next";
-
-const nextConfig: NextConfig = {};
-
-// Required so the 'use workflow' / 'use step' directives compile.
-export default withWorkflow(nextConfig);
-`;
+  // Some kinds require wrapping the config: Workflows (withWorkflow — so the
+  // 'use workflow'/'use step' directives transform) and BotID (withBotId — so the
+  // proxy rewrites are injected). Compose them when both are present.
+  const has = (kind: string) => bp.resources.some((r) => r.kind === kind);
+  const imports: string[] = [];
+  let expr = 'nextConfig';
+  if (has('workflow')) {
+    imports.push(`import { withWorkflow } from "workflow/next";`);
+    expr = `withWorkflow(${expr})`;
   }
-  return `import type { NextConfig } from "next";
+  if (has('botId')) {
+    imports.push(`import { withBotId } from "botid/next/config";`);
+    expr = `withBotId(${expr})`;
+  }
+  if (imports.length === 0) {
+    return `import type { NextConfig } from "next";
 
 // Deploying Next.js to Vercel is zero-config — no special settings needed.
 const nextConfig: NextConfig = {};
 
 export default nextConfig;
+`;
+  }
+  return `import type { NextConfig } from "next";
+${imports.join('\n')}
+
+const nextConfig: NextConfig = {};
+
+export default ${expr};
 `;
 };
 

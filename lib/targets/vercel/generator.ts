@@ -325,6 +325,69 @@ export async function trackEvent(name: string): Promise<{ ok: true }> {
 }
 `;
 
+// Routing middleware (verified: Next 16 renamed middleware→proxy; proxy.ts at root,
+// exported function `proxy`; runtime option is unavailable here). request.geo/.ip were
+// removed — use geolocation()/ipAddress() from @vercel/functions@3.
+const edgeProxyFile = (): string =>
+  `import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { geolocation, ipAddress } from "@vercel/functions";
+
+export function proxy(request: NextRequest): NextResponse {
+  const { country } = geolocation(request);
+  const { pathname } = request.nextUrl;
+
+  // Geo redirect: send EU visitors to a localized path.
+  const EU = new Set(["FR", "DE", "ES", "IT", "NL", "IE"]);
+  if (country && EU.has(country) && !pathname.startsWith("/eu")) {
+    return NextResponse.redirect(new URL(\`/eu\${pathname}\`, request.url));
+  }
+
+  // Auth gate: require a session cookie on /dashboard.
+  if (pathname.startsWith("/dashboard") && !request.cookies.has("session")) {
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+
+  // Forward the client IP downstream.
+  const headers = new Headers(request.headers);
+  headers.set("x-client-ip", ipAddress(request) ?? "unknown");
+  return NextResponse.next({ request: { headers } });
+}
+
+// Run on everything except static assets / image optimizer / metadata files.
+export const config = {
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)"],
+};
+`;
+
+// Invisible bot detection (verified: botid@1.5). The protected path MUST appear in
+// BOTH the client initBotId list and the server checkBotId() call site.
+const botIdInstrumentation = (protectedPath: string): string =>
+  `import { initBotId } from "botid/client/core";
+
+// Routes to protect. Each path here must also call checkBotId() server-side.
+initBotId({
+  protect: [{ path: ${q(protectedPath)}, method: "POST" }],
+});
+`;
+
+const botIdGuard = (protectedPath: string): string =>
+  `import { checkBotId } from "botid/server";
+
+// Call at the TOP of the "${protectedPath}" route handler. That path must also be
+// listed in instrumentation-client.ts's initBotId protect[], or verification fails.
+export async function assertHuman(): Promise<Response | null> {
+  const verification = await checkBotId();
+  if (verification.isBot) {
+    return new Response(JSON.stringify({ error: "Access denied" }), {
+      status: 403,
+      headers: { "content-type": "application/json" },
+    });
+  }
+  return null;
+}
+`;
+
 const workflowTriggerRoute = (name: string, slug: string): string =>
   `import { start } from "workflow/api";
 import { ${camel(name)} } from "@/workflows/${slug}";
@@ -386,6 +449,8 @@ const DEP_VERSIONS: Record<string, string> = {
   flags: '^4.2.0',
   '@flags-sdk/edge-config': '^0.1.2',
   '@vercel/firewall': '^1.2.1',
+  '@vercel/functions': '^3.7.0',
+  botid: '^1.5.0',
   resend: '^6.14.0',
   stripe: '^22.3.0',
 };
@@ -416,6 +481,8 @@ function packageAdditions(bp: Blueprint): string {
     if (bp.connections.some((c) => c.intent === 'flagsBackedBy')) add('@flags-sdk/edge-config');
   }
   if (present.has('rateLimit')) add('@vercel/firewall');
+  if (present.has('edgeMiddleware')) add('@vercel/functions');
+  if (present.has('botId')) add('botid');
   if (present.has('email')) add('resend');
   // stripe only when a webhook actually uses the Stripe provider.
   if (bp.resources.some((r) => r.kind === 'webhook' && webhookProvider(r) === 'stripe'))
@@ -506,6 +573,21 @@ export function generateVercel(bp: Blueprint): GeneratedFile[] {
     files.push({ path: 'lib/rate-limit.ts', content: rateLimitHelper(), language: 'ts' });
   if (has('afterResponse'))
     files.push({ path: 'app/actions/background-task.ts', content: afterExample(), language: 'ts' });
+  if (has('edgeMiddleware'))
+    files.push({ path: 'proxy.ts', content: edgeProxyFile(), language: 'ts' });
+  if (has('botId')) {
+    const protectedPath = has('aiGateway') ? '/api/chat' : '/api/protected';
+    files.push({
+      path: 'instrumentation-client.ts',
+      content: botIdInstrumentation(protectedPath),
+      language: 'ts',
+    });
+    files.push({
+      path: 'lib/bot-protection.ts',
+      content: botIdGuard(protectedPath),
+      language: 'ts',
+    });
+  }
 
   // Queue producer + consumers
   const queues = bp.resources.filter((r) => r.kind === 'queue');

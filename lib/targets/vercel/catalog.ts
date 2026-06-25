@@ -267,6 +267,27 @@ export const VERCEL_CATALOG: ResourceCatalog = {
     category: 'compute',
     singleton: true,
   },
+  edgeMiddleware: {
+    kind: 'edgeMiddleware',
+    label: 'Edge Middleware',
+    defaultName: 'Proxy',
+    component: 'proxy.ts (Next 16)',
+    description:
+      'Routing middleware (proxy.ts) — geo redirect, auth gate, IP forwarding at the edge',
+    accent: 'bg-yellow-600',
+    category: 'network',
+    singleton: true,
+  },
+  botId: {
+    kind: 'botId',
+    label: 'Bot Protection',
+    defaultName: 'BotId',
+    component: 'botid',
+    description: 'Invisible bot detection (BotID) — protect routes from automated abuse',
+    accent: 'bg-zinc-600',
+    category: 'network',
+    singleton: true,
+  },
 };
 
 export const VERCEL_CATALOG_ORDER = [
@@ -281,6 +302,8 @@ export const VERCEL_CATALOG_ORDER = [
   'cron',
   'webhook',
   'externalApi',
+  'edgeMiddleware',
+  'botId',
   'featureFlags',
   'rateLimit',
   'afterResponse',
