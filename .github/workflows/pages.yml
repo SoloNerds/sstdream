@@ -35,17 +35,19 @@ jobs:
           node-version: 22
           cache: yarn
       - run: yarn install --frozen-lockfile
-      - name: Build static export
-        # Serve under /<repo> so asset URLs resolve on a project Pages site.
-        # Using the repo name keeps this correct for forks automatically.
-        env:
-          PAGES_BASE_PATH: /${{ github.event.repository.name }}
-        run: yarn build
-      # enablement: true turns Pages on automatically the first time this runs,
-      # so you don't have to flip any repo setting first.
+      # Run configure-pages FIRST so we can read the ACTUAL base path GitHub will
+      # serve from. A private repo on Enterprise serves at a root *.pages.github.io
+      # subdomain (base_path = ""); a public project site serves at /<repo>. Using
+      # the reported value keeps asset URLs correct in both cases. enablement: true
+      # turns Pages on automatically.
       - uses: actions/configure-pages@v5
+        id: pages
         with:
           enablement: true
+      - name: Build static export
+        env:
+          PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+        run: yarn build
       - uses: actions/upload-pages-artifact@v3
         with:
           path: ./out
