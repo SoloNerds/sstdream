@@ -195,6 +195,37 @@ export const VERCEL_CATALOG: ResourceCatalog = {
     category: 'config',
     singleton: true,
   },
+  aiGateway: {
+    kind: 'aiGateway',
+    label: 'AI Gateway',
+    defaultName: 'Chat',
+    component: 'AI SDK + Vercel AI Gateway',
+    description:
+      'Streaming chat route through the Vercel AI Gateway (you run it — the builder makes no AI calls)',
+    accent: 'bg-emerald-500',
+    category: 'compute',
+    singleton: true,
+    props: [
+      {
+        key: 'model',
+        label: 'Model (provider/model)',
+        type: 'text',
+        default: 'openai/gpt-4o',
+        placeholder: 'openai/gpt-4o',
+        help: 'Vercel AI Gateway model string. Swappable — try anthropic/claude-* or google/gemini-*. Model IDs change; edit freely.',
+      },
+    ],
+  },
+  ogImage: {
+    kind: 'ogImage',
+    label: 'OG Image',
+    defaultName: 'OgImage',
+    component: 'next/og ImageResponse',
+    description: 'Dynamic Open Graph image route (app/api/og) for shareable social cards',
+    accent: 'bg-amber-500',
+    category: 'network',
+    singleton: true,
+  },
 };
 
 export const VERCEL_CATALOG_ORDER = [
@@ -209,6 +240,8 @@ export const VERCEL_CATALOG_ORDER = [
   'webhook',
   'externalApi',
   'email',
+  'aiGateway',
+  'ogImage',
   'analytics',
   'speedInsights',
 ];

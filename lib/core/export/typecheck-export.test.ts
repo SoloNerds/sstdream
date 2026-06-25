@@ -66,6 +66,9 @@ declare module "@vercel/queue" { export const send: any; export const handleCall
 declare module "@vercel/edge-config" { export function get<T = unknown>(key: string): Promise<T | undefined>; export function getAll(): Promise<Record<string, unknown>>; }
 declare module "@vercel/analytics/next" { export const Analytics: any; }
 declare module "@vercel/speed-insights/next" { export const SpeedInsights: any; }
+declare module "ai" { export const streamText: any; export const convertToModelMessages: any; export type UIMessage = any; export class DefaultChatTransport { constructor(opts: any); } }
+declare module "@ai-sdk/react" { export const useChat: any; }
+declare module "next/og" { export class ImageResponse { constructor(element: any, options?: any); } }
 declare module "resend" { export const Resend: any; }
 declare module "stripe" { const Stripe: any; export default Stripe; }
 declare module "node:crypto" { const crypto: any; export default crypto; }

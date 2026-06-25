@@ -13,3 +13,7 @@ yarn-error.log*
 
 # Claude Code agent worktrees
 .claude/worktrees/
+
+# stray npm-pack artifacts
+*.tgz
+/package/
