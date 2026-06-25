@@ -8,12 +8,16 @@ import { generateVercelScaffold } from './scaffold';
 // experimentalTriggers, @vercel/blob with `access`, @neondatabase/serverless,
 // @upstash/redis (NOT @vercel/kv/postgres), @vercel/queue, Resend, Stripe webhook.
 
-const blobHelper = (): string =>
+// Quote a user-controlled value for code position (escapes quotes/backslashes),
+// so a free-text prop (Blob access, email sender) can never break the emitted TS.
+const q = (s: string): string => JSON.stringify(s);
+
+const blobHelper = (access: string): string =>
   `import { put } from "@vercel/blob";
 
 /** Upload a file to Vercel Blob (store must be created; pulls BLOB_READ_WRITE_TOKEN). */
 export async function uploadFile(key: string, body: Blob | ArrayBuffer | string) {
-  return put(key, body, { access: "public", addRandomSuffix: true });
+  return put(key, body, { access: ${q(access)}, addRandomSuffix: true });
 }
 `;
 
@@ -94,13 +98,13 @@ export async function POST(request: Request) {
 }
 `;
 
-const emailHelper = (): string =>
+const emailHelper = (from: string): string =>
   `import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function sendEmail(to: string, subject: string, html: string) {
-  return resend.emails.send({ from: "noreply@example.com", to, subject, html });
+  return resend.emails.send({ from: ${q(from)}, to, subject, html });
 }
 `;
 
@@ -125,15 +129,30 @@ export function generateVercel(bp: Blueprint): GeneratedFile[] {
   const webhookPath = (r: Resource) => `app/api/webhooks/${kebabCase(r.name)}/route.ts`;
 
   // Storage / services
-  if (has('blob')) {
-    files.push({ path: 'lib/blob.ts', content: blobHelper(), language: 'ts' });
+  const strProp = (r: Resource, key: string, fallback: string): string =>
+    typeof r.props[key] === 'string' && r.props[key] ? (r.props[key] as string) : fallback;
+
+  const blobNode = bp.resources.find((r) => r.kind === 'blob');
+  if (blobNode) {
+    files.push({
+      path: 'lib/blob.ts',
+      content: blobHelper(strProp(blobNode, 'access', 'public')),
+      language: 'ts',
+    });
     if (bp.connections.some((c) => c.intent === 'storesFileIn')) {
       files.push({ path: 'app/actions/upload-file.ts', content: uploadAction(), language: 'ts' });
     }
   }
   if (has('postgres')) files.push({ path: 'lib/db.ts', content: dbHelper(), language: 'ts' });
   if (has('redis')) files.push({ path: 'lib/redis.ts', content: redisHelper(), language: 'ts' });
-  if (has('email')) files.push({ path: 'lib/email.ts', content: emailHelper(), language: 'ts' });
+  const emailNode = bp.resources.find((r) => r.kind === 'email');
+  if (emailNode) {
+    files.push({
+      path: 'lib/email.ts',
+      content: emailHelper(strProp(emailNode, 'from', 'noreply@example.com')),
+      language: 'ts',
+    });
+  }
 
   // Queue producer + consumers
   const queues = bp.resources.filter((r) => r.kind === 'queue');
@@ -172,9 +191,14 @@ export function generateVercel(bp: Blueprint): GeneratedFile[] {
     const edge = bp.connections.find((e) => e.target === c.id && e.intent === 'consumedBy');
     const queue = edge ? byId.get(edge.source) : undefined;
     const topic = queue ? kebabCase(queue.name) : kebabCase(c.name);
-    functionsJson[consumerPath(c)] = {
+    const fn: Record<string, unknown> = {
       experimentalTriggers: [{ type: 'queue/v2beta', topic }],
     };
+    const md = c.props.maxDuration;
+    const maxDuration =
+      typeof md === 'number' ? md : typeof md === 'string' && md.trim() ? Number(md) : NaN;
+    if (Number.isFinite(maxDuration) && maxDuration > 0) fn.maxDuration = maxDuration;
+    functionsJson[consumerPath(c)] = fn;
   }
   if (cronsJson.length || Object.keys(functionsJson).length) {
     const vercelJson: Record<string, unknown> = {
