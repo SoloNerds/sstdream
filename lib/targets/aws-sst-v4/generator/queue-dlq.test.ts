@@ -4,6 +4,7 @@ import { validateBlueprint } from '@/lib/core/validation/validate';
 import { draftBlueprint } from '@/lib/core/blueprint/serialize';
 import { awsDefaultIntent } from '@/lib/targets/aws-sst-v4/edges';
 import { awsRecommendations } from '@/lib/targets/aws-sst-v4/recommendations';
+import { simulateBlueprint } from '@/lib/core/simulation/simulate';
 import type { Blueprint } from '@/lib/core/blueprint/types';
 
 // #127 — queue DLQ (queue → queue edge) + explicit visibilityTimeout prop,
@@ -45,6 +46,44 @@ describe('queue → queue renders a dead-letter queue', () => {
   it('queue>queue defaults to deadLettersTo (same-kind pairs are otherwise refused)', () => {
     expect(awsDefaultIntent('queue', 'queue')).toBe('deadLettersTo');
     expect(awsDefaultIntent('bucket', 'bucket')).toBeNull();
+  });
+
+  // Regression: a worker that DRAINS the DLQ (subscribesTo the DLQ) must be treated
+  // as triggered by the simulation, and the generator must wire its subscription.
+  // The sim used to flag it "never triggered" because the DLQ hop wasn't walked.
+  it('a DLQ drainer worker is triggered (sim) and subscribed (generator)', () => {
+    const bp = mk(
+      [
+        n('app', 'nextjs', 'Web'),
+        n('q', 'queue', 'Jobs'),
+        n('d', 'queue', 'JobsDlq'),
+        n('w', 'worker', 'ProcessJob'),
+        n('dw', 'worker', 'JobsDlqWorker'),
+        n('t', 'dynamo', 'AppTable'),
+      ],
+      [
+        e('e1', 'app', 'q', 'publishesTo'),
+        e('e2', 'w', 'q', 'subscribesTo'),
+        e('e3', 'w', 't', 'writesTo'),
+        e('e4', 'q', 'd', 'deadLettersTo'),
+        e('e5', 'dw', 'd', 'subscribesTo'),
+      ],
+    );
+    // Simulation: the drainer is reached, NOT flagged as never-triggered.
+    const trace = simulateBlueprint(bp);
+    expect(trace.events.some((ev) => /JobsDlqWorker is never triggered/.test(ev.label))).toBe(
+      false,
+    );
+    expect(trace.events.some((ev) => /JobsDlq delivers to JobsDlqWorker/.test(ev.label))).toBe(
+      true,
+    );
+    expect(trace.events.some((ev) => ev.status === 'broken')).toBe(false);
+    // Generator: the DLQ drainer's subscription is wired (queue.subscribe is
+    // object-first — the handler is the first arg; only bus/topic are name-first).
+    const c = config(bp);
+    expect(c).toContain('jobsDlq.subscribe({');
+    expect(c).toMatch(/jobsDlq\.subscribe\(\{[\s\S]*?jobs-dlq-worker/);
+    expect(validateBlueprint(bp).errors).toEqual([]);
   });
 
   it('emits dlq: <target>.arn and declares the DLQ first', () => {

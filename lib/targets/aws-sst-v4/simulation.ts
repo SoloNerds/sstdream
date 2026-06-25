@@ -18,11 +18,21 @@ const VERB: Record<string, string> = {
   callsApi: 'calls',
   usesCognito: 'authenticates with',
   usesAuth: 'authenticates with',
+  usesOpenAuth: 'authenticates with',
+  usesCache: 'caches in',
+  usesRealtime: 'streams via',
+  startsWorkflow: 'starts',
+  resolvesFrom: 'resolves from',
+  consumesGraphQL: 'queries',
+  runsTask: 'runs',
   routesBucket: 'routes to',
   deadLettersTo: 'dead-letters to',
   routedBy: 'served by',
 };
 
+// Leaf intents: the target is exercised but isn't walked further (it's a sink, or
+// its outgoing edges aren't part of the data-flow we trace). resolvesFrom is a leaf
+// (the AppSync resolver's table) reached once the AppSync API is walked.
 const LEAF_INTENTS = new Set([
   'uploadsTo',
   'writesTo',
@@ -36,6 +46,11 @@ const LEAF_INTENTS = new Set([
   'callsApi',
   'usesCognito',
   'usesAuth',
+  'usesOpenAuth',
+  'usesCache',
+  'usesRealtime',
+  'startsWorkflow',
+  'resolvesFrom',
   'routesBucket',
   'routedBy',
   'deadLettersTo',
@@ -66,6 +81,18 @@ export function simulateAws(bp: Blueprint): SimTrace {
           targetId: edge.target,
           status: 'ok',
           label: `${name(edge.source)} triggers ${name(edge.target)}`,
+        });
+        walk(edge.target);
+      } else if (edge.intent === 'consumesGraphQL' || edge.intent === 'runsTask') {
+        // The target is active compute (an AppSync API / a Fargate Task) with its own
+        // outgoing edges (resolver→table, task→bucket) — walk it so those are reached.
+        events.push({
+          id: eid(),
+          edgeId: edge.id,
+          sourceId: edge.source,
+          targetId: edge.target,
+          status: 'ok',
+          label: `${name(edge.source)} ${VERB[edge.intent]} ${name(edge.target)}`,
         });
         walk(edge.target);
       } else if (edge.intent === 'publishesTo') {
@@ -136,7 +163,8 @@ export function simulateAws(bp: Blueprint): SimTrace {
       r.kind === 'cron' ||
       r.kind === 'apigatewayv2' ||
       r.kind === 'router' ||
-      r.kind === 'staticsite',
+      r.kind === 'staticsite' ||
+      r.kind === 'service',
   );
   for (const entry of entries) {
     events.push({
@@ -148,7 +176,9 @@ export function simulateAws(bp: Blueprint): SimTrace {
           ? `${entry.name} fires on schedule`
           : entry.kind === 'apigatewayv2'
             ? `${entry.name} receives requests`
-            : `${entry.name} receives traffic`,
+            : entry.kind === 'service'
+              ? `${entry.name} runs`
+              : `${entry.name} receives traffic`,
     });
     walk(entry.id);
     if (entry.kind === 'apigatewayv2') {
@@ -169,9 +199,11 @@ export function simulateAws(bp: Blueprint): SimTrace {
     }
   }
 
-  // Follow dead-letter edges from any reached queue so the DLQ target shows in
-  // the trace and isn't mistaken for unreached. A DLQ legitimately has no
-  // consumer, so it's surfaced as a hop, not walked for subscribers.
+  // Follow dead-letter edges from any reached queue so the DLQ target shows in the
+  // trace and isn't mistaken for unreached. A DLQ may have a drainer Worker
+  // (subscribesTo) — that worker IS triggered by the DLQ, exactly like any other
+  // queue consumer — or it may have none (messages accumulate for inspection), which
+  // is also fine. So we surface the hop AND deliver to any subscribers.
   for (const dlq of bp.connections.filter((c) => c.intent === 'deadLettersTo')) {
     if (visited.has(dlq.source) && !visited.has(dlq.target)) {
       visited.add(dlq.target);
@@ -183,6 +215,17 @@ export function simulateAws(bp: Blueprint): SimTrace {
         status: 'ok',
         label: `${name(dlq.source)} dead-letters to ${name(dlq.target)}`,
       });
+      for (const sub of subscribersOf(dlq.target)) {
+        events.push({
+          id: eid(),
+          edgeId: sub.id,
+          sourceId: dlq.target,
+          targetId: sub.source,
+          status: 'ok',
+          label: `${name(dlq.target)} delivers to ${name(sub.source)}`,
+        });
+        walk(sub.source);
+      }
     }
   }
 
