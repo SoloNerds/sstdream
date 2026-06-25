@@ -1,12 +1,14 @@
 import type { Blueprint } from '@/lib/core/blueprint/types';
 import type { DeployTarget } from '@/lib/targets/types';
 import { expandAws } from '@/lib/targets/aws-sst-v4/expansion';
+import { expandVercel } from '@/lib/targets/vercel/expansion';
 import type { InfraGroup } from './types';
 
-// Per-lane "what actually gets deployed" expanders. AWS first; Vercel degrades to
-// empty (its lane is integration-config, not provisioned infra) until added.
+// Per-lane "what actually gets deployed" expanders. AWS provisions infra; Vercel
+// hosts Functions + integrates external services (see vercel/expansion.ts).
 const EXPANDERS: Partial<Record<DeployTarget, (bp: Blueprint) => InfraGroup[]>> = {
   'aws-sst-v4': expandAws,
+  vercel: expandVercel,
 };
 
 export function expandInfra(bp: Blueprint): InfraGroup[] {

@@ -1,10 +1,12 @@
 import { simulateAws } from '@/lib/targets/aws-sst-v4/simulation';
+import { simulateVercel } from '@/lib/targets/vercel/simulation';
 import type { Blueprint } from '@/lib/core/blueprint/types';
 import type { DeployTarget } from '@/lib/targets/types';
 import type { SimTrace, SimulationProvider } from './types';
 
 const SIMS: Partial<Record<DeployTarget, SimulationProvider>> = {
   'aws-sst-v4': simulateAws,
+  vercel: simulateVercel,
 };
 
 export function simulateBlueprint(bp: Blueprint): SimTrace {
