@@ -29,24 +29,24 @@ export const myLaneTarget: Target = {
 Add `'my-lane'` to the `DeployTarget` union ([`lib/targets/types.ts`](../lib/targets/types.ts))
 and the Zod enum ([`lib/core/blueprint/schema.ts`](../lib/core/blueprint/schema.ts)), then wire:
 
-| File | What you add |
-| ---- | ------------ |
-| `lib/targets/registry.ts` | your `Target` in the `REGISTRY` map |
-| `lib/core/validation/validate.ts` | your rules in `RULES` (a total map — required) |
-| `lib/core/codegen/generate.ts` | your `generate(bp)` in `GENERATORS` |
-| `lib/core/export/manifest.ts` | your README/.env builders in `DOCS` |
+| File                              | What you add                                       |
+| --------------------------------- | -------------------------------------------------- |
+| `lib/targets/registry.ts`         | your `Target` in the `REGISTRY` map                |
+| `lib/core/validation/validate.ts` | your rules in `RULES` (a total map — required)     |
+| `lib/core/codegen/generate.ts`    | your `generate(bp)` in `GENERATORS`                |
+| `lib/core/export/manifest.ts`     | your README/.env builders in `DOCS`                |
 | `lib/core/blueprint/serialize.ts` | your lane's `target` defaults in `TARGET_DEFAULTS` |
 
 That's enough to **build, validate, and export**. The advisory engines are optional and
 degrade gracefully when absent (the panel shows "not available for this lane yet"):
 
-| File | Engine |
-| ---- | ------ |
-| `lib/core/simulation/simulate.ts` | data-flow trace |
-| `lib/core/cost/estimate.ts` | cost estimate |
-| `lib/core/expansion/expand.ts` | Infrastructure view |
-| `lib/core/audit/audit.ts` | security/ops findings |
-| `lib/core/recommendations/recommend.ts` | one-click fixes |
+| File                                    | Engine                |
+| --------------------------------------- | --------------------- |
+| `lib/core/simulation/simulate.ts`       | data-flow trace       |
+| `lib/core/cost/estimate.ts`             | cost estimate         |
+| `lib/core/expansion/expand.ts`          | Infrastructure view   |
+| `lib/core/audit/audit.ts`               | security/ops findings |
+| `lib/core/recommendations/recommend.ts` | one-click fixes       |
 
 See `lib/targets/vercel/` as the smaller reference implementation (and `aws-sst-v4/` for the
 deep one).
