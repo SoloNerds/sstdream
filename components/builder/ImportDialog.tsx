@@ -4,11 +4,12 @@ import { useState } from 'react';
 import { useCanvasStore } from '@/lib/canvas/store';
 import { getTarget } from '@/lib/targets/registry';
 import { parseAwsConfig, type ReverseResult } from '@/lib/targets/aws-sst-v4/reverse';
+import { parseVercelConfig } from '@/lib/targets/vercel/reverse';
 import { Button } from '@/components/ui/button';
 import { useDialog } from './useDialog';
 
-// Reverse-engineer: paste an existing sst.config.ts and draw it back out as a design.
-// AWS-only for now (the parser targets sst.aws.* components).
+// Reverse-engineer: paste existing project code and draw it back out as a design.
+// AWS: an sst.config.ts. Vercel: a package.json (deps → kinds) or vercel.json.
 export function ImportDialog({ onClose }: { onClose: () => void }) {
   const targetId = useCanvasStore((s) => s.targetId);
   const loadSnapshot = useCanvasStore((s) => s.loadSnapshot);
@@ -17,7 +18,9 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<ReverseResult | null>(null);
 
-  const supported = targetId === 'aws-sst-v4';
+  const supported = targetId === 'aws-sst-v4' || targetId === 'vercel';
+  const isVercel = targetId === 'vercel';
+  const parse = isVercel ? parseVercelConfig : parseAwsConfig;
 
   const load = (result: ReverseResult) => {
     if (
@@ -32,18 +35,19 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
 
   const doImport = () => {
     setError(null);
+    const what = isVercel ? 'a package.json or vercel.json' : 'a full sst.config.ts';
     let result: ReverseResult;
     try {
-      result = parseAwsConfig(source);
+      result = parse(source);
     } catch {
-      setError('Could not parse that file. Paste a full sst.config.ts.');
+      setError(`Could not parse that file. Paste ${what}.`);
       return;
     }
     if (result.nodes.length === 0) {
       setError(
         result.unrecognized.length
-          ? `Found ${result.unrecognized.length} resource(s) but couldn't model any of them — see below. Paste a full sst.config.ts.`
-          : 'No sst.aws.* resources found. Paste a full sst.config.ts.',
+          ? `Found ${result.unrecognized.length} item(s) but couldn't model any of them — see below. Paste ${what}.`
+          : `Nothing recognized. Paste ${what}.`,
       );
       if (result.unrecognized.length) setReport(result);
       return;
@@ -79,10 +83,20 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
         {supported ? (
           <div className="flex flex-col gap-3 overflow-y-auto p-4">
             <p className="text-xs text-neutral-500">
-              Paste an existing <code>sst.config.ts</code> and we&apos;ll draw it back out as an
-              editable design — resources become nodes, <code>link:</code> arrays become edges.
-              Auto-infra (Vpc, Cluster) is folded in; env-only integrations (Stripe, Mongo)
-              can&apos;t be recovered from code.
+              {isVercel ? (
+                <>
+                  Paste your <code>package.json</code> (or a <code>vercel.json</code>) and
+                  we&apos;ll draw the project back out — each integration dependency becomes a node.
+                  Anything we can&apos;t map is listed, never silently dropped.
+                </>
+              ) : (
+                <>
+                  Paste an existing <code>sst.config.ts</code> and we&apos;ll draw it back out as an
+                  editable design — resources become nodes, <code>link:</code> arrays become edges.
+                  Auto-infra (Vpc, Cluster) is folded in; env-only integrations (Stripe, Mongo)
+                  can&apos;t be recovered from code.
+                </>
+              )}
             </p>
             <textarea
               value={source}
@@ -93,7 +107,9 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
               }}
               spellCheck={false}
               placeholder={
-                '/// <reference path="./.sst/platform/config.d.ts" />\nexport default $config({ ... })'
+                isVercel
+                  ? '{\n  "dependencies": {\n    "next": "...",\n    "@vercel/blob": "..."\n  }\n}'
+                  : '/// <reference path="./.sst/platform/config.d.ts" />\nexport default $config({ ... })'
               }
               className="h-72 w-full resize-none rounded-md border border-neutral-300 bg-neutral-50 p-3 font-mono text-xs outline-none focus:border-indigo-500 dark:border-neutral-700 dark:bg-neutral-900"
             />
