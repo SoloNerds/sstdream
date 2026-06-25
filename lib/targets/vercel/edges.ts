@@ -66,6 +66,20 @@ export const VERCEL_EDGE_INTENTS: EdgeIntentMeta[] = [
     from: ['app'],
     to: ['workflow'],
   },
+  {
+    intent: 'readsFlags',
+    label: 'reads flags from',
+    description: 'App reads feature flags (flags SDK). Generates flags.ts + a discovery endpoint.',
+    from: ['app'],
+    to: ['featureFlags'],
+  },
+  {
+    intent: 'flagsBackedBy',
+    label: 'backed by',
+    description: 'Feature flags read values from Edge Config (switches to the edgeConfigAdapter).',
+    from: ['featureFlags'],
+    to: ['edgeConfig'],
+  },
 ];
 
 const INTENT_BY_PAIR: Record<string, string> = {
@@ -78,6 +92,8 @@ const INTENT_BY_PAIR: Record<string, string> = {
   'app>edgeConfig': 'readsConfig',
   'app>externalApi': 'callsApi',
   'app>workflow': 'triggersWorkflow',
+  'app>featureFlags': 'readsFlags',
+  'featureFlags>edgeConfig': 'flagsBackedBy',
 };
 
 export function vercelDefaultIntent(fromKind: string, toKind: string): string | null {

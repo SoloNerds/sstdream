@@ -482,6 +482,98 @@ describe('Vercel lane — Workflows (durable, verified workflow@4)', () => {
   });
 });
 
+describe('Vercel lane — Feature Flags + Rate Limit + after()', () => {
+  it('Feature Flags emits flags.ts + the Flags Explorer discovery endpoint + FLAGS_SECRET', () => {
+    const bp = draftBlueprint(
+      {
+        nodes: [
+          { id: 'a', kind: 'app', name: 'Web', props: {}, position: { x: 0, y: 0 } },
+          { id: 'f', kind: 'featureFlags', name: 'Flags', props: {}, position: { x: 1, y: 0 } },
+        ],
+        edges: [{ id: 'e', source: 'a', target: 'f', intent: 'readsFlags' }],
+      },
+      'vercel',
+      VERCEL_SAAS.app,
+      NOW,
+    );
+    const m = Object.fromEntries(generateFiles(bp).map((f) => [f.path, f.content]));
+    expect(m['flags.ts']).toContain('import { flag } from "flags/next"');
+    expect(m['flags.ts']).toContain('decide:'); // static (not edge-config backed)
+    expect(m['app/.well-known/vercel/flags/route.ts']).toContain('createFlagsDiscoveryEndpoint');
+    const env = JSON.parse(m['required-env.json']) as { required: { name: string }[] };
+    expect(env.required.map((e) => e.name)).toContain('FLAGS_SECRET');
+    const pkg = JSON.parse(m['package.additions.json']) as { dependencies: Record<string, string> };
+    expect(pkg.dependencies['flags']).toBe('^4.2.0');
+  });
+
+  it('Feature Flags backed by Edge Config switches to the edgeConfigAdapter + its dep', () => {
+    const bp = draftBlueprint(
+      {
+        nodes: [
+          { id: 'a', kind: 'app', name: 'Web', props: {}, position: { x: 0, y: 0 } },
+          { id: 'f', kind: 'featureFlags', name: 'Flags', props: {}, position: { x: 1, y: 0 } },
+          { id: 'ec', kind: 'edgeConfig', name: 'Config', props: {}, position: { x: 2, y: 0 } },
+        ],
+        edges: [
+          { id: 'e1', source: 'a', target: 'f', intent: 'readsFlags' },
+          { id: 'e2', source: 'f', target: 'ec', intent: 'flagsBackedBy' },
+        ],
+      },
+      'vercel',
+      VERCEL_SAAS.app,
+      NOW,
+    );
+    const m = Object.fromEntries(generateFiles(bp).map((f) => [f.path, f.content]));
+    expect(m['flags.ts']).toContain('edgeConfigAdapter()');
+    const pkg = JSON.parse(m['package.additions.json']) as { dependencies: Record<string, string> };
+    expect(pkg.dependencies['@flags-sdk/edge-config']).toBeDefined();
+  });
+
+  it('Rate Limit emits a checkRateLimit guard (with the dashboard-rule prerequisite noted)', () => {
+    const bp = draftBlueprint(
+      {
+        nodes: [
+          { id: 'a', kind: 'app', name: 'Web', props: {}, position: { x: 0, y: 0 } },
+          { id: 'r', kind: 'rateLimit', name: 'RateLimit', props: {}, position: { x: 1, y: 0 } },
+        ],
+        edges: [],
+      },
+      'vercel',
+      VERCEL_SAAS.app,
+      NOW,
+    );
+    const m = Object.fromEntries(generateFiles(bp).map((f) => [f.path, f.content]));
+    expect(m['lib/rate-limit.ts']).toContain('import { checkRateLimit } from "@vercel/firewall"');
+    expect(m['lib/rate-limit.ts']).toContain('dashboard'); // documents the prereq
+    const pkg = JSON.parse(m['package.additions.json']) as { dependencies: Record<string, string> };
+    expect(pkg.dependencies['@vercel/firewall']).toBe('^1.2.1');
+  });
+
+  it('Background Task emits an after() example (no package — built into next/server)', () => {
+    const bp = draftBlueprint(
+      {
+        nodes: [
+          { id: 'a', kind: 'app', name: 'Web', props: {}, position: { x: 0, y: 0 } },
+          {
+            id: 'b',
+            kind: 'afterResponse',
+            name: 'Background',
+            props: {},
+            position: { x: 1, y: 0 },
+          },
+        ],
+        edges: [],
+      },
+      'vercel',
+      VERCEL_SAAS.app,
+      NOW,
+    );
+    const m = Object.fromEntries(generateFiles(bp).map((f) => [f.path, f.content]));
+    expect(m['app/actions/background-task.ts']).toContain('import { after } from "next/server"');
+    expect(m['app/actions/background-task.ts']).toContain('after(async () =>');
+  });
+});
+
 describe('Vercel lane — honesty validation rules (docs §10)', () => {
   const mk = (
     nodes: { id: string; kind: string; name: string; props?: Record<string, unknown> }[],

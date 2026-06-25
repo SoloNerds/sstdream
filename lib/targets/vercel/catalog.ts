@@ -236,6 +236,37 @@ export const VERCEL_CATALOG: ResourceCatalog = {
     accent: 'bg-indigo-600',
     category: 'compute',
   },
+  featureFlags: {
+    kind: 'featureFlags',
+    label: 'Feature Flags',
+    defaultName: 'Flags',
+    component: 'Vercel Flags SDK',
+    description: 'Type-safe feature flags (flags SDK) + the Flags Explorer discovery endpoint',
+    accent: 'bg-lime-600',
+    category: 'config',
+    singleton: true,
+  },
+  rateLimit: {
+    kind: 'rateLimit',
+    label: 'Rate Limit',
+    defaultName: 'RateLimit',
+    component: '@vercel/firewall',
+    description: 'WAF-backed rate limiting (checkRateLimit) — a reusable guard for your routes',
+    accent: 'bg-red-600',
+    category: 'network',
+    singleton: true,
+  },
+  afterResponse: {
+    kind: 'afterResponse',
+    label: 'Background Task',
+    defaultName: 'Background',
+    component: 'after() (next/server)',
+    description:
+      'Fire-and-forget work after the response is sent (after()) — example server action',
+    accent: 'bg-stone-600',
+    category: 'compute',
+    singleton: true,
+  },
 };
 
 export const VERCEL_CATALOG_ORDER = [
@@ -250,6 +281,9 @@ export const VERCEL_CATALOG_ORDER = [
   'cron',
   'webhook',
   'externalApi',
+  'featureFlags',
+  'rateLimit',
+  'afterResponse',
   'email',
   'aiGateway',
   'ogImage',

@@ -42,6 +42,7 @@ export function collectEnv(bp: Blueprint): EnvVar[] {
   if (has('edgeConfig')) vars.push({ name: 'EDGE_CONFIG', scope: 'server', environments: ALL });
   if (has('aiGateway'))
     vars.push({ name: 'AI_GATEWAY_API_KEY', scope: 'server', environments: DEPLOYED });
+  if (has('featureFlags')) vars.push({ name: 'FLAGS_SECRET', scope: 'server', environments: ALL });
   for (const api of bp.resources.filter((r) => r.kind === 'externalApi')) {
     const baseUrl =
       typeof api.props.baseUrlEnv === 'string' && api.props.baseUrlEnv
