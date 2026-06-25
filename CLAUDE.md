@@ -61,12 +61,17 @@ A new lane is registered in `lib/targets/registry.ts` plus the `generate.ts`,
 
 ## State of the lanes
 
-- **AWS lane is complete.** 21 catalog kinds (Next.js, Static Site, Bucket, Dynamo +GSI,
-  Postgres/Aurora +fck-nat, Queue/Bus/SnsTopic, HTTP API, **Router**, Worker, Cron, Secret,
-  Email, Cognito/Clerk, Stripe, MongoDB, External API, AI Chat). The export is a **complete
-  runnable project** (scaffold: package.json/tsconfig/next.config/layout/page + **AGENTS.md**),
-  with **full CRUD server actions + example pages** per Dynamo/Mongo table the app touches,
-  worker roles for queue/bus/topic subscribers, API routes, cron, and S3 notifications.
+- **AWS lane is complete + deep — 26 catalog kinds.** Serverless: Next.js, Static Site, Bucket,
+  Dynamo +GSI, Postgres/Aurora +fck-nat, **Redis (ElastiCache)**, Queue/Bus/SnsTopic, **Realtime
+  (IoT WebSocket pub/sub)**, HTTP API, **Router**, Worker, Cron, **Step Functions** (durable
+  state machine), Secret, Email, Cognito/Clerk, Stripe, MongoDB, External API, AI Chat. Plus
+  **containers**: **Service** (long-running ECS Fargate behind an ALB) + **Task** (one-off batch
+  via `task.run()`), both on an auto-generated **Cluster**. The container/Redis kinds join the
+  shared VPC and floor NAT at fck-nat (a Fargate task needs egress to pull its image). The
+  export is a **complete runnable project** (scaffold + **AGENTS.md**), with **full CRUD server
+  actions + example pages** per Dynamo/Mongo table, container Dockerfiles, step Lambdas, the
+  Realtime authorizer/publish/subscribe, worker roles for subscribers, API routes, cron, and
+  S3 notifications. The 5 modern SST kinds (2026-06-25) were researched + verified vs live docs.
 - **Worker roles** (in `generator/plan.ts`): subscriber (queue/bus/topic **or Dynamo stream**,
   name-first vs object-first subscribe), route handler (handlesRoute → ApiGatewayV2),
   cron-invoked, bucket notifier (handlesBucketEvents → bucket.notify), or standalone function.
