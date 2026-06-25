@@ -75,10 +75,17 @@ A new lane is registered in `lib/targets/registry.ts` plus the `generate.ts`,
 - **Router** routes a bucket (`routeBucket`, router→bucket) and serves a StaticSite (router
   option, staticsite→router); paths live on the routed node's `routePath` prop.
 
-- **Vercel lane is at functional parity.** Runnable project scaffold (package.json/tsconfig/
-  next.config/layout/page + AGENTS.md), editable props, the doc §10 validation rules, and all
-  five engines (simulation / cost / expansion / audit / recommendations in `lib/targets/vercel/`).
-  9 catalog kinds; webhook supports Stripe + generic HMAC; deps pinned to verified versions.
+- **Vercel lane is deep + at functional parity.** Runnable project scaffold, editable props,
+  the doc §10 validation rules, and all five engines (sim / cost / expansion / audit /
+  recommendations in `lib/targets/vercel/`). **22 catalog kinds** spanning the whole Vercel
+  surface (researched + verified against live docs, 2026-06-25): app, Blob, Edge Config,
+  Postgres/Redis (Neon/Upstash), Queue+Consumer, **Workflow** (durable, withWorkflow wrap),
+  Cron, Webhook (Stripe/HMAC), External API, **Edge Middleware** (Next 16 `proxy.ts`),
+  **BotID** (withBotId wrap), **Sandbox** (`@vercel/sandbox`), **Feature Flags** (flags SDK +
+  optional Edge Config adapter), Rate Limit (`@vercel/firewall`), Background Task (`after()`),
+  Email (Resend), **AI Gateway** (AI SDK v7 — *the builder makes zero AI calls*, only emits
+  code), OG Image (`next/og`), Analytics, Speed Insights. All deps pinned to verified npm
+  versions; new kinds carry a `verified: <doc>@<date>` note + a snapshot/typecheck-export test.
 
 ## Correctness backstops
 
