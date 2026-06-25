@@ -78,6 +78,16 @@ export function awsRecommendations(bp: Blueprint): Recommendation[] {
         apply: linkAppTo(s.id, 'usesSecret'),
       });
     }
+    for (const c of bp.resources.filter((r) => r.kind === 'redis' && !connected.has(r.id))) {
+      recs.push({
+        id: `link-cache-${c.id}`,
+        kind: 'wiring',
+        resourceId: c.id,
+        title: `Link ${c.name} to your app`,
+        detail: `${c.name} isn't connected. Link it so your app can read/write the cache.`,
+        apply: linkAppTo(c.id, 'usesCache'),
+      });
+    }
   }
 
   // — Wiring / reliability: queues —
