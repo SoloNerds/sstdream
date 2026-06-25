@@ -283,6 +283,50 @@ describe('VPC NAT options + corrected Postgres cost', () => {
     expect(pkg.dependencies['@aws-sdk/client-iot-data-plane']).toBe('^3.0.0');
   });
 
+  it('Step Functions emits the static-builder definition + step Lambdas + a start action', () => {
+    const bp = draftBlueprint(
+      {
+        nodes: [
+          { id: 'nextjs_1', kind: 'nextjs', name: 'Web', props: {}, position: { x: 0, y: 0 } },
+          {
+            id: 'sf_2',
+            kind: 'stepFunctions',
+            name: 'OrderFlow',
+            props: { type: 'standard' },
+            position: { x: 200, y: 0 },
+          },
+        ],
+        edges: [{ id: 'e1', source: 'nextjs_1', target: 'sf_2', intent: 'startsWorkflow' }],
+      },
+      'aws-sst-v4',
+      { name: 'wf-app', region: 'us-east-1', packageManager: 'yarn' },
+      NOW,
+    );
+    const files = generateFiles(bp);
+    const cfg = files.find((f) => f.path === 'sst.config.ts')!.content;
+    // Verified static builders + chained definition.
+    expect(cfg).toContain('sst.aws.StepFunctions.lambdaInvoke({');
+    expect(cfg).toContain('function: "src/order-flow-validate.handler"');
+    expect(cfg).toContain('new sst.aws.StepFunctions("OrderFlow", {');
+    expect(cfg).toContain('.next(');
+    expect(cfg).toContain('type: "standard"');
+    expect(cfg).toMatch(/link: \[[^\]]*orderFlow/);
+    // Step Lambdas exist.
+    expect(files.some((f) => f.path === 'src/order-flow-validate.ts')).toBe(true);
+    expect(files.some((f) => f.path === 'src/order-flow-process.ts')).toBe(true);
+    // Start action uses the verified SFN SDK shape + the only linked field (.arn).
+    const action = files.find((f) => f.path === 'app/actions/start-order-flow.ts')!.content;
+    expect(action).toContain(
+      'import { SFNClient, StartExecutionCommand } from "@aws-sdk/client-sfn"',
+    );
+    expect(action).toContain('stateMachineArn: Resource.OrderFlow.arn');
+    expect(action).toContain('startOrderFlow');
+    const pkg = JSON.parse(files.find((f) => f.path === 'package.additions.json')!.content) as {
+      dependencies: Record<string, string>;
+    };
+    expect(pkg.dependencies['@aws-sdk/client-sfn']).toBe('^3.0.0');
+  });
+
   it('an aurora-only consumer design prices the floored NAT on the aurora node', () => {
     const bp = draftBlueprint(
       {

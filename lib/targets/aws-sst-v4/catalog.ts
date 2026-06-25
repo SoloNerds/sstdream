@@ -383,6 +383,28 @@ export const AWS_CATALOG: ResourceCatalog = {
       },
     ],
   },
+  stepFunctions: {
+    kind: 'stepFunctions',
+    label: 'Step Functions',
+    defaultName: 'Workflow',
+    component: 'sst.aws.StepFunctions',
+    description: 'Durable, multi-step state machine (the AWS analog to a durable workflow)',
+    accent: 'bg-fuchsia-700',
+    category: 'compute',
+    props: [
+      {
+        key: 'type',
+        label: 'Type',
+        type: 'select',
+        default: 'standard',
+        options: [
+          { value: 'standard', label: 'Standard — durable, long-running' },
+          { value: 'express', label: 'Express — high-volume, <5min, at-least-once' },
+        ],
+        help: 'Standard is durable orchestration (per-transition billing). Express runs the whole flow in one Lambda context. Changing this REPLACES the machine (drops in-flight runs).',
+      },
+    ],
+  },
   realtime: {
     kind: 'realtime',
     label: 'Realtime',
@@ -509,6 +531,7 @@ export const AWS_CATALOG_ORDER = [
   'bus',
   'snstopic',
   'realtime',
+  'stepFunctions',
   'apigatewayv2',
   'router',
   'worker',

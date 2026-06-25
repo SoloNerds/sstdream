@@ -194,6 +194,13 @@ function resourcesFor(
       }
       return out;
     }
+    case 'stepFunctions':
+      return [
+        P('Step Functions', 'State machine', { note: 'compiled to Amazon States Language' }),
+        P('IAM', 'Execution role', { security: true, note: 'invoke each step + task perms' }),
+        P('Lambda', 'Step functions ×2', { note: 'Validate + Process' }),
+        P('CloudWatch', 'Execution log group'),
+      ];
     case 'realtime':
       return [
         P('IoT', 'Custom authorizer', { security: true, note: 'validates every WS connect' }),
@@ -275,6 +282,7 @@ const ORDER = [
   'bus',
   'snstopic',
   'realtime',
+  'stepFunctions',
   'apigatewayv2',
   'router',
   'worker',
