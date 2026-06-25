@@ -108,24 +108,52 @@ function extractScalars(kind: string, args: string): Record<string, unknown> {
   return out;
 }
 
+/** Something in the config the parser could not turn into a node — surfaced, never
+ *  silently dropped (a correctness-branded tool must not lie about what it lost). */
+export interface Unrecognized {
+  snippet: string;
+  reason: string;
+}
+
+export interface ReverseResult {
+  nodes: CanvasNode[];
+  edges: CanvasEdge[];
+  unrecognized: Unrecognized[];
+}
+
 /**
  * Parse an `sst.config.ts` source string into a canvas design.
- * Returns the recovered nodes + edges (positions auto-laid-out in a grid).
+ * Returns the recovered nodes + edges (grid-laid-out) AND an `unrecognized` list of
+ * everything it couldn't model, so the UI can say "recovered N of M".
  */
-export function parseAwsConfig(source: string): { nodes: CanvasNode[]; edges: CanvasEdge[] } {
+export function parseAwsConfig(source: string): ReverseResult {
   const resources: ParsedResource[] = [];
+  const unrecognized: Unrecognized[] = [];
   // `[const <var> =] new sst[.aws].<Component>(` — captures the optional binding + component.
   const re = /(?:const\s+([A-Za-z_$][\w$]*)\s*=\s*)?new\s+sst\.(?:aws\.)?([A-Za-z0-9]+)\s*\(/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(source)) !== null) {
     const component = m[2];
-    if (SKIP.has(component)) continue;
-    const kind = COMPONENT_KIND[component];
-    if (!kind) continue;
+    if (SKIP.has(component)) continue; // Vpc/Cluster are auto-infra — intentional, not a miss.
+    const ref = m[0].includes('sst.aws.') ? `sst.aws.${component}` : `sst.${component}`;
     const parenIdx = source.indexOf('(', m.index + m[0].length - 1);
     const args = balanced(source, parenIdx, '(', ')');
     const name = firstStringArg(args);
-    if (!name) continue;
+    const kind = COMPONENT_KIND[component];
+    if (!kind) {
+      unrecognized.push({
+        snippet: `new ${ref}(${name ? `"${name}"` : '…'})`,
+        reason: `${ref} isn't modeled by the builder yet`,
+      });
+      continue;
+    }
+    if (!name) {
+      unrecognized.push({
+        snippet: `new ${ref}(…)`,
+        reason: 'could not read the resource name (expected a string-literal first argument)',
+      });
+      continue;
+    }
     resources.push({ varName: m[1], component, kind, name, args });
   }
 
@@ -161,7 +189,15 @@ export function parseAwsConfig(source: string): { nodes: CanvasNode[]; edges: Ca
     const sourceKind = idToKind.get(sourceId)!;
     for (const linkVar of extractLinks(r.args)) {
       const targetId = varToId.get(linkVar);
-      if (!targetId) continue;
+      if (!targetId) {
+        // A link to something we never turned into a node (unmodeled component, or a
+        // resource declared in another file) — record it rather than dropping the edge.
+        unrecognized.push({
+          snippet: `${r.name} → link: [${linkVar}]`,
+          reason: `links "${linkVar}", which wasn't recognized as a resource in this file`,
+        });
+        continue;
+      }
       const targetKind = idToKind.get(targetId)!;
       const intent = awsDefaultIntent(sourceKind, targetKind);
       if (intent) addEdge(sourceId, targetId, intent);
@@ -189,7 +225,7 @@ export function parseAwsConfig(source: string): { nodes: CanvasNode[]; edges: Ca
   }
 
   layout(nodes, edges);
-  return { nodes, edges };
+  return { nodes, edges, unrecognized };
 }
 
 // Simple layered layout: link/subscribe sources on the left, their targets to the
