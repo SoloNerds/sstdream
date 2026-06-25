@@ -227,7 +227,7 @@ describe('every template TYPE-CHECKS as a project', () => {
   }
 });
 
-describe('the all-21-kinds kitchen-sink TYPE-CHECKS', () => {
+describe('the all-28-kinds kitchen-sink TYPE-CHECKS', () => {
   type N = {
     id: string;
     kind: string;
@@ -278,6 +278,16 @@ describe('the all-21-kinds kitchen-sink TYPE-CHECKS', () => {
           keyEnv: 'WEATHER_KEY',
         }),
         n('ai', 'ai', 'AnthropicKey'),
+        // The 7 modern kinds, wired together — so their DERIVED consts (cluster,
+        // <v>Ds, <v>Validate/Process/Done) are compiled in one dense design where a
+        // collision would surface as a TS error (the root cause of the gate hole).
+        n('cache', 'redis', 'Cache'),
+        n('svc', 'service', 'ContainerApi'),
+        n('batch', 'task', 'BatchJob'),
+        n('rt', 'realtime', 'Realtime'),
+        n('flow', 'stepFunctions', 'OrderFlow'),
+        n('graph', 'appsync', 'Graph'),
+        n('auth', 'openauth', 'Auth'),
       ],
       edges: [
         e('e1', 'web', 'uploads', 'uploadsTo'),
@@ -298,6 +308,15 @@ describe('the all-21-kinds kitchen-sink TYPE-CHECKS', () => {
         e('e16', 'w4', 'api', 'handlesRoute'),
         e('e17', 'w5', 'uploads', 'handlesBucketEvents'),
         e('e18', 'cron', 'w6', 'invokes'),
+        e('e19', 'web', 'cache', 'usesCache'),
+        e('e20', 'svc', 'table', 'writesTo'),
+        e('e21', 'web', 'batch', 'runsTask'),
+        e('e22', 'batch', 'uploads', 'readsFrom'),
+        e('e23', 'web', 'rt', 'usesRealtime'),
+        e('e24', 'web', 'flow', 'startsWorkflow'),
+        e('e25', 'web', 'graph', 'consumesGraphQL'),
+        e('e26', 'graph', 'audit', 'resolvesFrom'),
+        e('e27', 'web', 'auth', 'usesOpenAuth'),
       ],
     },
     'aws-sst-v4',

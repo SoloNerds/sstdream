@@ -3,6 +3,7 @@ import { validateBlueprint } from '@/lib/core/validation/validate';
 import { awsRecommendations } from '@/lib/targets/aws-sst-v4/recommendations';
 import { generateFiles } from '@/lib/core/codegen/generate';
 import { draftBlueprint } from '@/lib/core/blueprint/serialize';
+import { AWS_CATALOG } from '@/lib/targets/aws-sst-v4/catalog';
 import type { Blueprint } from '@/lib/core/blueprint/types';
 
 // Audit (board meeting #3 follow-up): the validation + recommendations engines, like
@@ -69,6 +70,37 @@ describe('validation: var-name-collision covers the modern kinds', () => {
       expect(errs.some((e) => e.rule === 'var-name-collision')).toBe(true);
     });
   }
+
+  // ANTI-DRIFT GUARD (board #4 / Dax + Sasha): the validator's DECLARED const-set is
+  // a hand-mirror of the generator's plan.ts. This is generated FROM the catalog: for
+  // EVERY kind, if a name-collision design actually emits a duplicate top-level `const`
+  // in sst.config.ts, the export gate MUST catch it. A future kind that emits a const
+  // the validator doesn't claim fails here loudly — closing the gate-hole root cause.
+  describe('every const-emitting kind is covered (no validator/generator drift)', () => {
+    const dupConsts = (cfg: string): string[] => {
+      const names = [...cfg.matchAll(/^\s*const (\w+) = new sst\./gm)].map((m) => m[1]);
+      return names.filter((v, i) => names.indexOf(v) !== i);
+    };
+    for (const kind of Object.keys(AWS_CATALOG)) {
+      it(`a ${kind} whose var collides is caught by the export gate`, () => {
+        const probe = kind === 'bucket' ? 'dynamo' : 'bucket';
+        // "DriftProbe" and "driftProbe" are distinct names that camelCase to one var.
+        const bp = mk([N('k', kind, 'DriftProbe'), N('p', probe, 'driftProbe')], []);
+        let cfg = '';
+        try {
+          cfg = generateFiles(bp).find((f) => f.path === 'sst.config.ts')!.content;
+        } catch {
+          return; // a generation crash is kind-coverage's concern, not this guard's
+        }
+        if (dupConsts(cfg).length === 0) return; // this kind doesn't emit a colliding const
+        expect(
+          validateBlueprint(bp).errors.some((e) => e.rule === 'var-name-collision'),
+          `"${kind}" generates a duplicate \`const\` but the export gate missed it — ` +
+            `validation.ts's DECLARED/extra-var claims have drifted from the generator.`,
+        ).toBe(true);
+      });
+    }
+  });
 
   it('does NOT false-flag a normal multi-kind design', () => {
     const bp = mk(
