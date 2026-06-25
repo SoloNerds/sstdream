@@ -52,6 +52,8 @@ declare namespace React {
 // to add it. Local (relative + @/) imports still resolve to the real files.
 declare module "sst" { export const Resource: any; }
 declare module "sst/aws/task" { export const task: any; }
+declare module "sst/aws/realtime" { export const realtime: any; }
+declare module "@aws-sdk/client-iot-data-plane" { export const IoTDataPlaneClient: any; export const PublishCommand: any; }
 declare module "react" { export type ReactNode = any; export const useState: any; }
 declare module "next" { export type NextConfig = any; }
 declare module "next/navigation" { export const useRouter: any; }

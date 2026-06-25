@@ -367,6 +367,16 @@ exports[`aws-sst-v4 catalog > matches snapshot 1`] = `
       },
     ],
   },
+  "realtime": {
+    "accent": "bg-sky-700",
+    "category": "messaging",
+    "component": "sst.aws.Realtime",
+    "defaultName": "Realtime",
+    "description": "WebSocket pub/sub over AWS IoT (authorizer + publish + subscribe)",
+    "kind": "realtime",
+    "label": "Realtime",
+    "singleton": true,
+  },
   "redis": {
     "accent": "bg-red-700",
     "category": "database",

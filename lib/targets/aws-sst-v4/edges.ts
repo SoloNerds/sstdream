@@ -121,6 +121,14 @@ export const AWS_EDGE_INTENTS: EdgeIntentMeta[] = [
     to: ['task'],
   },
   {
+    intent: 'usesRealtime',
+    label: 'streams via',
+    description:
+      'App publishes/serves WebSocket messages over IoT Realtime (link + IoT publish helper).',
+    from: ['nextjs', 'service'],
+    to: ['realtime'],
+  },
+  {
     intent: 'sendsEmail',
     label: 'sends email through',
     description: 'App/worker sends email via SES (link + SESv2 helper).',
@@ -212,6 +220,8 @@ const INTENT_BY_PAIR: Record<string, string> = {
   'task>snstopic': 'publishesTo',
   'task>secret': 'usesSecret',
   'task>email': 'sendsEmail',
+  'nextjs>realtime': 'usesRealtime',
+  'service>realtime': 'usesRealtime',
   'nextjs>email': 'sendsEmail',
   'worker>email': 'sendsEmail',
   'nextjs>stripe': 'usesStripe',

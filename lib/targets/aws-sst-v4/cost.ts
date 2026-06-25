@@ -210,6 +210,11 @@ function breakdownFor(r: Resource, nat: 'none' | 'ec2' | 'managed'): CostBreakdo
       if (nat === 'ec2') lines.push({ label: 'fck-nat EC2 (t4g.nano)', usd: 4 });
       else if (nat === 'managed') lines.push({ label: 'NAT Gateway', usd: 32 });
       break;
+    case 'realtime':
+      // AWS IoT Core: no idle/provisioned cost — usage-priced (connection-minutes +
+      // messages). A rough small-app allowance.
+      lines = [{ label: 'IoT Core (connections + messages)', usd: 1 }];
+      break;
     case 'cognito':
       lines = [{ label: 'Cognito (free ≤ 50k MAU)', usd: 0 }];
       break;
