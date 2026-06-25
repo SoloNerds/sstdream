@@ -201,6 +201,14 @@ function resourcesFor(
         P('Lambda', 'Step functions ×2', { note: 'Validate + Process' }),
         P('CloudWatch', 'Execution log group'),
       ];
+    case 'appsync':
+      return [
+        P('AppSync', 'GraphQL API', { note: 'schema.graphql' }),
+        P('AppSync', 'Lambda data source'),
+        P('AppSync', 'Resolvers', { note: 'one per Type.field' }),
+        P('Lambda', 'Resolver function', { note: 'src/<api>-resolver' }),
+        P('IAM', 'Service-link role', { security: true, note: 'AppSync → data source' }),
+      ];
     case 'realtime':
       return [
         P('IoT', 'Custom authorizer', { security: true, note: 'validates every WS connect' }),
@@ -290,6 +298,7 @@ const ORDER = [
   'snstopic',
   'realtime',
   'stepFunctions',
+  'appsync',
   'apigatewayv2',
   'router',
   'worker',

@@ -379,6 +379,26 @@ function renderStepFunctions(r: Resource, plan: AwsPlan): string {
   ].join('\n');
 }
 
+// Managed GraphQL. `schema` is the only required arg (a path). A Lambda data source
+// (the resolver handler) backs the resolvers; if a Dynamo table is wired via
+// `resolvesFrom`, the resolver Lambda links it. dataSource on a resolver is the data
+// source NAME string. (verified: sst.dev/docs/component/aws/app-sync)
+function renderAppSync(r: Resource, plan: AwsPlan): string {
+  const v = plan.varNameById.get(r.id)!;
+  const slug = kebabCase(r.name);
+  const tables = plan.linkVarsById.get(r.id) ?? [];
+  const handler = `src/${slug}-resolver.handler`;
+  const lambda = tables.length
+    ? `{ handler: ${q(handler)}, link: ${linkArray(tables)} }`
+    : q(handler);
+  return [
+    `const ${v} = new sst.aws.AppSync(${q(r.name)}, { schema: "schema.graphql" });`,
+    `const ${v}Ds = ${v}.addDataSource({ name: "lambda", lambda: ${lambda} });`,
+    `${v}.addResolver("Query user", { dataSource: ${v}Ds.name });`,
+    `${v}.addResolver("Mutation createUser", { dataSource: ${v}Ds.name });`,
+  ].join('\n');
+}
+
 function renderNextjs(r: Resource, plan: AwsPlan): string {
   const v = plan.varNameById.get(r.id);
   const links = plan.linkVarsById.get(r.id) ?? [];
@@ -532,6 +552,7 @@ export function generateSstConfig(bp: Blueprint): string {
   for (const r of byKind('snstopic')) statements.push(renderSnsTopic(r, plan));
   for (const r of byKind('realtime')) statements.push(renderRealtime(r, plan));
   for (const r of byKind('stepFunctions')) statements.push(renderStepFunctions(r, plan));
+  for (const r of byKind('appsync')) statements.push(renderAppSync(r, plan));
   for (const r of byKind('apigatewayv2')) statements.push(renderApi(r, plan));
   for (const r of byKind('router')) statements.push(renderRouter(r, plan));
   for (const sub of plan.subscribers) statements.push(renderSubscriber(sub, plan));

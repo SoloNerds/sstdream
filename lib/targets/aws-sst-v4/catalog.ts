@@ -415,6 +415,15 @@ export const AWS_CATALOG: ResourceCatalog = {
     category: 'messaging',
     singleton: true,
   },
+  appsync: {
+    kind: 'appsync',
+    label: 'AppSync (GraphQL)',
+    defaultName: 'Graph',
+    component: 'sst.aws.AppSync',
+    description: 'Managed GraphQL API (schema + Lambda resolvers; optional Dynamo data source)',
+    accent: 'bg-pink-700',
+    category: 'network',
+  },
   email: {
     kind: 'email',
     label: 'Email',
@@ -541,6 +550,7 @@ export const AWS_CATALOG_ORDER = [
   'snstopic',
   'realtime',
   'stepFunctions',
+  'appsync',
   'apigatewayv2',
   'router',
   'worker',

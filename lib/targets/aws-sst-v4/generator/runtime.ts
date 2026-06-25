@@ -477,6 +477,64 @@ export async function GET(req: NextRequest) {
 }
 `;
 
+// AppSync (GraphQL). A starter schema + a direct-Lambda resolver (AppSync passes the
+// field args on event.arguments and the field name on event.info.fieldName) + a typed
+// gql() fetch helper for the app. (verified: sst.dev/docs/component/aws/app-sync)
+const appsyncSchemaFile = (): string =>
+  `type User {
+  id: ID!
+  name: String!
+  email: String!
+}
+
+type Query {
+  user(id: ID!): User
+}
+
+type Mutation {
+  createUser(name: String!, email: String!): User!
+}
+
+schema {
+  query: Query
+  mutation: Mutation
+}
+`;
+
+const appsyncResolverFile = (apiName: string): string =>
+  `// Direct-Lambda resolver for the "${apiName}" GraphQL API.
+interface AppSyncEvent<TArgs> {
+  arguments: TArgs;
+  info: { fieldName: string; parentTypeName: string };
+}
+
+export async function handler(
+  event: AppSyncEvent<{ id?: string; name?: string; email?: string }>,
+): Promise<{ id: string; name: string; email: string }> {
+  const { id, name, email } = event.arguments;
+  if (event.info.fieldName === "createUser") {
+    return { id: crypto.randomUUID(), name: name ?? "", email: email ?? "" };
+  }
+  // TODO: read from your data source (link a Dynamo table via the resolvesFrom edge).
+  return { id: id ?? "", name: "Ada", email: "ada@example.com" };
+}
+`;
+
+const appsyncGqlFile = (apiName: string): string =>
+  `import { Resource } from "sst";
+
+/** Typed GraphQL request against the AppSync endpoint. */
+export async function gql<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
+  const res = await fetch(Resource.${apiName}.url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query, variables }),
+  });
+  const { data } = (await res.json()) as { data: T };
+  return data;
+}
+`;
+
 // ECS Fargate container starter. node:22-slim, installs deps (sst for Resource
 // access), runs the server. SST builds this Dockerfile from services/<name>/.
 const serviceDockerfile = (port: number): string =>
@@ -889,6 +947,25 @@ export function generateRuntimeFiles(bp: Blueprint): GeneratedFile[] {
       { path: 'app/auth-actions.ts', content: openAuthActionsFile(), language: 'ts' },
       { path: 'app/api/auth/callback/route.ts', content: openAuthCallbackFile(), language: 'ts' },
     );
+  }
+
+  // AppSync: a schema + a resolver Lambda per GraphQL API; a gql() helper when the
+  // app consumes one.
+  const appsyncResources = bp.resources.filter((r) => r.kind === 'appsync');
+  if (appsyncResources.length) {
+    files.push({ path: 'schema.graphql', content: appsyncSchemaFile(), language: 'text' });
+    for (const api of appsyncResources) {
+      files.push({
+        path: `src/${kebabCase(api.name)}-resolver.ts`,
+        content: appsyncResolverFile(api.name),
+        language: 'ts',
+      });
+    }
+    const gqlEdge = bp.connections.find((c) => c.intent === 'consumesGraphQL');
+    const gqlApi = gqlEdge ? resourceOf(gqlEdge.target) : undefined;
+    if (gqlApi) {
+      files.push({ path: 'lib/graphql.ts', content: appsyncGqlFile(gqlApi.name), language: 'ts' });
+    }
   }
 
   // ECS Fargate services: each gets its own container folder (Dockerfile + a tiny

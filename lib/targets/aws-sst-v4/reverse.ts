@@ -23,6 +23,7 @@ const COMPONENT_KIND: Record<string, string> = {
   SnsTopic: 'snstopic',
   Realtime: 'realtime',
   ApiGatewayV2: 'apigatewayv2',
+  AppSync: 'appsync',
   Router: 'router',
   Function: 'worker',
   CronV2: 'cron',

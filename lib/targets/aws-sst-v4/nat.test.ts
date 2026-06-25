@@ -359,6 +359,40 @@ describe('VPC NAT options + corrected Postgres cost', () => {
     expect(pkg.dependencies['hono']).toBeDefined();
   });
 
+  it('AppSync emits the API + data source + resolvers, links Dynamo, and a gql helper', () => {
+    const bp = draftBlueprint(
+      {
+        nodes: [
+          { id: 'nextjs_1', kind: 'nextjs', name: 'Web', props: {}, position: { x: 0, y: 0 } },
+          { id: 'graph_2', kind: 'appsync', name: 'Graph', props: {}, position: { x: 200, y: 0 } },
+          { id: 'users_3', kind: 'dynamo', name: 'Users', props: {}, position: { x: 400, y: 0 } },
+        ],
+        edges: [
+          { id: 'e1', source: 'nextjs_1', target: 'graph_2', intent: 'consumesGraphQL' },
+          { id: 'e2', source: 'graph_2', target: 'users_3', intent: 'resolvesFrom' },
+        ],
+      },
+      'aws-sst-v4',
+      { name: 'graph-app', region: 'us-east-1', packageManager: 'yarn' },
+      NOW,
+    );
+    const files = generateFiles(bp);
+    const cfg = files.find((f) => f.path === 'sst.config.ts')!.content;
+    expect(cfg).toContain('new sst.aws.AppSync("Graph", { schema: "schema.graphql" });');
+    expect(cfg).toContain('.addDataSource({ name: "lambda", lambda:');
+    expect(cfg).toContain('.addResolver("Query user", { dataSource:');
+    // The resolver Lambda data source links the Dynamo table (resolvesFrom edge).
+    expect(cfg).toMatch(/lambda: \{ handler: "src\/graph-resolver\.handler", link: \[[^\]]*users/i);
+    // The app links the API to query it.
+    expect(cfg).toMatch(/new sst\.aws\.Nextjs[\s\S]*?link: \[[^\]]*graph/);
+    // Scaffold: schema, resolver, gql helper.
+    expect(files.some((f) => f.path === 'schema.graphql')).toBe(true);
+    expect(files.find((f) => f.path === 'src/graph-resolver.ts')!.content).toContain(
+      'event.info.fieldName',
+    );
+    expect(files.find((f) => f.path === 'lib/graphql.ts')!.content).toContain('Resource.Graph.url');
+  });
+
   it('an aurora-only consumer design prices the floored NAT on the aurora node', () => {
     const bp = draftBlueprint(
       {
