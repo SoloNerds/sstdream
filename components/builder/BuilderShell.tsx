@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { Palette } from './Palette';
 import { Canvas } from './Canvas';
 import { InfraView } from './InfraView';
@@ -117,12 +118,12 @@ export function BuilderShell() {
           SSTDREAM&apos;s drag-and-drop canvas is built for desktop. Open this on a laptop to design
           — or browse ready-made architectures from your phone.
         </p>
-        <a
+        <Link
           href="/gallery"
           className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white"
         >
           Browse the gallery
-        </a>
+        </Link>
       </div>
 
       <div className="hidden h-screen flex-col md:flex">
