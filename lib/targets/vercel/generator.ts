@@ -232,6 +232,50 @@ export default function Chat() {
 }
 `;
 
+// Durable Workflow (verified: workflow@4 — github.com/vercel/workflow, workflow-sdk.dev).
+// Directives go INSIDE the function body; steps are retried + durable; sleep() pauses
+// with zero compute billed and resumes after deploys/crashes. Zero-config on Vercel.
+const camel = (s: string): string => `${s.charAt(0).toLowerCase()}${s.slice(1)}`;
+
+const workflowFile = (name: string): string =>
+  `import { sleep } from "workflow";
+
+export async function ${camel(name)}(input: string) {
+  "use workflow";
+
+  const first = await firstStep(input);
+  await sleep("1 minute"); // pause — zero compute billed; resumes here
+  const second = await secondStep(first);
+  return { first, second };
+}
+
+async function firstStep(input: string) {
+  "use step";
+  // TODO: your durable, side-effecting work (auto-retried on failure)
+  return { input, done: true };
+}
+
+async function secondStep(prev: { input: string; done: boolean }) {
+  "use step";
+  return { ...prev, finalized: true };
+}
+`;
+
+const workflowTriggerRoute = (name: string, slug: string): string =>
+  `import { start } from "workflow/api";
+import { ${camel(name)} } from "@/workflows/${slug}";
+
+// Start the durable "${name}" workflow. start() is NON-blocking and returns a Run
+// handle — never await the workflow's completion inside the request.
+export async function POST(req: Request): Promise<Response> {
+  const { input } = (await req.json()) as { input: string };
+  const run = await start(${camel(name)}, [input]);
+  return new Response(JSON.stringify({ runId: run.runId }), {
+    headers: { "content-type": "application/json" },
+  });
+}
+`;
+
 // Dynamic Open Graph image. App Router bundles @vercel/og — no install. Satori
 // renders a CSS subset (display:flex, NOT grid); 1200x630 PNG. verified: next/og (Next 16).
 const ogImageRoute = (): string =>
@@ -274,6 +318,7 @@ const DEP_VERSIONS: Record<string, string> = {
   '@vercel/speed-insights': '^2.0.0',
   ai: '^7.0.0',
   '@ai-sdk/react': '^4.0.0',
+  workflow: '^4.5.0',
   resend: '^6.14.0',
   stripe: '^22.3.0',
 };
@@ -298,6 +343,7 @@ function packageAdditions(bp: Blueprint): string {
     add('ai');
     add('@ai-sdk/react');
   }
+  if (present.has('workflow')) add('workflow');
   if (present.has('email')) add('resend');
   // stripe only when a webhook actually uses the Stripe provider.
   if (bp.resources.some((r) => r.kind === 'webhook' && webhookProvider(r) === 'stripe'))
@@ -363,6 +409,15 @@ export function generateVercel(bp: Blueprint): GeneratedFile[] {
   }
   if (has('ogImage'))
     files.push({ path: 'app/api/og/route.tsx', content: ogImageRoute(), language: 'tsx' });
+  for (const wf of bp.resources.filter((r) => r.kind === 'workflow')) {
+    const slug = kebabCase(wf.name);
+    files.push({ path: `workflows/${slug}.ts`, content: workflowFile(wf.name), language: 'ts' });
+    files.push({
+      path: `app/api/workflows/${slug}/route.ts`,
+      content: workflowTriggerRoute(wf.name, slug),
+      language: 'ts',
+    });
+  }
 
   // Queue producer + consumers
   const queues = bp.resources.filter((r) => r.kind === 'queue');

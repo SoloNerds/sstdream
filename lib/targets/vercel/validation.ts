@@ -268,6 +268,7 @@ export const VERCEL_RULES: ValidationRule[] = [
         consumer: 'queues',
         webhook: 'webhooks',
         externalApi: 'lib', // lib/<slug>.ts helpers can collide too
+        workflow: 'workflows', // workflows/<slug>.ts + the trigger route
       };
       const out: Diagnostic[] = [];
       const seen = new Map<string, Resource>();

@@ -72,14 +72,27 @@ const tsconfigJson = (): string =>
     2,
   )}\n`;
 
-const nextConfig = (): string =>
-  `import type { NextConfig } from "next";
+const nextConfig = (bp: Blueprint): string => {
+  // Workflows REQUIRE the config wrapped with withWorkflow() so the
+  // 'use workflow' / 'use step' directives are transformed at build time.
+  if (bp.resources.some((r) => r.kind === 'workflow')) {
+    return `import type { NextConfig } from "next";
+import { withWorkflow } from "workflow/next";
+
+const nextConfig: NextConfig = {};
+
+// Required so the 'use workflow' / 'use step' directives compile.
+export default withWorkflow(nextConfig);
+`;
+  }
+  return `import type { NextConfig } from "next";
 
 // Deploying Next.js to Vercel is zero-config — no special settings needed.
 const nextConfig: NextConfig = {};
 
 export default nextConfig;
 `;
+};
 
 const gitignore = (): string =>
   `node_modules/
@@ -271,7 +284,7 @@ export function generateVercelScaffold(
   return [
     { path: 'package.json', content: packageJson(bp, deps), language: 'json' },
     { path: 'tsconfig.json', content: tsconfigJson(), language: 'json' },
-    { path: 'next.config.ts', content: nextConfig(), language: 'ts' },
+    { path: 'next.config.ts', content: nextConfig(bp), language: 'ts' },
     { path: '.gitignore', content: gitignore(), language: 'text' },
     { path: 'app/layout.tsx', content: layoutFile(bp), language: 'tsx' },
     { path: 'app/page.tsx', content: pageFile(bp, routes), language: 'tsx' },

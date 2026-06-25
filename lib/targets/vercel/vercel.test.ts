@@ -421,6 +421,67 @@ describe('Vercel lane — AI Gateway + OG Image (verified ai@7 / next/og)', () =
   });
 });
 
+describe('Vercel lane — Workflows (durable, verified workflow@4)', () => {
+  const bp = draftBlueprint(
+    {
+      nodes: [
+        { id: 'a', kind: 'app', name: 'Web', props: {}, position: { x: 0, y: 0 } },
+        {
+          id: 'wf',
+          kind: 'workflow',
+          name: 'OrderFulfillment',
+          props: {},
+          position: { x: 1, y: 0 },
+        },
+      ],
+      edges: [{ id: 'e1', source: 'a', target: 'wf', intent: 'triggersWorkflow' }],
+    },
+    'vercel',
+    VERCEL_SAAS.app,
+    NOW,
+  );
+  const m = Object.fromEntries(generateFiles(bp).map((f) => [f.path, f.content]));
+
+  it('emits a durable workflow file with the directives INSIDE the function body', () => {
+    const file = m['workflows/order-fulfillment.ts'];
+    expect(file).toContain('import { sleep } from "workflow"');
+    expect(file).toContain('"use workflow"');
+    expect(file).toContain('"use step"');
+    expect(file).toContain('export async function orderFulfillment(');
+  });
+
+  it('emits a non-blocking trigger route using start() from workflow/api', () => {
+    const route = m['app/api/workflows/order-fulfillment/route.ts'];
+    expect(route).toContain('import { start } from "workflow/api"');
+    expect(route).toContain('from "@/workflows/order-fulfillment"');
+    expect(route).toContain('await start(orderFulfillment, [input])');
+  });
+
+  it('wraps next.config with withWorkflow() (required for the directives to compile)', () => {
+    expect(m['next.config.ts']).toContain('import { withWorkflow } from "workflow/next"');
+    expect(m['next.config.ts']).toContain('export default withWorkflow(nextConfig)');
+    const pkg = JSON.parse(m['package.additions.json']) as { dependencies: Record<string, string> };
+    expect(pkg.dependencies['workflow']).toBe('^4.5.0');
+  });
+
+  it('blocks two workflows that kebab-collide', () => {
+    const two = draftBlueprint(
+      {
+        nodes: [
+          { id: 'a', kind: 'app', name: 'Web', props: {}, position: { x: 0, y: 0 } },
+          { id: 'w1', kind: 'workflow', name: 'Sync', props: {}, position: { x: 1, y: 0 } },
+          { id: 'w2', kind: 'workflow', name: 'SYNC', props: {}, position: { x: 2, y: 0 } },
+        ],
+        edges: [],
+      },
+      'vercel',
+      VERCEL_SAAS.app,
+      NOW,
+    );
+    expect(validateBlueprint(two).errors.some((d) => d.rule === 'kebab-path-collision')).toBe(true);
+  });
+});
+
 describe('Vercel lane — honesty validation rules (docs §10)', () => {
   const mk = (
     nodes: { id: string; kind: string; name: string; props?: Record<string, unknown> }[],
