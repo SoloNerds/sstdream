@@ -84,16 +84,18 @@ export function Toolbar({ validation }: { validation: ValidationResult }) {
         <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()}>
           Import
         </Button>
-        {targetId === 'aws-sst-v4' && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setImportingCode(true)}
-            title="Reverse-engineer: paste an sst.config.ts and draw it back out"
-          >
-            From code
-          </Button>
-        )}
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setImportingCode(true)}
+          title={
+            targetId === 'vercel'
+              ? 'Reverse-engineer: paste a package.json / vercel.json and draw it back out'
+              : 'Reverse-engineer: paste an sst.config.ts and draw it back out'
+          }
+        >
+          From code
+        </Button>
         <Button
           size="sm"
           variant="outline"
