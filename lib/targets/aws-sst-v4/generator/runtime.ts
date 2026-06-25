@@ -382,6 +382,25 @@ export const pool = new Pool({
 });
 `;
 
+// ElastiCache Redis — connection comes from the linked Redis resource. Cluster mode
+// is ON by default, so use ioredis's Cluster (not `new Redis`). TLS is mandatory and
+// checkServerIdentity is overridden because the cert CN won't match the config endpoint.
+const redisHelperFile = (cacheName: string): string =>
+  `import { Resource } from "sst";
+import { Cluster } from "ioredis";
+
+export const redis = new Cluster(
+  [{ host: Resource.${cacheName}.host, port: Resource.${cacheName}.port }],
+  {
+    redisOptions: {
+      tls: { checkServerIdentity: () => undefined },
+      username: Resource.${cacheName}.username,
+      password: Resource.${cacheName}.password,
+    },
+  },
+);
+`;
+
 // External integrations (env-driven — no SST infra). Verified env-var names from
 // real projects: STRIPE_SECRET_KEY/STRIPE_WEBHOOK_SECRET, DATABASE_URL (Mongo), etc.
 const stripeLibFile = (): string =>
@@ -707,6 +726,7 @@ function packageAdditions(flags: {
   ai: boolean;
   email: boolean;
   postgres: boolean;
+  redis: boolean;
   stripe: boolean;
   mongodb: boolean;
   clerk: boolean;
@@ -728,6 +748,7 @@ function packageAdditions(flags: {
   if (flags.ai) deps['@anthropic-ai/sdk'] = '^0.104.0';
   if (flags.email) deps['@aws-sdk/client-sesv2'] = '^3.0.0';
   if (flags.postgres) deps['pg'] = '^8.0.0';
+  if (flags.redis) deps['ioredis'] = '^5.0.0';
   if (flags.stripe) deps['stripe'] = '^22.0.0';
   if (flags.mongodb) deps['mongodb'] = '^7.0.0';
   if (flags.clerk) deps['@clerk/nextjs'] = '^7.0.0';
@@ -860,6 +881,12 @@ export function generateRuntimeFiles(bp: Blueprint): GeneratedFile[] {
   const pgRes = pgEdge ? resourceOf(pgEdge.target) : undefined;
   if (pgRes) {
     files.push({ path: 'lib/db.ts', content: postgresHelperFile(pgRes.name), language: 'ts' });
+  }
+
+  const redisEdge = bp.connections.find((c) => c.intent === 'usesCache');
+  const redisRes = redisEdge ? resourceOf(redisEdge.target) : undefined;
+  if (redisRes) {
+    files.push({ path: 'lib/redis.ts', content: redisHelperFile(redisRes.name), language: 'ts' });
   }
 
   const stripeRes = bp.resources.find(
@@ -1078,6 +1105,7 @@ export function generateRuntimeFiles(bp: Blueprint): GeneratedFile[] {
       ai: Boolean(aiRes),
       email: Boolean(emailRes),
       postgres: Boolean(pgRes),
+      redis: Boolean(redisRes),
       stripe: Boolean(stripeRes),
       mongodb: Boolean(mongoRes),
       clerk: Boolean(clerkRes),

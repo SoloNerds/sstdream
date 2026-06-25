@@ -105,6 +105,14 @@ export const AWS_EDGE_INTENTS: EdgeIntentMeta[] = [
     to: ['postgres', 'aurora'],
   },
   {
+    intent: 'usesCache',
+    label: 'caches in',
+    description:
+      'App/worker reads/writes ElastiCache Redis (link + ioredis Cluster helper). Joins the VPC.',
+    from: ['nextjs', 'worker'],
+    to: ['redis'],
+  },
+  {
     intent: 'sendsEmail',
     label: 'sends email through',
     description: 'App/worker sends email via SES (link + SESv2 helper).',
@@ -173,6 +181,8 @@ const INTENT_BY_PAIR: Record<string, string> = {
   'worker>postgres': 'queriesDb',
   'nextjs>aurora': 'queriesDb',
   'worker>aurora': 'queriesDb',
+  'nextjs>redis': 'usesCache',
+  'worker>redis': 'usesCache',
   'nextjs>email': 'sendsEmail',
   'worker>email': 'sendsEmail',
   'nextjs>stripe': 'usesStripe',

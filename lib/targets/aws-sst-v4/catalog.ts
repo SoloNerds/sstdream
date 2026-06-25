@@ -276,6 +276,28 @@ export const AWS_CATALOG: ResourceCatalog = {
       },
     ],
   },
+  redis: {
+    kind: 'redis',
+    label: 'Redis',
+    defaultName: 'Cache',
+    component: 'sst.aws.Redis',
+    description: 'ElastiCache Redis/Valkey (in-VPC; cluster-mode; a VPC is generated)',
+    accent: 'bg-red-700',
+    category: 'database',
+    props: [
+      {
+        key: 'engine',
+        label: 'Engine',
+        type: 'select',
+        default: 'redis',
+        options: [
+          { value: 'redis', label: 'Redis (OSS 7.1)' },
+          { value: 'valkey', label: 'Valkey 7.2 — ~20% cheaper' },
+        ],
+        help: 'ElastiCache engine. Valkey is the AWS/Linux-Foundation Redis fork — cheaper, wire-compatible. Cluster mode is on by default, so the runtime uses ioredis Cluster + TLS.',
+      },
+    ],
+  },
   email: {
     kind: 'email',
     label: 'Email',
@@ -385,6 +407,7 @@ export const AWS_CATALOG_ORDER = [
   'dynamo',
   'postgres',
   'aurora',
+  'redis',
   'queue',
   'bus',
   'snstopic',

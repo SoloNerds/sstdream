@@ -84,7 +84,9 @@ export function vpcConsumerIds(bp: Blueprint): Set<string> {
     bp.connections
       .filter((c) => {
         const t = byId.get(c.target);
-        return c.intent === 'queriesDb' && (t?.kind === 'postgres' || t?.kind === 'aurora');
+        if (c.intent === 'queriesDb') return t?.kind === 'postgres' || t?.kind === 'aurora';
+        if (c.intent === 'usesCache') return t?.kind === 'redis';
+        return false;
       })
       .map((c) => c.source),
   );
@@ -96,9 +98,14 @@ export function vpcConsumerIds(bp: Blueprint): Set<string> {
 // or its calls to public endpoints (SES, Dynamo, S3, external APIs) hang.
 // Strongest explicit request still wins: managed > ec2.
 export function effectiveAwsNat(bp: Blueprint): 'none' | 'ec2' | 'managed' {
-  const dbs = bp.resources.filter((r) => r.kind === 'postgres' || r.kind === 'aurora');
-  if (!dbs.length) return 'none';
-  const vals = dbs.map((r) => (typeof r.props.nat === 'string' ? r.props.nat : 'none'));
+  // postgres/aurora/redis all live in the shared VPC. redis has no `nat` prop of its
+  // own (you don't reach a cache over the internet), but it still forces the VPC, and
+  // any consumer that joins it to reach the cache + the public internet needs egress.
+  const vpcResources = bp.resources.filter(
+    (r) => r.kind === 'postgres' || r.kind === 'aurora' || r.kind === 'redis',
+  );
+  if (!vpcResources.length) return 'none';
+  const vals = vpcResources.map((r) => (typeof r.props.nat === 'string' ? r.props.nat : 'none'));
   if (vals.includes('managed')) return 'managed';
   if (vals.includes('ec2')) return 'ec2';
   return vpcConsumerIds(bp).size ? 'ec2' : 'none';
@@ -146,6 +153,7 @@ export function planAws(bp: Blueprint): AwsPlan {
       r.kind === 'dynamo' ||
       r.kind === 'postgres' ||
       r.kind === 'aurora' ||
+      r.kind === 'redis' ||
       r.kind === 'queue' ||
       r.kind === 'bus' ||
       r.kind === 'snstopic' ||

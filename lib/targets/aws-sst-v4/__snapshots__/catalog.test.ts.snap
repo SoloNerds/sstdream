@@ -367,6 +367,34 @@ exports[`aws-sst-v4 catalog > matches snapshot 1`] = `
       },
     ],
   },
+  "redis": {
+    "accent": "bg-red-700",
+    "category": "database",
+    "component": "sst.aws.Redis",
+    "defaultName": "Cache",
+    "description": "ElastiCache Redis/Valkey (in-VPC; cluster-mode; a VPC is generated)",
+    "kind": "redis",
+    "label": "Redis",
+    "props": [
+      {
+        "default": "redis",
+        "help": "ElastiCache engine. Valkey is the AWS/Linux-Foundation Redis fork — cheaper, wire-compatible. Cluster mode is on by default, so the runtime uses ioredis Cluster + TLS.",
+        "key": "engine",
+        "label": "Engine",
+        "options": [
+          {
+            "label": "Redis (OSS 7.1)",
+            "value": "redis",
+          },
+          {
+            "label": "Valkey 7.2 — ~20% cheaper",
+            "value": "valkey",
+          },
+        ],
+        "type": "select",
+      },
+    ],
+  },
   "router": {
     "accent": "bg-indigo-500",
     "category": "network",

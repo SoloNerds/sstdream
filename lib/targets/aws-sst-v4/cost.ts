@@ -171,6 +171,20 @@ function breakdownFor(r: Resource, nat: 'none' | 'ec2' | 'managed'): CostBreakdo
       else if (nat === 'managed') lines.push({ label: 'NAT Gateway', usd: 32 });
       break;
     }
+    case 'redis': {
+      // ElastiCache node runs 24/7. Valkey is ~20% cheaper than Redis OSS.
+      const valkey = r.props.engine === 'valkey';
+      lines = [
+        valkey
+          ? { label: 'ElastiCache Valkey (cache.t4g.micro)', usd: 9 }
+          : { label: 'ElastiCache Redis (cache.t4g.micro)', usd: 12 },
+      ];
+      // Only the shared-VPC owner carries the VPC line (nat is 'none' for the rest).
+      if (nat !== 'none') lines.push({ label: 'VPC (CloudMap DNS)', usd: 0.5 });
+      if (nat === 'ec2') lines.push({ label: 'fck-nat EC2 (t4g.nano)', usd: 4 });
+      else if (nat === 'managed') lines.push({ label: 'NAT Gateway', usd: 32 });
+      break;
+    }
     case 'cognito':
       lines = [{ label: 'Cognito (free ≤ 50k MAU)', usd: 0 }];
       break;
@@ -193,7 +207,9 @@ export function estimateAwsCost(bp: Blueprint): CostEstimate {
   // One shared VPC → one NAT; charge it on the first DB node only. The
   // generator floors NAT at "ec2" when consumers join the VPC (see plan.ts).
   const nat = effectiveAwsNat(bp);
-  const firstVpcNode = bp.resources.find((r) => r.kind === 'postgres' || r.kind === 'aurora');
+  const firstVpcNode = bp.resources.find(
+    (r) => r.kind === 'postgres' || r.kind === 'aurora' || r.kind === 'redis',
+  );
   const perResource = bp.resources.map((r) =>
     breakdownFor(r, r.id === firstVpcNode?.id ? nat : 'none'),
   );
