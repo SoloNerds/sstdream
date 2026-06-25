@@ -3,6 +3,7 @@ import type { TemplateMeta } from './types';
 import { AI_PROCESSING_APP } from './ai-processing-app';
 import { VERCEL_SAAS } from './vercel-saas';
 import { AWS_TEMPLATES } from './aws';
+import { VERCEL_TEMPLATES } from './vercel';
 
 export const TEMPLATES: TemplateMeta[] = [
   {
@@ -19,9 +20,10 @@ export const TEMPLATES: TemplateMeta[] = [
     name: 'Vercel SaaS',
     description: 'Blob, Postgres, queue + consumer, cron, Stripe webhook, Resend.',
     target: 'vercel',
-    tags: ['SaaS'],
+    tags: ['SaaS', 'Flagship'],
     ...VERCEL_SAAS,
   },
+  ...VERCEL_TEMPLATES,
 ];
 
 export function getTemplates(target: DeployTarget): TemplateMeta[] {
