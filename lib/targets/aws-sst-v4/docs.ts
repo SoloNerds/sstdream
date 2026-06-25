@@ -77,12 +77,15 @@ key from the IAM console), or set \`AWS_PROFILE\` to an existing profile.
 ${install}
 \`\`\`
 ${secretsSection}
-## ${3 + n}. Run locally
+## ${3 + n}. Run locally — Live Lambda
 
 \`\`\`bash
 ${run} sst dev
 \`\`\`
 
+> **One command, live against real AWS.** \`sst dev\` doesn't emulate the cloud — it proxies
+> every real invocation (API request, cron, queue message, S3 event) back to the handler on
+> your machine, so edits are live in **<1s with no redeploy**, with real IAM and breakpoints.
 > Each stage is an isolated copy of the app — \`sst dev\` uses your personal stage; the
 > commands below use \`production\`.
 
