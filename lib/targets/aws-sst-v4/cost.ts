@@ -228,6 +228,13 @@ function breakdownFor(r: Resource, nat: 'none' | 'ec2' | 'managed'): CostBreakdo
         },
       ];
       break;
+    case 'appsync':
+      // AppSync is request-priced (~$4/million queries) + the resolver Lambda. Small.
+      lines = [
+        { label: 'AppSync (per query)', usd: 1 },
+        { label: 'Resolver Lambda (request-priced)', usd: 0 },
+      ];
+      break;
     case 'cognito':
       lines = [{ label: 'Cognito (free ≤ 50k MAU)', usd: 0 }];
       break;

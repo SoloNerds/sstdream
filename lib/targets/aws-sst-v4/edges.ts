@@ -105,6 +105,21 @@ export const AWS_EDGE_INTENTS: EdgeIntentMeta[] = [
     to: ['postgres', 'aurora'],
   },
   {
+    intent: 'consumesGraphQL',
+    label: 'queries GraphQL',
+    description:
+      'App consumes an AppSync GraphQL endpoint (link → Resource.<Api>.url + a gql helper).',
+    from: ['nextjs'],
+    to: ['appsync'],
+  },
+  {
+    intent: 'resolvesFrom',
+    label: 'resolves from',
+    description: 'An AppSync resolver Lambda reads/writes a Dynamo table (data source link).',
+    from: ['appsync'],
+    to: ['dynamo'],
+  },
+  {
     intent: 'usesCache',
     label: 'caches in',
     description:
@@ -213,6 +228,8 @@ const INTENT_BY_PAIR: Record<string, string> = {
   'worker>postgres': 'queriesDb',
   'nextjs>aurora': 'queriesDb',
   'worker>aurora': 'queriesDb',
+  'nextjs>appsync': 'consumesGraphQL',
+  'appsync>dynamo': 'resolvesFrom',
   'nextjs>redis': 'usesCache',
   'worker>redis': 'usesCache',
   'service>dynamo': 'writesTo',

@@ -401,6 +401,22 @@ export const AWS_TEMPLATES: TemplateMeta[] = [
     ],
   ),
   aws(
+    'aws-graphql-api',
+    'GraphQL API (AppSync)',
+    'A managed GraphQL API with AppSync: a starter schema, a Lambda resolver that reads/writes a DynamoDB table, and a Next.js app that queries it through a typed gql() helper.',
+    ['API', 'GraphQL', 'Flagship'],
+    'graphql-api',
+    [
+      n('nextjs_1', 'nextjs', 'Web', 80, 180),
+      n('appsync_2', 'appsync', 'Graph', 400, 100),
+      n('dynamo_3', 'dynamo', 'Users', 700, 100),
+    ],
+    [
+      e('edge_4', 'nextjs_1', 'appsync_2', 'consumesGraphQL'),
+      e('edge_5', 'appsync_2', 'dynamo_3', 'resolvesFrom'),
+    ],
+  ),
+  aws(
     'aws-openauth-saas',
     'OpenAuth SaaS (self-hosted auth)',
     'Self-hosted auth with OpenAuth (sst.aws.Auth): the issuer runs on Lambda with auto-provisioned DynamoDB storage, and the Next.js app gets the full login/callback/verify flow. Your auth, your data — no third-party auth bill.',

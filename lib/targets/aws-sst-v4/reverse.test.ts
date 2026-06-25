@@ -94,8 +94,8 @@ jobs.subscribe("Processor", { handler: "src/processor.handler" });`;
 
   it('surfaces unmodeled components in `unrecognized` instead of silently dropping them', () => {
     const cfg = `
-      const web = new sst.aws.Nextjs("Web", { link: [graph] });
-      const graph = new sst.aws.AppSync("Graph", { schema: "schema.graphql" });
+      const web = new sst.aws.Nextjs("Web", { link: [stream] });
+      const stream = new sst.aws.Kinesis("Stream", {});
       const fs = new sst.aws.Efs("Files", { vpc });
     `;
     const { nodes, unrecognized } = parseAwsConfig(cfg);
@@ -103,7 +103,7 @@ jobs.subscribe("Processor", { handler: "src/processor.handler" });`;
     expect(nodes.map((n) => n.kind)).toEqual(['nextjs']);
     // …and the two unmodeled components are reported, not dropped.
     const reasons = unrecognized.map((u) => u.snippet).join(' ');
-    expect(reasons).toContain('sst.aws.AppSync');
+    expect(reasons).toContain('sst.aws.Kinesis');
     expect(reasons).toContain('sst.aws.Efs');
     expect(unrecognized.some((u) => /isn't modeled/.test(u.reason))).toBe(true);
   });

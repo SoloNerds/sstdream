@@ -42,6 +42,15 @@ exports[`aws-sst-v4 catalog > matches snapshot 1`] = `
     "kind": "apigatewayv2",
     "label": "HTTP API",
   },
+  "appsync": {
+    "accent": "bg-pink-700",
+    "category": "network",
+    "component": "sst.aws.AppSync",
+    "defaultName": "Graph",
+    "description": "Managed GraphQL API (schema + Lambda resolvers; optional Dynamo data source)",
+    "kind": "appsync",
+    "label": "AppSync (GraphQL)",
+  },
   "aurora": {
     "accent": "bg-cyan-800",
     "category": "database",
