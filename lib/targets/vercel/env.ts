@@ -1,4 +1,5 @@
 import type { Blueprint } from '@/lib/core/blueprint/types';
+import { kebabCase } from '@/lib/core/codegen/strings';
 
 export interface EnvVar {
   name: string;
@@ -8,6 +9,8 @@ export interface EnvVar {
 
 const ALL = ['development', 'preview', 'production'];
 const DEPLOYED = ['preview', 'production'];
+
+const screamingSnake = (s: string): string => kebabCase(s).replace(/-/g, '_').toUpperCase();
 
 /** Collect the environment variables this Vercel design needs. */
 export function collectEnv(bp: Blueprint): EnvVar[] {
@@ -21,11 +24,23 @@ export function collectEnv(bp: Blueprint): EnvVar[] {
     vars.push({ name: 'UPSTASH_REDIS_REST_TOKEN', scope: 'server', environments: ALL });
   }
   if (has('email')) vars.push({ name: 'RESEND_API_KEY', scope: 'server', environments: DEPLOYED });
-  if (has('webhook')) {
-    vars.push({ name: 'STRIPE_SECRET_KEY', scope: 'server', environments: DEPLOYED });
-    vars.push({ name: 'STRIPE_WEBHOOK_SECRET', scope: 'server', environments: DEPLOYED });
+  for (const wh of bp.resources.filter((r) => r.kind === 'webhook')) {
+    const provider = typeof wh.props.provider === 'string' ? wh.props.provider : 'stripe';
+    if (provider === 'stripe') {
+      vars.push({ name: 'STRIPE_SECRET_KEY', scope: 'server', environments: DEPLOYED });
+      vars.push({ name: 'STRIPE_WEBHOOK_SECRET', scope: 'server', environments: DEPLOYED });
+    } else {
+      vars.push({
+        name: `${screamingSnake(wh.name)}_WEBHOOK_SECRET`,
+        scope: 'server',
+        environments: DEPLOYED,
+      });
+    }
   }
   if (has('cron'))
     vars.push({ name: 'CRON_SECRET', scope: 'server', environments: ['production'] });
-  return vars;
+
+  // Dedupe by name (multiple Stripe webhooks share STRIPE_* vars).
+  const seen = new Set<string>();
+  return vars.filter((v) => (seen.has(v.name) ? false : (seen.add(v.name), true)));
 }

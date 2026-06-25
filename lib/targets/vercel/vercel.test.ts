@@ -215,6 +215,82 @@ describe('Vercel lane — editable props are wired into codegen', () => {
   });
 });
 
+describe('Vercel lane — codegen robustness', () => {
+  it('a generic webhook emits HMAC verification, not Stripe', () => {
+    const bp = draftBlueprint(
+      {
+        nodes: [
+          { id: 'a', kind: 'app', name: 'Web', props: {}, position: { x: 0, y: 0 } },
+          {
+            id: 'w',
+            kind: 'webhook',
+            name: 'GithubHook',
+            props: { provider: 'generic' },
+            position: { x: 1, y: 0 },
+          },
+        ],
+        edges: [],
+      },
+      'vercel',
+      VERCEL_SAAS.app,
+      NOW,
+    );
+    const out = Object.fromEntries(generateFiles(bp).map((f) => [f.path, f.content]));
+    const route = out['app/api/webhooks/github-hook/route.ts'];
+    expect(route).toContain('node:crypto');
+    expect(route).toContain('timingSafeEqual');
+    expect(route).toContain('GITHUB_HOOK_WEBHOOK_SECRET');
+    expect(route).not.toContain('import Stripe');
+    // env has the per-hook secret, not Stripe's
+    const env = JSON.parse(out['required-env.json']) as { required: { name: string }[] };
+    const names = env.required.map((e) => e.name);
+    expect(names).toContain('GITHUB_HOOK_WEBHOOK_SECRET');
+    expect(names).not.toContain('STRIPE_WEBHOOK_SECRET');
+    // and stripe is NOT added as a dependency
+    const pkg = JSON.parse(out['package.additions.json']) as {
+      dependencies: Record<string, string>;
+    };
+    expect(pkg.dependencies['stripe']).toBeUndefined();
+  });
+
+  it('a Stripe webhook (default) still emits Stripe verification + deps', () => {
+    expect(byPath['app/api/webhooks/stripe-hook/route.ts']).toContain('import Stripe');
+    const pkg = JSON.parse(byPath['package.additions.json']) as {
+      dependencies: Record<string, string>;
+    };
+    expect(pkg.dependencies['stripe']).toBeDefined();
+  });
+
+  it('the queue producer handles every queue, not just the first', () => {
+    const bp = draftBlueprint(
+      {
+        nodes: [
+          { id: 'a', kind: 'app', name: 'Web', props: {}, position: { x: 0, y: 0 } },
+          { id: 'q1', kind: 'queue', name: 'Jobs', props: {}, position: { x: 1, y: 0 } },
+          { id: 'q2', kind: 'queue', name: 'Emails', props: {}, position: { x: 2, y: 0 } },
+        ],
+        edges: [],
+      },
+      'vercel',
+      VERCEL_SAAS.app,
+      NOW,
+    );
+    const queue = generateFiles(bp).find((f) => f.path === 'lib/queue.ts')!.content;
+    expect(queue).toContain('"jobs": "jobs"');
+    expect(queue).toContain('"emails": "emails"');
+    expect(queue).toContain('export async function enqueue(topic: string, body: unknown)');
+  });
+
+  it('pins verified dependency versions instead of latest', () => {
+    const pkg = JSON.parse(byPath['package.additions.json']) as {
+      dependencies: Record<string, string>;
+    };
+    expect(Object.values(pkg.dependencies).every((v) => v !== 'latest')).toBe(true);
+    expect(pkg.dependencies['@neondatabase/serverless']).toMatch(/^\^\d/);
+    expect(pkg.dependencies['@vercel/queue']).toBe('^0.3.1');
+  });
+});
+
 describe('Vercel lane — honesty validation rules (docs §10)', () => {
   const mk = (
     nodes: { id: string; kind: string; name: string; props?: Record<string, unknown> }[],
