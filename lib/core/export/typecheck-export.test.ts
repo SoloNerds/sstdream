@@ -69,6 +69,9 @@ declare module "@vercel/speed-insights/next" { export const SpeedInsights: any; 
 declare module "ai" { export const streamText: any; export const convertToModelMessages: any; export type UIMessage = any; export class DefaultChatTransport { constructor(opts: any); } }
 declare module "@ai-sdk/react" { export const useChat: any; }
 declare module "next/og" { export class ImageResponse { constructor(element: any, options?: any); } }
+declare module "workflow" { export const sleep: any; export const defineHook: any; }
+declare module "workflow/api" { export const start: any; export const getRun: any; }
+declare module "workflow/next" { export const withWorkflow: any; }
 declare module "resend" { export const Resend: any; }
 declare module "stripe" { const Stripe: any; export default Stripe; }
 declare module "node:crypto" { const crypto: any; export default crypto; }

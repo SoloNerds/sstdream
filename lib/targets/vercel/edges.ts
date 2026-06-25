@@ -58,6 +58,14 @@ export const VERCEL_EDGE_INTENTS: EdgeIntentMeta[] = [
     from: ['app'],
     to: ['externalApi'],
   },
+  {
+    intent: 'triggersWorkflow',
+    label: 'triggers',
+    description:
+      'App starts a durable Workflow (start() — non-blocking). Generates a trigger route.',
+    from: ['app'],
+    to: ['workflow'],
+  },
 ];
 
 const INTENT_BY_PAIR: Record<string, string> = {
@@ -69,6 +77,7 @@ const INTENT_BY_PAIR: Record<string, string> = {
   'app>email': 'sendsEmailThrough',
   'app>edgeConfig': 'readsConfig',
   'app>externalApi': 'callsApi',
+  'app>workflow': 'triggersWorkflow',
 };
 
 export function vercelDefaultIntent(fromKind: string, toKind: string): string | null {

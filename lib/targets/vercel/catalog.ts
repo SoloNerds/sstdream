@@ -226,6 +226,16 @@ export const VERCEL_CATALOG: ResourceCatalog = {
     category: 'network',
     singleton: true,
   },
+  workflow: {
+    kind: 'workflow',
+    label: 'Workflow',
+    defaultName: 'Workflow',
+    component: 'Vercel Workflow (durable)',
+    description:
+      'Durable, multi-step function (use workflow / use step) — pause/retry/resume; zero-config on Vercel',
+    accent: 'bg-indigo-600',
+    category: 'compute',
+  },
 };
 
 export const VERCEL_CATALOG_ORDER = [
@@ -236,6 +246,7 @@ export const VERCEL_CATALOG_ORDER = [
   'redis',
   'queue',
   'consumer',
+  'workflow',
   'cron',
   'webhook',
   'externalApi',
