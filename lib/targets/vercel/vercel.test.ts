@@ -75,6 +75,54 @@ describe('Vercel lane — generator', () => {
   });
 });
 
+describe('Vercel lane — runnable project scaffold', () => {
+  it('emits a complete Next.js project, not just fragments', () => {
+    const paths = files.map((f) => f.path);
+    expect(paths).toEqual(
+      expect.arrayContaining([
+        'package.json',
+        'tsconfig.json',
+        'next.config.ts',
+        '.gitignore',
+        'app/layout.tsx',
+        'app/page.tsx',
+        'AGENTS.md',
+      ]),
+    );
+  });
+
+  it('package.json is a real Next.js app (next/react + the service deps, no SST)', () => {
+    const pkg = JSON.parse(byPath['package.json']) as {
+      name: string;
+      dependencies: Record<string, string>;
+      scripts: Record<string, string>;
+    };
+    expect(pkg.name).toBe('vercel-saas');
+    expect(pkg.dependencies['next']).toBe('^16.0.0');
+    expect(pkg.dependencies['react']).toBe('^19.0.0');
+    // service deps from the design are merged in
+    expect(pkg.dependencies['@neondatabase/serverless']).toBeDefined();
+    expect(pkg.dependencies['@vercel/blob']).toBeDefined();
+    // never SST on the Vercel lane
+    expect(pkg.dependencies['sst']).toBeUndefined();
+    expect(pkg.scripts.deploy).toBe('vercel --prod');
+  });
+
+  it('AGENTS.md documents the graph, the deploy flow, and the storage hard rule', () => {
+    const agents = byPath['AGENTS.md'];
+    expect(agents).toContain('deploys **natively on Vercel**');
+    expect(agents).toContain('Git integration');
+    expect(agents).toContain('stores files in'); // a data-flow edge label
+    expect(agents).toContain('never `@vercel/kv` or `@vercel/postgres`');
+  });
+
+  it('the landing page lists the wired endpoints', () => {
+    const page = byPath['app/page.tsx'];
+    expect(page).toContain('GET /api/cron/daily');
+    expect(page).toContain('POST /api/queues/worker (consumer)');
+  });
+});
+
 describe('Vercel lane — validation + export', () => {
   it('validates the SaaS template clean', () => {
     expect(validateBlueprint(bp).ok).toBe(true);
