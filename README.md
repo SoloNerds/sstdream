@@ -5,13 +5,30 @@
 [![CI](https://github.com/SoloNerds/sstdream/actions/workflows/ci.yml/badge.svg)](https://github.com/SoloNerds/sstdream/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-SSTDREAM is a cutting-edge **SST v4 deployment template builder**. You design your
-full-stack app visually, watch the architecture **simulate** to confirm everything wires
-up correctly, see **cost estimates** and **best-practice recommendations**, then **export
-clean, current SST v4 files** you drop into your own project and deploy yourself.
+### ▶ [Open the live builder →](https://solonerds.github.io/sstdream/builder/)
+
+**No install. No login. No credentials.** Design in your browser, export a complete project, deploy it yourself.
+
+SSTDREAM is a visual **SST v4 (AWS)** and **Vercel** deployment-template builder. You design your
+full-stack app on a canvas, watch the architecture **simulate** to confirm everything wires
+up correctly, see **cost estimates** + an **SST-Console-style infrastructure view**, then **export
+clean, verified, type-checked files** you drop into your own project and deploy yourself.
 
 > The website never deploys anything and never touches your cloud credentials.
-> It forges files. You run `sst` (or `vercel`) yourself.
+> It forges files. You run `sst` (or `vercel`) yourself — and **the builder makes zero AI/network calls.**
+
+## Who it's for
+
+- **New to SST or Vercel?** Start from a template, watch the simulation light up **green**, and
+  export a **complete, runnable project** with an `AGENTS.md` that explains every file — then run
+  `sst dev` and you're live. No prior infrastructure knowledge needed: the builder won't let you
+  wire something that wouldn't deploy, and the **cost** + **tips** panels teach the best practices
+  as you go.
+- **Already deep in SST?** 28 AWS kinds (ECS Fargate containers, Redis, Realtime, Step Functions,
+  AppSync, OpenAuth, …) and 22 Vercel kinds — **every snippet verified against the live docs** and
+  type-checked end-to-end by a meta-test that compiles every generated project. Paste your existing
+  `sst.config.ts` (or a Vercel `package.json`) with **"From code"** and edit it visually. Zero
+  hand-holding, zero hallucinated APIs.
 
 ---
 
@@ -108,17 +125,20 @@ Jobs · Worker ProcessJob · Dynamo AppTable — designed, validated, simulated,
 exported to a deployable SST project end to end. A **Vercel SaaS** template proves the
 second lane.
 
-## Run it
+## Use it — no install
+
+**[Open the builder →](https://solonerds.github.io/sstdream/builder/)** Pick a lane (AWS / Vercel),
+start from a template or paste your own code (**From code**), **Simulate**, check **Cost** / the
+**Infrastructure** view / **Tips**, and **Export** the project (copy files or download the ZIP).
+
+## Build on it — run locally
 
 ```bash
 yarn install
 yarn dev          # http://localhost:3000/builder
-yarn test         # 536 tests
+yarn test         # 614 tests
 yarn lint && yarn typecheck && yarn build
 ```
-
-Open `/builder`, pick a lane (AWS / Vercel), **Load template**, then **Simulate**,
-check **Cost** / **Tips**, and **Export** the project (copy files or download the ZIP).
 
 ## Contributing
 
