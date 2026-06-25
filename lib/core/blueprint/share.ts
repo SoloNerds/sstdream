@@ -38,9 +38,40 @@ export function decodeDesign(encoded: string): Blueprint | null {
   }
 }
 
-/** Build a full shareable builder URL for a design (uses the hash fragment). */
+/**
+ * Strip anything that could carry a real secret/value from a design before it
+ * goes into a shareable link. We share the SHAPE, never the values:
+ *  - key-value props (e.g. a Next.js `environment` map) keep their keys but have
+ *    every value blanked — a pasted API key or connection string never travels.
+ *  - the envelope `secrets`/`outputs` lists are dropped entirely.
+ * Names, kinds, edges, schedules, access levels, and env-var *names* are kept —
+ * they describe the architecture, not a secret.
+ */
+export function sanitizeForShare(bp: Blueprint): Blueprint {
+  const redactProps = (props: Record<string, unknown>): Record<string, unknown> => {
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(props)) {
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        const blanked: Record<string, unknown> = {};
+        for (const k of Object.keys(value as Record<string, unknown>)) blanked[k] = '';
+        out[key] = blanked;
+      } else {
+        out[key] = value;
+      }
+    }
+    return out;
+  };
+  return {
+    ...bp,
+    resources: bp.resources.map((r) => ({ ...r, props: redactProps(r.props) })),
+    secrets: [],
+    outputs: [],
+  };
+}
+
+/** Build a full shareable builder URL (sanitized — no secret values travel). */
 export function buildShareUrl(origin: string, bp: Blueprint): string {
-  return `${origin}/builder#d=${encodeDesign(bp)}`;
+  return `${origin}/builder#d=${encodeDesign(sanitizeForShare(bp))}`;
 }
 
 /** Read a `#d=...` design from a builder URL hash, or null if absent/invalid. */
