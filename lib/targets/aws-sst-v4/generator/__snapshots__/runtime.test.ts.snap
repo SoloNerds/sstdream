@@ -43,6 +43,22 @@ sst-env.d.ts
 > \`sst.config.ts\` (\`$config\` + \`sst.aws.*\`); runtime code reads linked resources via
 > \`import { Resource } from "sst"\`. **Read this before extending the app.**
 
+## Local development — \`sst dev\` (Live Lambda)
+
+\`\`\`bash
+npm install && npx sst dev
+\`\`\`
+
+**One command runs the whole app live against real AWS.** \`sst dev\` does *not* emulate the
+cloud — it deploys stub Lambdas to your personal stage and proxies every real invocation
+(API request, cron tick, queue message, S3 event, Step Functions step) back to the handler
+running **on your machine**. Edit a function and it's live in **<1 second with no redeploy**,
+with real IAM permissions and breakpoint debugging. Your Next.js dev server runs alongside it
+from the same command.
+
+> Each developer gets an isolated **stage** (your username by default), so \`sst dev\` never
+> collides with a teammate or with \`production\`.
+
 ## Resources
 
 - **Web** (Next.js Web — \`sst.aws.Nextjs\`)

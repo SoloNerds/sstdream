@@ -18,6 +18,41 @@ function Empty({ children }: { children: ReactNode }) {
   );
 }
 
+// The SST lifecycle, surfaced like the Console — leading with `sst dev` (Live Lambda),
+// the killer DX. These are the commands you run against this exact design.
+function LifecycleStrip() {
+  const steps: { cmd: string; label: string; tone: string }[] = [
+    {
+      cmd: 'sst dev',
+      label: 'Live Lambda — run locally against real AWS, no redeploy',
+      tone: 'text-emerald-700 dark:text-emerald-400',
+    },
+    {
+      cmd: 'sst diff',
+      label: 'Preview the change set before shipping',
+      tone: 'text-sky-700 dark:text-sky-400',
+    },
+    {
+      cmd: 'sst deploy --stage production',
+      label: 'Ship it',
+      tone: 'text-indigo-700 dark:text-indigo-400',
+    },
+  ];
+  return (
+    <div className="mb-4 grid gap-2 sm:grid-cols-3">
+      {steps.map((s) => (
+        <div
+          key={s.cmd}
+          className="rounded-lg border border-neutral-200 bg-white px-3 py-2 dark:border-neutral-800 dark:bg-neutral-900"
+        >
+          <code className={`text-[11px] font-semibold ${s.tone}`}>{s.cmd}</code>
+          <div className="mt-0.5 text-[10px] text-neutral-500">{s.label}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function FindingRow({ f }: { f: SecurityFinding }) {
   const warn = f.level === 'warn';
   return (
@@ -147,8 +182,8 @@ export function InfraView() {
               <strong className="text-neutral-700 dark:text-neutral-200">
                 ~${cost.totalMonthlyUsd.toFixed(2)}/mo
               </strong>
-              . Derived from a verified SST v4 map — read-only. Live graph:{' '}
-              <code className="text-[11px]">sst diff</code>.
+              . Derived from a verified SST v4 map — read-only, like the SST Console&apos;s resource
+              graph.
             </p>
           </div>
           <div className="flex gap-3 text-[11px] text-neutral-500">
@@ -159,6 +194,8 @@ export function InfraView() {
             <span className="opacity-60">dimmed = conditional</span>
           </div>
         </div>
+
+        <LifecycleStrip />
 
         {findings.length > 0 && (
           <div className="mb-4 overflow-hidden rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
