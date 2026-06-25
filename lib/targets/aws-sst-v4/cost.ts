@@ -185,6 +185,23 @@ function breakdownFor(r: Resource, nat: 'none' | 'ec2' | 'managed'): CostBreakdo
       else if (nat === 'managed') lines.push({ label: 'NAT Gateway', usd: 32 });
       break;
     }
+    case 'service': {
+      // Fargate runs 24/7 per task. Rough vCPU/mem pricing for the chosen size.
+      const cpuUsd: Record<string, number> = {
+        '0.25 vCPU': 9,
+        '0.5 vCPU': 18,
+        '1 vCPU': 36,
+        '2 vCPU': 72,
+        '4 vCPU': 144,
+      };
+      const cpu = typeof r.props.cpu === 'string' ? r.props.cpu : '0.25 vCPU';
+      lines = [{ label: `Fargate (${cpu}, 1 task)`, usd: cpuUsd[cpu] ?? 9 }];
+      if (r.props.public !== 'no') lines.push({ label: 'Application Load Balancer', usd: 16 });
+      if (nat !== 'none') lines.push({ label: 'VPC (CloudMap DNS)', usd: 0.5 });
+      if (nat === 'ec2') lines.push({ label: 'fck-nat EC2 (t4g.nano)', usd: 4 });
+      else if (nat === 'managed') lines.push({ label: 'NAT Gateway', usd: 32 });
+      break;
+    }
     case 'cognito':
       lines = [{ label: 'Cognito (free ≤ 50k MAU)', usd: 0 }];
       break;
@@ -208,7 +225,8 @@ export function estimateAwsCost(bp: Blueprint): CostEstimate {
   // generator floors NAT at "ec2" when consumers join the VPC (see plan.ts).
   const nat = effectiveAwsNat(bp);
   const firstVpcNode = bp.resources.find(
-    (r) => r.kind === 'postgres' || r.kind === 'aurora' || r.kind === 'redis',
+    (r) =>
+      r.kind === 'postgres' || r.kind === 'aurora' || r.kind === 'redis' || r.kind === 'service',
   );
   const perResource = bp.resources.map((r) =>
     breakdownFor(r, r.id === firstVpcNode?.id ? nat : 'none'),

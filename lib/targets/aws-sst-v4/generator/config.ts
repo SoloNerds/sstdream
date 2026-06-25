@@ -1,5 +1,5 @@
 import type { Blueprint, Resource } from '@/lib/core/blueprint/types';
-import { indent } from '@/lib/core/codegen/strings';
+import { indent, kebabCase } from '@/lib/core/codegen/strings';
 import { effectiveAwsNat, planAws, type AwsPlan } from './plan';
 
 // sst.config.ts renderer. Verified against docs/sst-v4-target.md@0.1.0 (2026-06-08):
@@ -231,6 +231,35 @@ function renderRedis(r: Resource, plan: AwsPlan): string {
   return `const ${v} = new sst.aws.Redis(${q(r.name)}, {\n  vpc,${engine}\n});`;
 }
 
+// ECS Fargate Service on the shared Cluster. The container source lives in its own
+// services/<name>/ folder (own Dockerfile). A public service gets an ALB (rules use
+// the verified "PORT/protocol" string shape); private services are in-VPC only. The
+// task runs in private subnets, so it needs the VPC's NAT to pull its image.
+function renderService(r: Resource, plan: AwsPlan): string {
+  const v = plan.varNameById.get(r.id);
+  const slug = kebabCase(r.name);
+  const port = typeof r.props.port === 'number' ? r.props.port : 3000;
+  const links = plan.linkVarsById.get(r.id) ?? [];
+  const lines = [`const ${v} = new sst.aws.Service(${q(r.name)}, {`, `  cluster,`];
+  lines.push(`  image: { context: ${q(`./services/${slug}`)} },`);
+  if (typeof r.props.cpu === 'string' && r.props.cpu !== '0.25 vCPU')
+    lines.push(`  cpu: ${q(r.props.cpu)},`);
+  if (typeof r.props.memory === 'string' && r.props.memory && r.props.memory !== '0.5 GB')
+    lines.push(`  memory: ${q(r.props.memory)},`);
+  if (r.props.public !== 'no') {
+    lines.push(
+      `  loadBalancer: {`,
+      `    rules: [{ listen: "80/http", forward: ${q(`${port}/http`)} }],`,
+      `  },`,
+    );
+  }
+  if (links.length) lines.push(`  link: ${linkArray(links)},`);
+  // In `sst dev` the service is NOT deployed — SST runs this command locally.
+  lines.push(`  dev: { command: "npm run dev" },`);
+  lines.push(`});`);
+  return lines.join('\n');
+}
+
 // Cognito user pool + a web client. Linked → Resource.<Pool>.id; the pool/client
 // ids are injected into the Next.js app as NEXT_PUBLIC_COGNITO_* env (see renderNextjs).
 function renderCognito(r: Resource, plan: AwsPlan): string {
@@ -338,6 +367,7 @@ const OUTPUT_ORDER: Record<string, number> = {
   staticsite: 0,
   apigatewayv2: 0,
   router: 0,
+  service: 0,
   bucket: 1,
   dynamo: 2,
   queue: 3,
@@ -346,6 +376,8 @@ const OUTPUT_ORDER: Record<string, number> = {
 function renderOutputs(bp: Blueprint, plan: AwsPlan): string | null {
   const entries = plan.declared
     .filter((r) => r.kind in OUTPUT_ORDER)
+    // A private Service (no load balancer) has no .url to export.
+    .filter((r) => !(r.kind === 'service' && r.props.public === 'no'))
     .sort((a, b) => OUTPUT_ORDER[a.kind] - OUTPUT_ORDER[b.kind])
     .map((r) => {
       const v = plan.varNameById.get(r.id)!;
@@ -354,7 +386,8 @@ function renderOutputs(bp: Blueprint, plan: AwsPlan): string | null {
         r.kind === 'queue' ||
         r.kind === 'staticsite' ||
         r.kind === 'apigatewayv2' ||
-        r.kind === 'router'
+        r.kind === 'router' ||
+        r.kind === 'service'
           ? 'url'
           : 'name';
       return `  ${v}: ${v}.${prop},`;
@@ -374,7 +407,13 @@ export function generateSstConfig(bp: Blueprint): string {
   for (const r of byKind('cognito')) statements.push(renderCognito(r, plan));
   for (const r of byKind('bucket')) statements.push(renderBucket(r, plan));
   for (const r of byKind('dynamo')) statements.push(renderDynamo(r, plan));
-  const vpcResources = [...byKind('postgres'), ...byKind('aurora'), ...byKind('redis')];
+  const services = byKind('service');
+  const vpcResources = [
+    ...byKind('postgres'),
+    ...byKind('aurora'),
+    ...byKind('redis'),
+    ...services,
+  ];
   if (vpcResources.length) {
     const nat = effectiveAwsNat(bp);
     statements.push(
@@ -385,6 +424,11 @@ export function generateSstConfig(bp: Blueprint): string {
     for (const r of byKind('postgres')) statements.push(renderPostgres(r, plan));
     for (const r of byKind('aurora')) statements.push(renderAurora(r, plan));
     for (const r of byKind('redis')) statements.push(renderRedis(r, plan));
+    // One shared Cluster (just a namespace on the Vpc) backs every Service.
+    if (services.length) {
+      statements.push('const cluster = new sst.aws.Cluster("Cluster", { vpc });');
+      for (const r of services) statements.push(renderService(r, plan));
+    }
   }
   // DLQ targets must be declared before the queues that reference their .arn.
   {

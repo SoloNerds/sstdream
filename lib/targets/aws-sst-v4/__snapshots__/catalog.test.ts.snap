@@ -421,6 +421,79 @@ exports[`aws-sst-v4 catalog > matches snapshot 1`] = `
     "kind": "secret",
     "label": "Secret",
   },
+  "service": {
+    "accent": "bg-orange-700",
+    "category": "compute",
+    "component": "sst.aws.Service",
+    "defaultName": "Service",
+    "description": "Long-running container on ECS Fargate (a Cluster + VPC are generated)",
+    "kind": "service",
+    "label": "Service (Container)",
+    "props": [
+      {
+        "default": "0.25 vCPU",
+        "help": "Fargate vCPU. Must form a valid CPU/memory pair. Billed per vCPU-second while a task runs (24/7 for an always-on service).",
+        "key": "cpu",
+        "label": "CPU",
+        "options": [
+          {
+            "label": "0.25 vCPU",
+            "value": "0.25 vCPU",
+          },
+          {
+            "label": "0.5 vCPU",
+            "value": "0.5 vCPU",
+          },
+          {
+            "label": "1 vCPU",
+            "value": "1 vCPU",
+          },
+          {
+            "label": "2 vCPU",
+            "value": "2 vCPU",
+          },
+          {
+            "label": "4 vCPU",
+            "value": "4 vCPU",
+          },
+        ],
+        "type": "select",
+      },
+      {
+        "default": "0.5 GB",
+        "help": "Fargate memory, e.g. "0.5 GB", "2 GB". Constrained by the chosen CPU per Fargate rules.",
+        "key": "memory",
+        "label": "Memory",
+        "placeholder": "0.5 GB",
+        "type": "text",
+      },
+      {
+        "default": 3000,
+        "help": "The port your container listens on. A public service gets an ALB that forwards :80 → this port.",
+        "key": "port",
+        "label": "Container port",
+        "placeholder": "3000",
+        "type": "number",
+      },
+      {
+        "default": "yes",
+        "help": "Public adds an ALB (~$16/mo) and a service.url. Private services are reachable only inside the VPC.",
+        "key": "public",
+        "label": "Expose publicly (ALB)",
+        "options": [
+          {
+            "label": "Yes — Application Load Balancer + public URL",
+            "value": "yes",
+          },
+          {
+            "label": "No — private (in-VPC / CloudMap only)",
+            "value": "no",
+          },
+        ],
+        "type": "select",
+      },
+    ],
+  },
   "snstopic": {
     "accent": "bg-rose-500",
     "category": "messaging",
