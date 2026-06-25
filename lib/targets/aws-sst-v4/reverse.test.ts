@@ -92,6 +92,37 @@ jobs.subscribe("Processor", { handler: "src/processor.handler" });`;
     expect(edges).toEqual([expect.objectContaining({ source: worker.id, intent: 'subscribesTo' })]);
   });
 
+  it('surfaces unmodeled components in `unrecognized` instead of silently dropping them', () => {
+    const cfg = `
+      const web = new sst.aws.Nextjs("Web", { link: [graph] });
+      const graph = new sst.aws.AppSync("Graph", { schema: "schema.graphql" });
+      const fs = new sst.aws.Efs("Files", { vpc });
+    `;
+    const { nodes, unrecognized } = parseAwsConfig(cfg);
+    // The modeled node is recovered…
+    expect(nodes.map((n) => n.kind)).toEqual(['nextjs']);
+    // …and the two unmodeled components are reported, not dropped.
+    const reasons = unrecognized.map((u) => u.snippet).join(' ');
+    expect(reasons).toContain('sst.aws.AppSync');
+    expect(reasons).toContain('sst.aws.Efs');
+    expect(unrecognized.some((u) => /isn't modeled/.test(u.reason))).toBe(true);
+  });
+
+  it('reports a link to an unresolved resource', () => {
+    const { unrecognized } = parseAwsConfig(
+      'const web = new sst.aws.Nextjs("Web", { link: [somethingElse] });',
+    );
+    expect(unrecognized.some((u) => /somethingElse/.test(u.reason))).toBe(true);
+  });
+
+  it('a clean config recovers everything with an empty `unrecognized`', () => {
+    const { nodes, unrecognized } = parseAwsConfig(
+      'const b = new sst.aws.Bucket("Files");\nconst w = new sst.aws.Nextjs("Web", { link: [b] });',
+    );
+    expect(nodes).toHaveLength(2);
+    expect(unrecognized).toEqual([]);
+  });
+
   it('ignores realtime.subscribe handler-path calls (not a worker)', () => {
     const cfg = `
 const realtime = new sst.aws.Realtime("Realtime", { authorizer: "src/auth.handler" });
@@ -106,7 +137,9 @@ realtime.subscribe("src/sub.handler", { filter: "x" });`;
     for (const t of AWS_TEMPLATES) {
       it(t.id, () => {
         const cfg = configOf(t.snapshot);
-        const { nodes } = parseAwsConfig(cfg);
+        const { nodes, unrecognized } = parseAwsConfig(cfg);
+        // Our own generated config must parse back with nothing unmodeled.
+        expect(unrecognized).toEqual([]);
         const recovered = nodes.map((n) => `${n.kind}:${n.name}`).sort();
         const expected = t.snapshot.nodes
           .filter((n) => !NON_INFRA.has(n.kind))
