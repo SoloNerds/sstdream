@@ -1,10 +1,12 @@
 import { estimateAwsCost } from '@/lib/targets/aws-sst-v4/cost';
+import { estimateVercelCost } from '@/lib/targets/vercel/cost';
 import type { Blueprint } from '@/lib/core/blueprint/types';
 import type { DeployTarget } from '@/lib/targets/types';
 import type { CostEstimate, CostProvider } from './types';
 
 const PROVIDERS: Partial<Record<DeployTarget, CostProvider>> = {
   'aws-sst-v4': estimateAwsCost,
+  vercel: estimateVercelCost,
 };
 
 const EMPTY = (region: string, target: string): CostEstimate => ({

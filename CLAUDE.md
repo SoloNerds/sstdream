@@ -75,7 +75,9 @@ A new lane is registered in `lib/targets/registry.ts` plus the `generate.ts`,
 
 ## Known follow-ups
 
-- **Vercel lane parity** is the frontier: simulation / cost / expansion / audit are AWS-only
-  and degrade gracefully on Vercel (selectors return empty). Resend email + an AI SDK v5
-  template belong on the Vercel lane (email is SES on AWS, Resend on Vercel).
+- **Vercel lane parity**: the Vercel lane now ships a runnable project scaffold, editable
+  props, the doc §10 validation rules, and all five engines (simulation / cost / expansion /
+  audit / recommendations live in `lib/targets/vercel/`). Remaining frontier: more catalog
+  kinds (Workflow, Edge Config, External API), generalizing the Stripe-only webhook, and an
+  AI SDK v5 template. (Email is SES on AWS, Resend on Vercel.)
 - No in-app AI assistant (deferred by design until export quality is proven).
