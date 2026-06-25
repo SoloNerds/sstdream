@@ -4,12 +4,16 @@ name: Deploy to GitHub Pages
 # client-side (it never deploys your cloud — it generates files you run), so a
 # static export is a complete, faithful copy of the builder.
 #
-# One-time setup: repo Settings → Pages → Build and deployment → Source:
-# "GitHub Actions". Then every push to main republishes the builder.
+# Manual trigger for now: run it from the Actions tab ("Run workflow") when you
+# want to (re)publish. The configure-pages step below self-enables Pages, so
+# there's no separate Settings step. On the SoloNerds Enterprise plan you can
+# keep the published site PRIVATE (Settings → Pages → Visibility) — the repo
+# stays private regardless.
+#
+# When you open-source this, add `push: { branches: [main] }` under `on:` to
+# republish automatically on every push.
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 # Allow this workflow to publish to Pages via OIDC.
@@ -39,7 +43,11 @@ jobs:
         env:
           PAGES_BASE_PATH: /${{ github.event.repository.name }}
         run: yarn build
+      # enablement: true turns Pages on automatically the first time this runs,
+      # so you don't have to flip any repo setting first.
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: ./out
