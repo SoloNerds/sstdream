@@ -388,6 +388,34 @@ export async function assertHuman(): Promise<Response | null> {
 }
 `;
 
+// Ephemeral microVM to run untrusted / AI-generated code (verified: @vercel/sandbox@2,
+// GA). MUST be Node runtime (the SDK uses node streams/undici); region-locked to iad1;
+// auth is automatic on Vercel via VERCEL_OIDC_TOKEN (locally: vercel link && env pull).
+const sandboxRoute = (): string =>
+  `import { Sandbox } from "@vercel/sandbox";
+
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
+export async function POST(req: Request): Promise<Response> {
+  const sandbox = await Sandbox.create({
+    runtime: "node24",
+    timeout: 5 * 60 * 1000, // 5 min default; max 45m Hobby / 24h Pro
+  });
+  try {
+    const result = await sandbox.runCommand({
+      cmd: "node",
+      args: ["-e", "console.log('Hello from Vercel Sandbox!')"],
+    });
+    const stdout = await result.stdout();
+    const stderr = await result.stderr();
+    return Response.json({ exitCode: result.exitCode, stdout, stderr });
+  } finally {
+    await sandbox.stop();
+  }
+}
+`;
+
 const workflowTriggerRoute = (name: string, slug: string): string =>
   `import { start } from "workflow/api";
 import { ${camel(name)} } from "@/workflows/${slug}";
@@ -451,6 +479,7 @@ const DEP_VERSIONS: Record<string, string> = {
   '@vercel/firewall': '^1.2.1',
   '@vercel/functions': '^3.7.0',
   botid: '^1.5.0',
+  '@vercel/sandbox': '^2.2.0',
   resend: '^6.14.0',
   stripe: '^22.3.0',
 };
@@ -483,6 +512,7 @@ function packageAdditions(bp: Blueprint): string {
   if (present.has('rateLimit')) add('@vercel/firewall');
   if (present.has('edgeMiddleware')) add('@vercel/functions');
   if (present.has('botId')) add('botid');
+  if (present.has('sandbox')) add('@vercel/sandbox');
   if (present.has('email')) add('resend');
   // stripe only when a webhook actually uses the Stripe provider.
   if (bp.resources.some((r) => r.kind === 'webhook' && webhookProvider(r) === 'stripe'))
@@ -575,6 +605,8 @@ export function generateVercel(bp: Blueprint): GeneratedFile[] {
     files.push({ path: 'app/actions/background-task.ts', content: afterExample(), language: 'ts' });
   if (has('edgeMiddleware'))
     files.push({ path: 'proxy.ts', content: edgeProxyFile(), language: 'ts' });
+  if (has('sandbox'))
+    files.push({ path: 'app/api/sandbox/route.ts', content: sandboxRoute(), language: 'ts' });
   if (has('botId')) {
     const protectedPath = has('aiGateway') ? '/api/chat' : '/api/protected';
     files.push({

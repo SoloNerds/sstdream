@@ -80,6 +80,13 @@ export const VERCEL_EDGE_INTENTS: EdgeIntentMeta[] = [
     from: ['featureFlags'],
     to: ['edgeConfig'],
   },
+  {
+    intent: 'runsCode',
+    label: 'runs code in',
+    description: 'App runs untrusted/AI-generated code in an ephemeral Sandbox microVM.',
+    from: ['app'],
+    to: ['sandbox'],
+  },
 ];
 
 const INTENT_BY_PAIR: Record<string, string> = {
@@ -94,6 +101,7 @@ const INTENT_BY_PAIR: Record<string, string> = {
   'app>workflow': 'triggersWorkflow',
   'app>featureFlags': 'readsFlags',
   'featureFlags>edgeConfig': 'flagsBackedBy',
+  'app>sandbox': 'runsCode',
 };
 
 export function vercelDefaultIntent(fromKind: string, toKind: string): string | null {

@@ -634,6 +634,32 @@ describe('Vercel lane — Edge Middleware + BotID (verified Next 16 proxy / boti
   });
 });
 
+describe('Vercel lane — Sandboxes (verified @vercel/sandbox@2)', () => {
+  it('emits a Node-runtime route using Sandbox.create + runCommand + the dep', () => {
+    const bp = draftBlueprint(
+      {
+        nodes: [
+          { id: 'a', kind: 'app', name: 'Web', props: {}, position: { x: 0, y: 0 } },
+          { id: 's', kind: 'sandbox', name: 'Sandbox', props: {}, position: { x: 1, y: 0 } },
+        ],
+        edges: [{ id: 'e', source: 'a', target: 's', intent: 'runsCode' }],
+      },
+      'vercel',
+      VERCEL_SAAS.app,
+      NOW,
+    );
+    const m = Object.fromEntries(generateFiles(bp).map((f) => [f.path, f.content]));
+    const route = m['app/api/sandbox/route.ts'];
+    expect(route).toContain('import { Sandbox } from "@vercel/sandbox"');
+    expect(route).toContain('export const runtime = "nodejs"'); // SDK is not Edge-compatible
+    expect(route).toContain('Sandbox.create(');
+    expect(route).toContain('runCommand(');
+    expect(route).toContain('await sandbox.stop()'); // releases resources promptly
+    const pkg = JSON.parse(m['package.additions.json']) as { dependencies: Record<string, string> };
+    expect(pkg.dependencies['@vercel/sandbox']).toBe('^2.2.0');
+  });
+});
+
 describe('Vercel lane — honesty validation rules (docs §10)', () => {
   const mk = (
     nodes: { id: string; kind: string; name: string; props?: Record<string, unknown> }[],
