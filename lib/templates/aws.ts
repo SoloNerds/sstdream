@@ -401,6 +401,22 @@ export const AWS_TEMPLATES: TemplateMeta[] = [
     ],
   ),
   aws(
+    'aws-openauth-saas',
+    'OpenAuth SaaS (self-hosted auth)',
+    'Self-hosted auth with OpenAuth (sst.aws.Auth): the issuer runs on Lambda with auto-provisioned DynamoDB storage, and the Next.js app gets the full login/callback/verify flow. Your auth, your data — no third-party auth bill.',
+    ['SaaS', 'Auth', 'Flagship'],
+    'openauth-saas',
+    [
+      n('nextjs_1', 'nextjs', 'Web', 80, 180),
+      n('openauth_2', 'openauth', 'Auth', 400, 80),
+      n('dynamo_3', 'dynamo', 'Users', 400, 300),
+    ],
+    [
+      e('edge_4', 'nextjs_1', 'openauth_2', 'usesOpenAuth'),
+      e('edge_5', 'nextjs_1', 'dynamo_3', 'writesTo'),
+    ],
+  ),
+  aws(
     'aws-cached-api',
     'Cached API + Redis',
     'A read-heavy API: Postgres as the source of truth, ElastiCache Redis (cluster-mode, TLS) as the cache. Both share one auto-generated VPC; fck-nat keeps Lambdas online.',

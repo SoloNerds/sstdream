@@ -124,6 +124,7 @@ const DECL_ORDER: Record<string, number> = {
   ai: 0,
   email: 0,
   cognito: 0,
+  openauth: 0,
   bucket: 1,
   dynamo: 2,
   postgres: 2,
@@ -161,6 +162,7 @@ export function planAws(bp: Blueprint): AwsPlan {
       r.kind === 'ai' ||
       r.kind === 'email' ||
       r.kind === 'cognito' ||
+      r.kind === 'openauth' ||
       r.kind === 'bucket' ||
       r.kind === 'dynamo' ||
       r.kind === 'postgres' ||

@@ -484,6 +484,15 @@ export const AWS_CATALOG: ResourceCatalog = {
     accent: 'bg-amber-700',
     category: 'config',
   },
+  openauth: {
+    kind: 'openauth',
+    label: 'OpenAuth',
+    defaultName: 'Auth',
+    component: 'sst.aws.Auth',
+    description: 'Self-hosted OpenAuth issuer (the modern SST auth — Lambda + DynamoDB storage)',
+    accent: 'bg-amber-800',
+    category: 'config',
+  },
   clerk: {
     kind: 'clerk',
     label: 'Clerk Auth',
@@ -539,6 +548,7 @@ export const AWS_CATALOG_ORDER = [
   'secret',
   'email',
   'cognito',
+  'openauth',
   'clerk',
   'stripe',
   'mongodb',

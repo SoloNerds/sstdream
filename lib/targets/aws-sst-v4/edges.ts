@@ -178,6 +178,14 @@ export const AWS_EDGE_INTENTS: EdgeIntentMeta[] = [
     from: ['nextjs'],
     to: ['clerk'],
   },
+  {
+    intent: 'usesOpenAuth',
+    label: 'authenticates with',
+    description:
+      'App uses a self-hosted OpenAuth issuer (sst.aws.Auth) — links it + generates the issuer/client/callback flow.',
+    from: ['nextjs'],
+    to: ['openauth'],
+  },
 ];
 
 const INTENT_BY_PAIR: Record<string, string> = {
@@ -242,6 +250,7 @@ const INTENT_BY_PAIR: Record<string, string> = {
   'nextjs>cognito': 'usesCognito',
   'worker>cognito': 'usesCognito',
   'nextjs>clerk': 'usesAuth',
+  'nextjs>openauth': 'usesOpenAuth',
 };
 
 // Unmapped pairs return null so the canvas refuses the connection outright —

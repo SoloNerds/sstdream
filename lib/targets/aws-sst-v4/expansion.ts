@@ -221,6 +221,13 @@ function resourcesFor(
         P('Cognito', 'User Pool', { security: true }),
         P('Cognito', 'User Pool Client', { note: 'addClient("Web") — no Identity Pool' }),
       ];
+    case 'openauth':
+      return [
+        P('Lambda', 'OpenAuth issuer (Hono)', { note: 'auth/index.handler' }),
+        P('Lambda', 'Function URL', { note: 'Resource.<Auth>.url' }),
+        P('DynamoDB', 'Storage table', { paid: true, note: 'auto-provisioned (DynamoStorage)' }),
+        P('IAM', 'Issuer role', { security: true }),
+      ];
     case 'secret':
       return [P('SSM', 'Parameter (SecureString)', { security: true })];
     case 'ai':
@@ -288,6 +295,7 @@ const ORDER = [
   'worker',
   'cron',
   'cognito',
+  'openauth',
   'secret',
   'ai',
   'email',

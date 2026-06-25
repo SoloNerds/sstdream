@@ -355,6 +355,128 @@ export async function start${pascalCase(machineName)}(input: Record<string, unkn
 }
 `;
 
+// OpenAuth (sst.aws.Auth) — a complete, verified auth flow. The issuer runs as a
+// Hono→Lambda; sst.aws.Auth provisions + injects the DynamoDB storage automatically
+// (so `storage` is omitted). Verified import paths: subject from /subject, providers
+// from /provider/*, client from /client. (sst.dev/docs/component/aws/auth + openauth)
+const openAuthSubjectsFile = (): string =>
+  `import { object, string } from "valibot";
+import { createSubjects } from "@openauthjs/openauth/subject";
+
+// Shared between the issuer and the verifying client.
+export const subjects = createSubjects({
+  user: object({ id: string() }),
+});
+`;
+
+const openAuthIssuerFile = (): string =>
+  `import { handle } from "hono/aws-lambda";
+import { issuer } from "@openauthjs/openauth";
+import { CodeUI } from "@openauthjs/openauth/ui/code";
+import { CodeProvider } from "@openauthjs/openauth/provider/code";
+import { subjects } from "./subjects";
+
+async function getUser(email: string): Promise<string> {
+  // TODO: look up or create the user, return its id.
+  console.log("login", email);
+  return "user-123";
+}
+
+const app = issuer({
+  subjects,
+  // sst.aws.Auth provisions + injects DynamoDB storage automatically — do not set \`storage\`.
+  allow: async () => true,
+  providers: {
+    code: CodeProvider(
+      CodeUI({
+        sendCode: async (email, code) => {
+          // TODO: email the code (wire an Email kind). Logged for local dev.
+          console.log("send code", email, code);
+        },
+      }),
+    ),
+  },
+  success: async (ctx, value) => {
+    if (value.provider === "code") {
+      return ctx.subject("user", { id: await getUser(value.claims.email) });
+    }
+    throw new Error("Invalid provider");
+  },
+});
+
+export const handler = handle(app);
+`;
+
+const openAuthClientFile = (authName: string): string =>
+  `import { Resource } from "sst";
+import { createClient } from "@openauthjs/openauth/client";
+import { cookies as getCookies } from "next/headers";
+
+export const client = createClient({
+  clientID: "nextjs",
+  issuer: Resource.${authName}.url,
+});
+
+export async function setTokens(access: string, refresh: string): Promise<void> {
+  const cookies = await getCookies();
+  const opts = { httpOnly: true, sameSite: "lax" as const, path: "/", maxAge: 34560000 };
+  cookies.set({ name: "access_token", value: access, ...opts });
+  cookies.set({ name: "refresh_token", value: refresh, ...opts });
+}
+`;
+
+const openAuthActionsFile = (): string =>
+  `"use server";
+
+import { redirect } from "next/navigation";
+import { headers as getHeaders, cookies as getCookies } from "next/headers";
+import { subjects } from "../auth/subjects";
+import { client, setTokens } from "./auth";
+
+/** Verify the session; rotates + re-persists tokens when needed. */
+export async function auth() {
+  const cookies = await getCookies();
+  const accessToken = cookies.get("access_token");
+  const refreshToken = cookies.get("refresh_token");
+  if (!accessToken) return false;
+  const verified = await client.verify(subjects, accessToken.value, {
+    refresh: refreshToken?.value,
+  });
+  if (verified.err) return false;
+  if (verified.tokens) await setTokens(verified.tokens.access, verified.tokens.refresh);
+  return verified.subject;
+}
+
+export async function login() {
+  const headers = await getHeaders();
+  const host = headers.get("host");
+  const protocol = host?.includes("localhost") ? "http" : "https";
+  const { url } = await client.authorize(\`\${protocol}://\${host}/api/auth/callback\`, "code");
+  redirect(url);
+}
+
+export async function logout() {
+  const cookies = await getCookies();
+  cookies.delete("access_token");
+  cookies.delete("refresh_token");
+  redirect("/");
+}
+`;
+
+const openAuthCallbackFile = (): string =>
+  `import { type NextRequest, NextResponse } from "next/server";
+import { client, setTokens } from "../../../auth";
+
+export async function GET(req: NextRequest) {
+  const url = new URL(req.url);
+  const code = url.searchParams.get("code");
+  const exchanged = await client.exchange(code ?? "", \`\${url.origin}/api/auth/callback\`);
+  if (exchanged.err) return NextResponse.json(exchanged.err, { status: 400 });
+  await setTokens(exchanged.tokens.access, exchanged.tokens.refresh);
+  return NextResponse.redirect(url.origin);
+}
+`;
+
 // ECS Fargate container starter. node:22-slim, installs deps (sst for Resource
 // access), runs the server. SST builds this Dockerfile from services/<name>/.
 const serviceDockerfile = (port: number): string =>
@@ -545,6 +667,7 @@ function packageAdditions(flags: {
   stripe: boolean;
   mongodb: boolean;
   clerk: boolean;
+  openauth: boolean;
   bus: boolean;
   topic: boolean;
 }): string {
@@ -569,6 +692,11 @@ function packageAdditions(flags: {
   if (flags.stripe) deps['stripe'] = '^22.0.0';
   if (flags.mongodb) deps['mongodb'] = '^7.0.0';
   if (flags.clerk) deps['@clerk/nextjs'] = '^7.0.0';
+  if (flags.openauth) {
+    deps['@openauthjs/openauth'] = '^0.4.0';
+    deps['valibot'] = '^1.0.0';
+    deps['hono'] = '^4.0.0';
+  }
   if (flags.bus) deps['@aws-sdk/client-eventbridge'] = '^3.0.0';
   if (flags.topic) deps['@aws-sdk/client-sns'] = '^3.0.0';
   const devDeps: Record<string, string> = {};
@@ -748,6 +876,19 @@ export function generateRuntimeFiles(bp: Blueprint): GeneratedFile[] {
         language: 'ts',
       });
     }
+  }
+
+  // OpenAuth: the full issuer + client + callback flow, when an app authenticates with it.
+  const openAuthEdge = bp.connections.find((c) => c.intent === 'usesOpenAuth');
+  const openAuthRes = openAuthEdge ? resourceOf(openAuthEdge.target) : undefined;
+  if (openAuthRes) {
+    files.push(
+      { path: 'auth/subjects.ts', content: openAuthSubjectsFile(), language: 'ts' },
+      { path: 'auth/index.ts', content: openAuthIssuerFile(), language: 'ts' },
+      { path: 'app/auth.ts', content: openAuthClientFile(openAuthRes.name), language: 'ts' },
+      { path: 'app/auth-actions.ts', content: openAuthActionsFile(), language: 'ts' },
+      { path: 'app/api/auth/callback/route.ts', content: openAuthCallbackFile(), language: 'ts' },
+    );
   }
 
   // ECS Fargate services: each gets its own container folder (Dockerfile + a tiny
@@ -1018,6 +1159,7 @@ export function generateRuntimeFiles(bp: Blueprint): GeneratedFile[] {
       stripe: Boolean(stripeRes),
       mongodb: Boolean(mongoRes),
       clerk: Boolean(clerkRes),
+      openauth: Boolean(openAuthRes),
       bus: Boolean(publishBus),
       topic: Boolean(publishTopic),
     }),
