@@ -75,7 +75,11 @@ declare module "workflow/next" { export const withWorkflow: any; }
 declare module "flags/next" { export function flag<T = unknown>(opts: any): () => Promise<T>; export const createFlagsDiscoveryEndpoint: any; export const getProviderData: any; }
 declare module "@flags-sdk/edge-config" { export const edgeConfigAdapter: any; }
 declare module "@vercel/firewall" { export const checkRateLimit: any; }
-declare module "next/server" { export function after(fn: any): void; export const NextResponse: any; export type NextRequest = any; }
+declare module "@vercel/functions" { export const geolocation: any; export const ipAddress: any; export const waitUntil: any; }
+declare module "botid/client/core" { export const initBotId: any; }
+declare module "botid/server" { export const checkBotId: any; }
+declare module "botid/next/config" { export const withBotId: any; }
+declare module "next/server" { export function after(fn: any): void; export const NextResponse: any; export type NextResponse = any; export type NextRequest = any; }
 declare module "resend" { export const Resend: any; }
 declare module "stripe" { const Stripe: any; export default Stripe; }
 declare module "node:crypto" { const crypto: any; export default crypto; }

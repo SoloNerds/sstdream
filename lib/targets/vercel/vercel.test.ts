@@ -574,6 +574,66 @@ describe('Vercel lane — Feature Flags + Rate Limit + after()', () => {
   });
 });
 
+describe('Vercel lane — Edge Middleware + BotID (verified Next 16 proxy / botid@1.5)', () => {
+  const mk = (kinds: string[]) =>
+    draftBlueprint(
+      {
+        nodes: [
+          { id: 'a', kind: 'app', name: 'Web', props: {}, position: { x: 0, y: 0 } },
+          ...kinds.map((k, i) => ({
+            id: `n${i}`,
+            kind: k,
+            name: k.charAt(0).toUpperCase() + k.slice(1),
+            props: {},
+            position: { x: i + 1, y: 0 },
+          })),
+        ],
+        edges: [],
+      },
+      'vercel',
+      VERCEL_SAAS.app,
+      NOW,
+    );
+
+  it('Edge Middleware emits proxy.ts (Next 16) with geolocation/ipAddress + a matcher, no runtime', () => {
+    const m = Object.fromEntries(
+      generateFiles(mk(['edgeMiddleware'])).map((f) => [f.path, f.content]),
+    );
+    const proxy = m['proxy.ts'];
+    expect(proxy).toContain('export function proxy(request: NextRequest)');
+    expect(proxy).toContain('import { geolocation, ipAddress } from "@vercel/functions"');
+    expect(proxy).toContain('matcher:');
+    expect(proxy).not.toContain('runtime'); // Next 16 proxy throws on a runtime option
+    const pkg = JSON.parse(m['package.additions.json']) as { dependencies: Record<string, string> };
+    expect(pkg.dependencies['@vercel/functions']).toBeDefined();
+  });
+
+  it('BotID emits client init + a server guard + the withBotId next.config wrap', () => {
+    const m = Object.fromEntries(generateFiles(mk(['botId'])).map((f) => [f.path, f.content]));
+    expect(m['instrumentation-client.ts']).toContain('initBotId');
+    expect(m['lib/bot-protection.ts']).toContain('checkBotId');
+    expect(m['next.config.ts']).toContain('import { withBotId } from "botid/next/config"');
+    expect(m['next.config.ts']).toContain('withBotId(');
+    const pkg = JSON.parse(m['package.additions.json']) as { dependencies: Record<string, string> };
+    expect(pkg.dependencies['botid']).toBeDefined();
+  });
+
+  it('BotID protects the AI chat route when an AI Gateway is present', () => {
+    const m = Object.fromEntries(
+      generateFiles(mk(['botId', 'aiGateway'])).map((f) => [f.path, f.content]),
+    );
+    expect(m['instrumentation-client.ts']).toContain('"/api/chat"');
+  });
+
+  it('next.config composes BOTH wrappers when Workflow + BotID are present', () => {
+    const m = Object.fromEntries(
+      generateFiles(mk(['workflow', 'botId'])).map((f) => [f.path, f.content]),
+    );
+    expect(m['next.config.ts']).toContain('withWorkflow(');
+    expect(m['next.config.ts']).toContain('withBotId(');
+  });
+});
+
 describe('Vercel lane — honesty validation rules (docs §10)', () => {
   const mk = (
     nodes: { id: string; kind: string; name: string; props?: Record<string, unknown> }[],
