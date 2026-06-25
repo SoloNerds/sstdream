@@ -168,6 +168,100 @@ export async function sendEmail(to: string, subject: string, html: string) {
 }
 `;
 
+// Streaming chat through the Vercel AI Gateway. The bare "provider/model" string
+// routes via the gateway (auth: AI_GATEWAY_API_KEY). YOU run this — the builder
+// makes ZERO AI calls. verified: ai@7 (ai-sdk.dev/docs/ai-sdk-ui/chatbot, 2026-06-25).
+const aiChatRoute = (model: string): string =>
+  `import { streamText, convertToModelMessages, type UIMessage } from "ai";
+
+export const maxDuration = 30;
+
+export async function POST(req: Request): Promise<Response> {
+  const { messages }: { messages: UIMessage[] } = await req.json();
+  const result = streamText({
+    // Vercel AI Gateway model string — swappable; the key lives in your .env.local.
+    model: ${q(model)},
+    system: "You are a helpful assistant.",
+    messages: convertToModelMessages(messages),
+  });
+  return result.toUIMessageStreamResponse();
+}
+`;
+
+const aiChatPage = (): string =>
+  `"use client";
+
+import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
+import { useState } from "react";
+
+export default function Chat() {
+  const { messages, sendMessage, status } = useChat({
+    transport: new DefaultChatTransport({ api: "/api/chat" }),
+  });
+  const [input, setInput] = useState("");
+
+  return (
+    <main style={{ maxWidth: 640, margin: "2rem auto", fontFamily: "system-ui" }}>
+      <h1>Chat</h1>
+      {messages.map((m) => (
+        <div key={m.id} style={{ margin: "0.5rem 0" }}>
+          <strong>{m.role}: </strong>
+          {m.parts.map((p, i) => (p.type === "text" ? <span key={i}>{p.text}</span> : null))}
+        </div>
+      ))}
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (input.trim()) {
+            sendMessage({ text: input });
+            setInput("");
+          }
+        }}
+      >
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          disabled={status !== "ready"}
+          placeholder="Say something…"
+          style={{ width: "100%", padding: 8 }}
+        />
+      </form>
+    </main>
+  );
+}
+`;
+
+// Dynamic Open Graph image. App Router bundles @vercel/og — no install. Satori
+// renders a CSS subset (display:flex, NOT grid); 1200x630 PNG. verified: next/og (Next 16).
+const ogImageRoute = (): string =>
+  `import { ImageResponse } from "next/og";
+
+export async function GET(request: Request): Promise<ImageResponse> {
+  const { searchParams } = new URL(request.url);
+  const title = searchParams.get("title") ?? "Hello";
+  return new ImageResponse(
+    (
+      <div
+        style={{
+          display: "flex",
+          width: "100%",
+          height: "100%",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 64,
+          color: "white",
+          background: "#0a0a0a",
+        }}
+      >
+        {title}
+      </div>
+    ),
+    { width: 1200, height: 630 },
+  );
+}
+`;
+
 // Verified versions (npm registry, 2026-06-25). @vercel/queue is 0.x beta — its
 // trigger format may change before GA (see docs/vercel-target.md §12).
 const DEP_VERSIONS: Record<string, string> = {
@@ -178,6 +272,8 @@ const DEP_VERSIONS: Record<string, string> = {
   '@vercel/edge-config': '^1.4.0',
   '@vercel/analytics': '^2.0.0',
   '@vercel/speed-insights': '^2.0.0',
+  ai: '^7.0.0',
+  '@ai-sdk/react': '^4.0.0',
   resend: '^6.14.0',
   stripe: '^22.3.0',
 };
@@ -198,6 +294,10 @@ function packageAdditions(bp: Blueprint): string {
   if (present.has('edgeConfig')) add('@vercel/edge-config');
   if (present.has('analytics')) add('@vercel/analytics');
   if (present.has('speedInsights')) add('@vercel/speed-insights');
+  if (present.has('aiGateway')) {
+    add('ai');
+    add('@ai-sdk/react');
+  }
   if (present.has('email')) add('resend');
   // stripe only when a webhook actually uses the Stripe provider.
   if (bp.resources.some((r) => r.kind === 'webhook' && webhookProvider(r) === 'stripe'))
@@ -252,6 +352,17 @@ export function generateVercel(bp: Blueprint): GeneratedFile[] {
       language: 'ts',
     });
   }
+  const aiNode = bp.resources.find((r) => r.kind === 'aiGateway');
+  if (aiNode) {
+    files.push({
+      path: 'app/api/chat/route.ts',
+      content: aiChatRoute(strProp(aiNode, 'model', 'openai/gpt-4o')),
+      language: 'ts',
+    });
+    files.push({ path: 'app/chat/page.tsx', content: aiChatPage(), language: 'tsx' });
+  }
+  if (has('ogImage'))
+    files.push({ path: 'app/api/og/route.tsx', content: ogImageRoute(), language: 'tsx' });
 
   // Queue producer + consumers
   const queues = bp.resources.filter((r) => r.kind === 'queue');

@@ -359,4 +359,37 @@ export const VERCEL_TEMPLATES: TemplateMeta[] = [
       e('e2', 'app_1', 'email_3', 'sendsEmailThrough'),
     ],
   ),
+  vercel(
+    'vercel-ai-chat',
+    'AI Chat SaaS',
+    'Streaming AI chat through the Vercel AI Gateway (you run it — the builder makes no AI calls), with chat history in Postgres and Upstash Redis rate-limiting.',
+    ['AI', 'Flagship', 'SaaS'],
+    'vercel-ai-chat',
+    [
+      n('app_1', 'app', 'Web', 60, 200),
+      n('aiGateway_2', 'aiGateway', 'Chat', 360, 80, { model: 'openai/gpt-4o' }),
+      n('postgres_3', 'postgres', 'History', 360, 220),
+      n('redis_4', 'redis', 'RateLimit', 360, 340),
+      n('analytics_5', 'analytics', 'Analytics', 60, 60),
+    ],
+    [
+      e('e1', 'app_1', 'postgres_3', 'writesToService'),
+      e('e2', 'app_1', 'redis_4', 'writesToService'),
+    ],
+  ),
+  vercel(
+    'vercel-social-cards',
+    'Viral Social Cards',
+    'Dynamic Open Graph images at the edge (next/og) for shareable cards, with media in Blob and Web Analytics.',
+    ['Marketing', 'OG Image'],
+    'vercel-social-cards',
+    [
+      n('app_1', 'app', 'Web', 60, 180),
+      n('ogImage_2', 'ogImage', 'OgImage', 360, 80),
+      n('blob_3', 'blob', 'Media', 360, 220),
+      n('analytics_4', 'analytics', 'Analytics', 60, 60),
+      n('speedInsights_5', 'speedInsights', 'SpeedInsights', 60, 320),
+    ],
+    [e('e1', 'app_1', 'blob_3', 'storesFileIn')],
+  ),
 ];

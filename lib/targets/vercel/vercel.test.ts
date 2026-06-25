@@ -355,6 +355,72 @@ describe('Vercel lane — expanded catalog (Edge Config, External API, Analytics
   });
 });
 
+describe('Vercel lane — AI Gateway + OG Image (verified ai@7 / next/og)', () => {
+  const bp = draftBlueprint(
+    {
+      nodes: [
+        { id: 'a', kind: 'app', name: 'Web', props: {}, position: { x: 0, y: 0 } },
+        {
+          id: 'ai',
+          kind: 'aiGateway',
+          name: 'Chat',
+          props: { model: 'anthropic/claude-sonnet-4' },
+          position: { x: 1, y: 0 },
+        },
+        { id: 'og', kind: 'ogImage', name: 'OgImage', props: {}, position: { x: 2, y: 0 } },
+      ],
+      edges: [],
+    },
+    'vercel',
+    VERCEL_SAAS.app,
+    NOW,
+  );
+  const m = Object.fromEntries(generateFiles(bp).map((f) => [f.path, f.content]));
+
+  it('AI Gateway emits a v7 streaming chat route + client page, model from the prop', () => {
+    const route = m['app/api/chat/route.ts'];
+    expect(route).toContain('from "ai"');
+    expect(route).toContain('convertToModelMessages');
+    expect(route).toContain('toUIMessageStreamResponse');
+    expect(route).toContain('model: "anthropic/claude-sonnet-4"'); // user prop, escaped
+    expect(m['app/chat/page.tsx']).toContain('useChat'); // @ai-sdk/react v7 shape
+    expect(m['app/chat/page.tsx']).toContain('DefaultChatTransport');
+  });
+
+  it('AI Gateway adds ai + @ai-sdk/react deps and the AI_GATEWAY_API_KEY env — no AI call in the builder', () => {
+    const pkg = JSON.parse(m['package.additions.json']) as { dependencies: Record<string, string> };
+    expect(pkg.dependencies['ai']).toBe('^7.0.0');
+    expect(pkg.dependencies['@ai-sdk/react']).toBe('^4.0.0');
+    const env = JSON.parse(m['required-env.json']) as { required: { name: string }[] };
+    expect(env.required.map((e) => e.name)).toContain('AI_GATEWAY_API_KEY');
+  });
+
+  it('OG Image emits an app/api/og route using next/og (flex, no edge runtime, 1200x630)', () => {
+    const og = m['app/api/og/route.tsx'];
+    expect(og).toContain('import { ImageResponse } from "next/og"');
+    expect(og).toContain('width: 1200');
+    expect(og).toContain('display: "flex"');
+    expect(og).not.toContain("runtime = 'edge'");
+  });
+
+  it('rejects a second singleton kind (would collide on a fixed path)', () => {
+    const two = draftBlueprint(
+      {
+        nodes: [
+          { id: 'a', kind: 'app', name: 'Web', props: {}, position: { x: 0, y: 0 } },
+          { id: 'o1', kind: 'ogImage', name: 'OgImage', props: {}, position: { x: 1, y: 0 } },
+          { id: 'o2', kind: 'ogImage', name: 'OgImage2', props: {}, position: { x: 2, y: 0 } },
+        ],
+        edges: [],
+      },
+      'vercel',
+      VERCEL_SAAS.app,
+      NOW,
+    );
+    expect(validateBlueprint(two).errors.some((d) => d.rule === 'singleton-kind')).toBe(true);
+  });
+});
+
 describe('Vercel lane — honesty validation rules (docs §10)', () => {
   const mk = (
     nodes: { id: string; kind: string; name: string; props?: Record<string, unknown> }[],

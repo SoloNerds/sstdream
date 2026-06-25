@@ -143,6 +143,33 @@ export const VERCEL_RULES: ValidationRule[] = [
         })),
   },
   {
+    // Singleton kinds (analytics, speed insights, AI chat, OG route) emit
+    // fixed-path files — a second one would silently collide on export.
+    id: 'singleton-kind',
+    run: (bp, ctx) => {
+      const out: Diagnostic[] = [];
+      const counts = new Map<string, Resource[]>();
+      for (const r of bp.resources) {
+        if (r.kind === 'app') continue; // covered by single-app
+        if (ctx.target.catalog[r.kind]?.singleton) {
+          (counts.get(r.kind) ?? counts.set(r.kind, []).get(r.kind)!).push(r);
+        }
+      }
+      for (const [kind, group] of counts) {
+        for (const extra of group.slice(1)) {
+          out.push({
+            rule: 'singleton-kind',
+            severity: 'error',
+            resourceId: extra.id,
+            message: `Only one "${ctx.target.catalog[kind]?.label ?? kind}" is allowed — it generates fixed-path files.`,
+            hint: 'Remove the duplicate.',
+          });
+        }
+      }
+      return out;
+    },
+  },
+  {
     id: 'queue-needs-consumer',
     run: (bp) =>
       bp.resources
