@@ -7,6 +7,7 @@ import { buildExport } from '@/lib/core/export/manifest';
 import { zipFiles } from '@/lib/core/export/zip';
 import type { GeneratedFile } from '@/lib/core/codegen/types';
 import { Button } from '@/components/ui/button';
+import { useDialog } from './useDialog';
 
 function downloadBlob(name: string, data: Uint8Array | string, type: string) {
   const part: BlobPart = typeof data === 'string' ? data : new Uint8Array(data);
@@ -68,6 +69,7 @@ function groupFiles(files: GeneratedFile[]): Group[] {
 
 export function ExportDialog({ onClose }: { onClose: () => void }) {
   const appName = useCanvasStore((s) => s.app.name) || 'app';
+  const dialogRef = useDialog<HTMLDivElement>(onClose);
 
   const files = useMemo<GeneratedFile[]>(() => {
     const s = useCanvasStore.getState();
@@ -101,7 +103,12 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
       onClick={onClose}
     >
       <div
-        className="flex h-[82vh] w-[min(1040px,94vw)] flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-xl dark:border-neutral-700 dark:bg-neutral-950"
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Export ${appName}`}
+        tabIndex={-1}
+        className="flex h-[82vh] w-[min(1040px,94vw)] flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-xl outline-none dark:border-neutral-700 dark:bg-neutral-950"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-2 border-b border-neutral-200 px-4 py-2 dark:border-neutral-800">

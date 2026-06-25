@@ -108,7 +108,6 @@ function typecheckProject(files: GeneratedFile[]): string[] {
     types: [],
   };
 
-  const libDir = `${ts.getDirectoryPath(ts.getDefaultLibFilePath(options))}/`;
   const readFile = (fileName: string): string | undefined => {
     if (sources.has(fileName)) return sources.get(fileName);
     if (fileName.endsWith('.d.ts')) return ts.sys.readFile(fileName);
@@ -140,8 +139,9 @@ function typecheckProject(files: GeneratedFile[]): string[] {
   return ts
     .getPreEmitDiagnostics(program)
     .filter((d) => {
+      // Only diagnostics from our generated files (lib/.d.ts files live outside ROOT).
       const fn = d.file?.fileName ?? '';
-      return fn.startsWith(ROOT) && fn !== AMBIENT_PATH && !fn.startsWith(libDir);
+      return fn.startsWith(ROOT) && fn !== AMBIENT_PATH;
     })
     .map((d) => {
       const at = d.file
@@ -197,12 +197,19 @@ describe('every template TYPE-CHECKS as a project', () => {
 });
 
 describe('the all-21-kinds kitchen-sink TYPE-CHECKS', () => {
-  type N = { id: string; kind: string; name: string; props?: Record<string, unknown> };
+  type N = {
+    id: string;
+    kind: string;
+    name: string;
+    props: Record<string, unknown>;
+    position: { x: number; y: number };
+  };
   const n = (id: string, kind: string, name: string, props: Record<string, unknown> = {}): N => ({
     id,
     kind,
     name,
     props,
+    position: { x: 0, y: 0 },
   });
   const e = (id: string, source: string, target: string, intent: string) => ({
     id,

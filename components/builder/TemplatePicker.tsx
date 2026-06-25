@@ -5,12 +5,14 @@ import { getTarget } from '@/lib/targets/registry';
 import { getTemplates } from '@/lib/templates/registry';
 import type { TemplateMeta } from '@/lib/templates/types';
 import { Button } from '@/components/ui/button';
+import { useDialog } from './useDialog';
 
 export function TemplatePicker({ onClose }: { onClose: () => void }) {
   const targetId = useCanvasStore((s) => s.targetId);
   const setApp = useCanvasStore((s) => s.setApp);
   const loadSnapshot = useCanvasStore((s) => s.loadSnapshot);
   const templates = getTemplates(targetId);
+  const dialogRef = useDialog<HTMLDivElement>(onClose);
 
   const pick = (t: TemplateMeta) => {
     if (
@@ -30,7 +32,12 @@ export function TemplatePicker({ onClose }: { onClose: () => void }) {
       onClick={onClose}
     >
       <div
-        className="flex max-h-[82vh] w-[min(900px,92vw)] flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-xl dark:border-neutral-700 dark:bg-neutral-950"
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Choose a template"
+        tabIndex={-1}
+        className="flex max-h-[82vh] w-[min(900px,92vw)] flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-xl outline-none dark:border-neutral-700 dark:bg-neutral-950"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-2 dark:border-neutral-800">
