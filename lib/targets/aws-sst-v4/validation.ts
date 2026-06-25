@@ -296,15 +296,22 @@ export const AWS_RULES: ValidationRule[] = [
         'ai',
         'email',
         'cognito',
+        'openauth',
         'bucket',
         'dynamo',
         'postgres',
         'aurora',
+        'redis',
         'queue',
         'bus',
         'snstopic',
+        'realtime',
+        'stepFunctions',
+        'appsync',
         'apigatewayv2',
         'router',
+        'service',
+        'task',
         'nextjs',
         'staticsite',
       ]);
@@ -322,6 +329,18 @@ export const AWS_RULES: ValidationRule[] = [
 
       const out: Diagnostic[] = [];
       const seen = new Map<string, Resource>();
+      // `const cluster = new sst.aws.Cluster(...)` is auto-generated whenever a
+      // Service/Task is present, so `cluster` is reserved in that case. (`vpc` is
+      // already in RESERVED_VARS.) Seed a sentinel so a user resource that
+      // camelCases to "cluster" collides with it.
+      if (bp.resources.some((r) => r.kind === 'service' || r.kind === 'task')) {
+        seen.set('cluster', {
+          id: '__cluster__',
+          kind: 'service',
+          name: 'the auto-generated Cluster',
+          props: {},
+        } as Resource);
+      }
       const claim = (v: string, r: Resource) => {
         if (RESERVED_VARS.has(v)) {
           out.push({
@@ -347,9 +366,17 @@ export const AWS_RULES: ValidationRule[] = [
         }
       };
       for (const r of bp.resources.filter(declares)) {
-        claim(camelCase(r.name), r);
-        // renderCognito also declares `<var>Client = <var>.addClient("Web")`.
-        if (r.kind === 'cognito') claim(`${camelCase(r.name)}Client`, r);
+        const v = camelCase(r.name);
+        claim(v, r);
+        // Some kinds declare EXTRA consts derived from their var name (mirror the
+        // config renderers): a collision on any of these also fails the export.
+        if (r.kind === 'cognito') claim(`${v}Client`, r); // <var>Client = <var>.addClient("Web")
+        if (r.kind === 'appsync') claim(`${v}Ds`, r); // <var>Ds = <var>.addDataSource(...)
+        if (r.kind === 'stepFunctions') {
+          claim(`${v}Validate`, r);
+          claim(`${v}Process`, r);
+          claim(`${v}Done`, r);
+        }
       }
       return out;
     },
