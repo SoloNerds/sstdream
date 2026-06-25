@@ -81,6 +81,18 @@ function renderDynamo(r: Resource, plan: AwsPlan): string {
       : `{ hashKey: ${q(gsiHash!)} }`;
     lines.push(`  globalIndexes: {`, `    ${objKey(gsiName!)}: ${gsiStr},`, `  },`);
   }
+  // A change stream is required for a Worker to subscribe to the table. Honor an
+  // explicit prop; auto-enable when a subscriber is wired (the subscribe() call
+  // would otherwise fail at deploy). docs/sst-v4-target.md §4.3.
+  const explicitStream = str(r.props.stream);
+  const hasStreamSub = plan.subscribers.some((s) => s.targetId === r.id);
+  const stream =
+    explicitStream && explicitStream !== 'none'
+      ? explicitStream
+      : hasStreamSub
+        ? 'new-and-old-images'
+        : undefined;
+  if (stream) lines.push(`  stream: ${q(stream)},`);
   lines.push(`});`);
   return lines.join('\n');
 }

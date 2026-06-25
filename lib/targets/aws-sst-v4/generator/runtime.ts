@@ -153,7 +153,7 @@ interface SubscriberTable {
 // event object with the payload under `detail` — no Records array.
 const subscriberHandlerFile = (
   name: string,
-  targetKind: 'queue' | 'bus' | 'snstopic',
+  targetKind: 'queue' | 'bus' | 'snstopic' | 'dynamo',
   table?: SubscriberTable,
 ): string => {
   const importLine = table ? `import { putItem } from "${table.importPath}";\n\n` : '';
@@ -189,6 +189,22 @@ export async function handler(event: { Records: { Sns: { Message: string } }[] }
   for (const record of event.Records) {
     const message = JSON.parse(record.Sns.Message) as Record<string, unknown>;
     console.log("Processing message", message);
+${writeBlock('    ')}
+  }
+}
+`;
+  }
+  if (targetKind === 'dynamo') {
+    return `${importLine}/** DynamoDB stream subscriber for the "${name}" worker. */
+export async function handler(event: {
+  Records: {
+    eventName: string;
+    dynamodb: { NewImage?: Record<string, unknown>; OldImage?: Record<string, unknown> };
+  }[];
+}) {
+  for (const record of event.Records) {
+    const message = (record.dynamodb.NewImage ?? {}) as Record<string, unknown>;
+    console.log("Processing", record.eventName, message);
 ${writeBlock('    ')}
   }
 }

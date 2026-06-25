@@ -199,6 +199,35 @@ exports[`aws-sst-v4 catalog > matches snapshot 1`] = `
         "placeholder": "createdAt",
         "type": "text",
       },
+      {
+        "default": "none",
+        "help": "Enable a change stream so a Worker can subscribe to inserts/updates/deletes. Auto-enabled when a subscriber is wired.",
+        "key": "stream",
+        "label": "Stream",
+        "options": [
+          {
+            "label": "Off",
+            "value": "none",
+          },
+          {
+            "label": "New + old images",
+            "value": "new-and-old-images",
+          },
+          {
+            "label": "New image",
+            "value": "new-image",
+          },
+          {
+            "label": "Old image",
+            "value": "old-image",
+          },
+          {
+            "label": "Keys only",
+            "value": "keys-only",
+          },
+        ],
+        "type": "select",
+      },
     ],
   },
   "email": {

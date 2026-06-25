@@ -186,6 +186,23 @@ export function simulateAws(bp: Blueprint): SimTrace {
     }
   }
 
+  // A worker that subscribes to a reached Dynamo table's stream is triggered by
+  // it — walk it so it isn't mistaken for an untriggered worker.
+  for (const sub of bp.connections.filter((c) => c.intent === 'subscribesTo')) {
+    const target = byId.get(sub.target);
+    if (target?.kind === 'dynamo' && visited.has(sub.target) && !visited.has(sub.source)) {
+      events.push({
+        id: eid(),
+        edgeId: sub.id,
+        sourceId: sub.target,
+        targetId: sub.source,
+        status: 'ok',
+        label: `${name(sub.target)} streams to ${name(sub.source)}`,
+      });
+      walk(sub.source);
+    }
+  }
+
   for (const w of bp.resources.filter((r) => r.kind === 'worker')) {
     const isNotifier = bp.connections.some(
       (c) => c.source === w.id && c.intent === 'handlesBucketEvents',
