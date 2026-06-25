@@ -12,13 +12,16 @@ import {
 } from '@/lib/core/blueprint/serialize';
 import { buildShareUrl } from '@/lib/core/blueprint/share';
 import { TemplatePicker } from './TemplatePicker';
+import { ImportDialog } from './ImportDialog';
 import type { ValidationResult } from '@/lib/core/validation/types';
 
 export function Toolbar({ validation }: { validation: ValidationResult }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [exporting, setExporting] = useState(false);
   const [picking, setPicking] = useState(false);
+  const [importingCode, setImportingCode] = useState(false);
   const [shared, setShared] = useState(false);
+  const targetId = useCanvasStore((s) => s.targetId);
   const appName = useCanvasStore((s) => s.app.name);
   const setApp = useCanvasStore((s) => s.setApp);
   const loadSnapshot = useCanvasStore((s) => s.loadSnapshot);
@@ -81,6 +84,16 @@ export function Toolbar({ validation }: { validation: ValidationResult }) {
         <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()}>
           Import
         </Button>
+        {targetId === 'aws-sst-v4' && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setImportingCode(true)}
+            title="Reverse-engineer: paste an sst.config.ts and draw it back out"
+          >
+            From code
+          </Button>
+        )}
         <Button
           size="sm"
           variant="outline"
@@ -130,6 +143,7 @@ export function Toolbar({ validation }: { validation: ValidationResult }) {
       </div>
       {exporting && <ExportDialog onClose={() => setExporting(false)} />}
       {picking && <TemplatePicker onClose={() => setPicking(false)} />}
+      {importingCode && <ImportDialog onClose={() => setImportingCode(false)} />}
     </>
   );
 }
