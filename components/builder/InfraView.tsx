@@ -9,6 +9,8 @@ import { estimateCost } from '@/lib/core/cost/estimate';
 import { auditInfra } from '@/lib/core/audit/audit';
 import type { InfraGroup } from '@/lib/core/expansion/types';
 import type { SecurityFinding } from '@/lib/core/audit/types';
+import type { CostEstimate } from '@/lib/core/cost/types';
+import type { ResourceCatalog } from '@/lib/targets/types';
 
 function Empty({ children }: { children: ReactNode }) {
   return (
@@ -137,34 +139,19 @@ function GroupCard({
   );
 }
 
-export function InfraView() {
-  const nodes = useCanvasStore((s) => s.nodes);
-  const edges = useCanvasStore((s) => s.edges);
-  const targetId = useCanvasStore((s) => s.targetId);
-  const app = useCanvasStore((s) => s.app);
-
-  const data = useMemo(() => {
-    try {
-      const bp = canvasToBlueprint({ nodes, edges }, targetId, app, '1970-01-01T00:00:00.000Z');
-      return {
-        groups: expandInfra(bp),
-        cost: estimateCost(bp),
-        findings: auditInfra(bp),
-      };
-    } catch {
-      return null;
-    }
-  }, [nodes, edges, targetId, app]);
-
-  if (targetId !== 'aws-sst-v4') {
-    return <Empty>Infrastructure view is AWS-only for now.</Empty>;
-  }
-  if (!data || !data.groups.length) {
-    return <Empty>Add resources on the Design view to see what actually gets deployed.</Empty>;
-  }
-
-  const { groups, cost, findings } = data;
-  const catalog = getTarget(targetId).catalog;
+// Pure presentational report — takes the already-computed engine output, so it's
+// directly renderable/testable without the store (which serves initial state in SSR).
+export function InfraReport({
+  groups,
+  cost,
+  findings,
+  catalog,
+}: {
+  groups: InfraGroup[];
+  cost: CostEstimate;
+  findings: SecurityFinding[];
+  catalog: ResourceCatalog;
+}) {
   const total = groups.reduce((n, g) => n + g.resources.length, 0);
   const costById = new Map(cost.perResource.map((r) => [r.resourceId, r.monthlyUsd]));
   const warns = findings.filter((f) => f.level === 'warn').length;
@@ -228,5 +215,41 @@ export function InfraView() {
         </div>
       </div>
     </div>
+  );
+}
+
+export function InfraView() {
+  const nodes = useCanvasStore((s) => s.nodes);
+  const edges = useCanvasStore((s) => s.edges);
+  const targetId = useCanvasStore((s) => s.targetId);
+  const app = useCanvasStore((s) => s.app);
+
+  const data = useMemo(() => {
+    try {
+      const bp = canvasToBlueprint({ nodes, edges }, targetId, app, '1970-01-01T00:00:00.000Z');
+      return {
+        groups: expandInfra(bp),
+        cost: estimateCost(bp),
+        findings: auditInfra(bp),
+      };
+    } catch {
+      return null;
+    }
+  }, [nodes, edges, targetId, app]);
+
+  if (targetId !== 'aws-sst-v4') {
+    return <Empty>Infrastructure view is AWS-only for now.</Empty>;
+  }
+  if (!data || !data.groups.length) {
+    return <Empty>Add resources on the Design view to see what actually gets deployed.</Empty>;
+  }
+
+  return (
+    <InfraReport
+      groups={data.groups}
+      cost={data.cost}
+      findings={data.findings}
+      catalog={getTarget(targetId).catalog}
+    />
   );
 }
