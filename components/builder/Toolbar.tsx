@@ -5,7 +5,12 @@ import { Button } from '@/components/ui/button';
 import { ExportDialog } from './ExportDialog';
 import { useCanvasStore } from '@/lib/canvas/store';
 import { isTargetImplemented } from '@/lib/targets/registry';
-import { blueprintToCanvas, parseBlueprint } from '@/lib/core/blueprint/serialize';
+import {
+  blueprintToCanvas,
+  canvasToBlueprint,
+  parseBlueprint,
+} from '@/lib/core/blueprint/serialize';
+import { buildShareUrl } from '@/lib/core/blueprint/share';
 import { TemplatePicker } from './TemplatePicker';
 import type { ValidationResult } from '@/lib/core/validation/types';
 
@@ -13,10 +18,31 @@ export function Toolbar({ validation }: { validation: ValidationResult }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [exporting, setExporting] = useState(false);
   const [picking, setPicking] = useState(false);
+  const [shared, setShared] = useState(false);
   const appName = useCanvasStore((s) => s.app.name);
   const setApp = useCanvasStore((s) => s.setApp);
   const loadSnapshot = useCanvasStore((s) => s.loadSnapshot);
   const reset = useCanvasStore((s) => s.reset);
+
+  const onShare = () => {
+    const s = useCanvasStore.getState();
+    try {
+      const bp = canvasToBlueprint(
+        { nodes: s.nodes, edges: s.edges, secrets: s.secrets, outputs: s.outputs },
+        s.targetId,
+        s.app,
+        new Date().toISOString(),
+      );
+      const url = buildShareUrl(window.location.origin, bp);
+      void navigator.clipboard?.writeText(url);
+      // Reflect it in the address bar so a manual copy / bookmark works too.
+      window.history.replaceState(null, '', url);
+      setShared(true);
+      setTimeout(() => setShared(false), 1500);
+    } catch {
+      alert('Finish editing the app name before sharing.');
+    }
+  };
 
   const onImportFile = async (file: File) => {
     try {
@@ -54,6 +80,14 @@ export function Toolbar({ validation }: { validation: ValidationResult }) {
         </Button>
         <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()}>
           Import
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={onShare}
+          title="Copy a shareable link to this design"
+        >
+          {shared ? 'Link copied!' : 'Share'}
         </Button>
         <Button
           size="sm"

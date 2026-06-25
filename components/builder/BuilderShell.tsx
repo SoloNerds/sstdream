@@ -24,6 +24,8 @@ import { isTargetImplemented, listTargets } from '@/lib/targets/registry';
 import type { DeployTarget } from '@/lib/targets/types';
 import { loadBlueprint, saveBlueprint } from '@/lib/core/blueprint/persistence';
 import { blueprintToCanvas, canvasToBlueprint } from '@/lib/core/blueprint/serialize';
+import { readDesignFromHash } from '@/lib/core/blueprint/share';
+import type { Blueprint } from '@/lib/core/blueprint/types';
 
 export function BuilderShell() {
   const targetId = useCanvasStore((s) => s.targetId);
@@ -36,8 +38,23 @@ export function BuilderShell() {
   // restored design, or captured from the first save of a brand-new design.
   const createdAtRef = useRef<string | null>(null);
 
-  // Restore the last design from localStorage on mount.
+  // On mount: a shared-design link (#d=...) wins over the local autosave, so a
+  // link always opens the design it points at. Otherwise restore localStorage.
   useEffect(() => {
+    const openDesign = (bp: Blueprint) => {
+      createdAtRef.current = bp.metadata.createdAt;
+      const s = useCanvasStore.getState();
+      useCanvasStore.setState({ targetId: bp.target.deploy });
+      s.setApp({ name: bp.app.name, region: bp.app.region, packageManager: bp.app.packageManager });
+      s.loadSnapshot(blueprintToCanvas(bp));
+    };
+
+    const shared = readDesignFromHash(window.location.hash);
+    if (shared && isTargetImplemented(shared.target.deploy)) {
+      openDesign(shared);
+      return;
+    }
+
     const result = loadBlueprint();
     if (result.status === 'loaded' && isTargetImplemented(result.blueprint.target.deploy)) {
       const bp = result.blueprint;
