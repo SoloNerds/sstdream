@@ -284,3 +284,71 @@ describe('second-round review fixes', () => {
     expect(rulesOf(bp, 'var-name-collision')).toHaveLength(1);
   });
 });
+
+// #143: kebabCase(name) drives generated file paths and is many-to-one, so two
+// individually-valid names can collide on one path. var-name-collision uses
+// camelCase and misses these, so the design exported ok=true and a file was
+// silently dropped or cross-wired. These must now be export-gate errors.
+describe('kebab-path-collision (#143)', () => {
+  it('two workers whose names kebab to the same slug are blocked', () => {
+    // both -> "process-job"; distinct camelCase (aProcessJob / aPROcessJob) so
+    // var-name-collision does NOT catch them.
+    const bp = mk(
+      [
+        n('q', 'queue', 'Jobs'),
+        n('w1', 'worker', 'ProcessJob'),
+        n('w2', 'worker', 'PROcessJob'),
+      ],
+      [e('e1', 'w1', 'q', 'subscribesTo'), e('e2', 'w2', 'q', 'subscribesTo')],
+    );
+    expect(rulesOf(bp, 'var-name-collision')).toHaveLength(0);
+    expect(rulesOf(bp, 'kebab-path-collision')).toHaveLength(1);
+    expect(validateBlueprint(bp).ok).toBe(false);
+  });
+
+  it('two Dynamo tables that kebab-collide are blocked', () => {
+    // "Items" and "ITems" both -> "items".
+    const bp = mk(
+      [n('web', 'nextjs', 'Web'), n('t1', 'dynamo', 'Items'), n('t2', 'dynamo', 'ITems')],
+      [e('e1', 'web', 't1', 'writesTo'), e('e2', 'web', 't2', 'writesTo')],
+    );
+    expect(rulesOf(bp, 'kebab-path-collision')).toHaveLength(1);
+  });
+
+  it('two external-API helpers that kebab-collide are blocked', () => {
+    const bp = mk(
+      [
+        n('web', 'nextjs', 'Web'),
+        n('a1', 'externalApi', 'Weather', { baseUrlEnv: 'W_URL', keyEnv: 'W_KEY' }),
+        n('a2', 'externalApi', 'WEAther', { baseUrlEnv: 'W2_URL', keyEnv: 'W2_KEY' }),
+      ],
+      [e('e1', 'web', 'a1', 'callsApi'), e('e2', 'web', 'a2', 'callsApi')],
+    );
+    expect(rulesOf(bp, 'kebab-path-collision')).toHaveLength(1);
+  });
+
+  it('a Dynamo table that kebabs to "items" collides with the Mongo CRUD paths', () => {
+    const bp = mk(
+      [n('web', 'nextjs', 'Web'), n('t', 'dynamo', 'Items'), n('m', 'mongodb', 'Mongo')],
+      [e('e1', 'web', 't', 'writesTo'), e('e2', 'web', 'm', 'queriesMongo')],
+    );
+    expect(rulesOf(bp, 'kebab-path-collision')).toHaveLength(1);
+  });
+
+  it('distinct slugs (and a Dynamo named anything but "items" without Mongo) pass clean', () => {
+    const bp = mk(
+      [
+        n('q', 'queue', 'Jobs'),
+        n('w1', 'worker', 'ProcessJob'),
+        n('w2', 'worker', 'ResizeImage'),
+        n('t', 'dynamo', 'Items'),
+      ],
+      [
+        e('e1', 'w1', 'q', 'subscribesTo'),
+        e('e2', 'w2', 'q', 'subscribesTo'),
+        e('e3', 'w1', 't', 'writesTo'),
+      ],
+    );
+    expect(rulesOf(bp, 'kebab-path-collision')).toHaveLength(0);
+  });
+});

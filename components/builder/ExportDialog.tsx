@@ -73,7 +73,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
     const s = useCanvasStore.getState();
     try {
       const bp = canvasToBlueprint(
-        { nodes: s.nodes, edges: s.edges },
+        { nodes: s.nodes, edges: s.edges, secrets: s.secrets, outputs: s.outputs },
         s.targetId,
         s.app,
         new Date().toISOString(),

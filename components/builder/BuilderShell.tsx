@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Palette } from './Palette';
 import { Canvas } from './Canvas';
 import { InfraView } from './InfraView';
@@ -31,12 +31,17 @@ export function BuilderShell() {
   const [tab, setTab] = useState<'properties' | 'simulation' | 'cost' | 'advice'>('properties');
   const [view, setView] = useState<'design' | 'infra'>('design');
   const [recoveryKey, setRecoveryKey] = useState<string | null>(null);
+  // The original createdAt of the active design, so autosave preserves it
+  // instead of overwriting it with `now` on every keystroke. Seeded from the
+  // restored design, or captured from the first save of a brand-new design.
+  const createdAtRef = useRef<string | null>(null);
 
   // Restore the last design from localStorage on mount.
   useEffect(() => {
     const result = loadBlueprint();
     if (result.status === 'loaded' && isTargetImplemented(result.blueprint.target.deploy)) {
       const bp = result.blueprint;
+      createdAtRef.current = bp.metadata.createdAt;
       const s = useCanvasStore.getState();
       useCanvasStore.setState({ targetId: bp.target.deploy });
       s.setApp({ name: bp.app.name, region: bp.app.region, packageManager: bp.app.packageManager });
@@ -54,11 +59,14 @@ export function BuilderShell() {
       timer = setTimeout(() => {
         try {
           const bp = canvasToBlueprint(
-            { nodes: s.nodes, edges: s.edges },
+            { nodes: s.nodes, edges: s.edges, secrets: s.secrets, outputs: s.outputs },
             s.targetId,
             s.app,
             new Date().toISOString(),
+            createdAtRef.current ?? undefined,
           );
+          // Capture the creation time of a brand-new design so later saves keep it.
+          createdAtRef.current ??= bp.metadata.createdAt;
           saveBlueprint(bp);
         } catch {
           // invalid intermediate state (e.g. app name mid-edit) — skip this autosave

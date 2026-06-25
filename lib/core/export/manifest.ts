@@ -1,4 +1,5 @@
 import { generateFiles } from '@/lib/core/codegen/generate';
+import { validateBlueprint } from '@/lib/core/validation/validate';
 import { serializeBlueprint } from '@/lib/core/blueprint/serialize';
 import { buildAwsReadme, buildAwsEnvExample } from '@/lib/targets/aws-sst-v4/docs';
 import { buildVercelReadme, buildVercelEnvExample } from '@/lib/targets/vercel/docs';
@@ -33,8 +34,24 @@ function depsFrom(files: GeneratedFile[]): { deps: string[]; devDeps: string[] }
   }
 }
 
-/** Assemble the complete export manifest: generated code + README + env + design.json. */
+/**
+ * Assemble the complete export manifest: generated code + README + env + design.json.
+ *
+ * The export gate is enforced HERE, not just in the UI: the generator turns
+ * validation-error designs into non-compiling / non-deploying files, so we
+ * re-validate and refuse to emit a broken project. This makes the gate a
+ * code-path invariant for every caller (UI, scripts, tests, future API),
+ * rather than relying on the Export button being disabled.
+ */
 export function buildExport(bp: Blueprint): GeneratedFile[] {
+  const validation = validateBlueprint(bp);
+  if (!validation.ok) {
+    const summary = validation.errors.map((e) => `  • ${e.message}`).join('\n');
+    throw new Error(
+      `Cannot export: the design has ${validation.errors.length} validation ` +
+        `error${validation.errors.length === 1 ? '' : 's'} that would produce a broken project:\n${summary}`,
+    );
+  }
   const code = generateFiles(bp);
   const docs = DOCS[bp.target.deploy];
   const extras: GeneratedFile[] = [];

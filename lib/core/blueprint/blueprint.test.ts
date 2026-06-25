@@ -71,6 +71,21 @@ describe('blueprint envelope', () => {
     expect(later.metadata.updatedAt).toBe(NOW);
   });
 
+  it('round-trips secrets and outputs through the canvas snapshot without dropping them', () => {
+    const withExtras: CanvasSnapshot = {
+      ...snapshot,
+      secrets: [{ id: 'sec_1', name: 'StripeSecretKey' }],
+      outputs: [{ id: 'out_1', name: 'BucketUrl', valueRef: 'bucket_2.url' }],
+    };
+    const bp = canvasToBlueprint(withExtras, 'aws-sst-v4', app, NOW);
+    expect(bp.secrets).toEqual(withExtras.secrets);
+    expect(bp.outputs).toEqual(withExtras.outputs);
+    // and back to the canvas, so an imported design's secrets/outputs survive a re-save
+    const back = blueprintToCanvas(bp);
+    expect(back.secrets).toEqual(withExtras.secrets);
+    expect(back.outputs).toEqual(withExtras.outputs);
+  });
+
   it('rejects a blueprint with no version', () => {
     expect(() => migrateBlueprint({ app: {} })).toThrow(BlueprintMigrationError);
   });

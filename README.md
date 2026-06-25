@@ -71,7 +71,10 @@ boolean); SST v4 runs Pulumi AWS provider **v7**.
 ## Roadmap
 
 Tracked entirely in this repo's **Milestones**, **Issues**, and **Project board** —
-**all 11 milestones (M0–M10) are complete.**
+**all 11 milestones (M0–M10) are complete.** The **AWS lane is at full depth**; the
+**Vercel lane ships validation + generation + export but is not yet at feature parity**
+(simulation, cost, the Infrastructure view, and the security audit are AWS-only and degrade
+gracefully on Vercel — see [docs/architecture-targets.md](docs/architecture-targets.md)).
 
 | Milestone | Focus                                                                          | Status |
 | --------- | ------------------------------------------------------------------------------ | ------ |
@@ -85,7 +88,7 @@ Tracked entirely in this repo's **Milestones**, **Issues**, and **Project board*
 | M7        | Simulation engine ("everything talks")                                         | ✅     |
 | M8        | Cost estimation                                                                | ✅     |
 | M9        | Recommendations engine                                                         | ✅     |
-| M10       | Vercel export target                                                           | ✅     |
+| M10       | Vercel export target (validation + generation + export; parity WIP)            | ✅     |
 
 **First proof:** the _AI Processing App_ template — Next.js Web · Bucket Uploads · Queue
 Jobs · Worker ProcessJob · Dynamo AppTable — designed, validated, simulated, costed, and
@@ -97,7 +100,7 @@ second lane.
 ```bash
 yarn install
 yarn dev          # http://localhost:3000/builder
-yarn test         # 69 tests
+yarn test         # 275 tests
 yarn lint && yarn typecheck && yarn build
 ```
 

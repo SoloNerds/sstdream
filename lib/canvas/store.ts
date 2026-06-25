@@ -3,7 +3,7 @@ import type { CanvasEdge, CanvasNode } from './types';
 import { DEFAULT_TARGET, getTarget } from '@/lib/targets/registry';
 import type { DeployTarget } from '@/lib/targets/types';
 import type { CanvasSnapshot } from '@/lib/core/blueprint/serialize';
-import type { Blueprint } from '@/lib/core/blueprint/types';
+import type { Blueprint, Output, Secret } from '@/lib/core/blueprint/types';
 
 let idCounter = 0;
 const nextId = (prefix: string) => `${prefix}_${++idCounter}`;
@@ -38,6 +38,10 @@ export interface CanvasState {
   app: AppConfigState;
   nodes: CanvasNode[];
   edges: CanvasEdge[];
+  // Durable blueprint fields with no canvas editor yet; preserved across
+  // load/save/export so imported designs don't lose them (see CanvasSnapshot).
+  secrets: Secret[];
+  outputs: Output[];
   selectedId: string | null;
 
   addNode: (kind: string, position: { x: number; y: number }) => string;
@@ -68,6 +72,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   app: { ...INITIAL_APP },
   nodes: [],
   edges: [],
+  secrets: [],
+  outputs: [],
   selectedId: null,
 
   addNode: (kind, position) => {
@@ -137,9 +143,11 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         target: e.target,
         intent: e.intent,
       })),
+      secrets: snapshot.secrets ?? [],
+      outputs: snapshot.outputs ?? [],
       selectedId: null,
     });
   },
 
-  reset: () => set({ nodes: [], edges: [], selectedId: null }),
+  reset: () => set({ nodes: [], edges: [], secrets: [], outputs: [], selectedId: null }),
 }));

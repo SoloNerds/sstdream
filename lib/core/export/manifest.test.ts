@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { unzipSync, strFromU8 } from 'fflate';
 import { buildExport } from './manifest';
 import { zipFiles } from './zip';
-import { canvasToBlueprint, parseBlueprint } from '@/lib/core/blueprint/serialize';
+import { canvasToBlueprint, draftBlueprint, parseBlueprint } from '@/lib/core/blueprint/serialize';
 import { AI_PROCESSING_APP } from '@/lib/templates/ai-processing-app';
 
 const NOW = '2026-06-08T00:00:00.000Z';
@@ -77,5 +77,35 @@ describe('export manifest — AI Processing App', () => {
   it('zips under a root directory when requested', () => {
     const unzipped = unzipSync(zipFiles(files, 'my-app'));
     expect(Object.keys(unzipped).every((p) => p.startsWith('my-app/'))).toBe(true);
+  });
+});
+
+// The export gate is enforced at the code boundary, not only in the UI: a design
+// with validation errors must refuse to emit rather than produce a broken project.
+describe('export gate is a buildExport invariant (#143)', () => {
+  const APP = { name: 'gate-app', region: 'us-east-1', packageManager: 'yarn' as const };
+
+  it('throws (does not emit) when the design has validation errors', () => {
+    // A bucket named "Public" generates `const public` — a reserved-word error.
+    const invalid = draftBlueprint(
+      { nodes: [{ id: 'b', kind: 'bucket', name: 'Public', props: {}, position: { x: 0, y: 0 } }], edges: [] },
+      'aws-sst-v4',
+      APP,
+      NOW,
+    );
+    expect(() => buildExport(invalid)).toThrow(/Cannot export/);
+    expect(() => buildExport(invalid)).toThrow(/reserved/);
+  });
+
+  it('still emits for a warning-only design (warnings do not block)', () => {
+    // A single bucket with no consumer is a warning, not an error.
+    const warnOnly = draftBlueprint(
+      { nodes: [{ id: 'b', kind: 'bucket', name: 'Uploads', props: {}, position: { x: 0, y: 0 } }], edges: [] },
+      'aws-sst-v4',
+      APP,
+      NOW,
+    );
+    expect(() => buildExport(warnOnly)).not.toThrow();
+    expect(buildExport(warnOnly).some((f) => f.path === 'sst.config.ts')).toBe(true);
   });
 });

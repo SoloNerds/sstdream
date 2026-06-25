@@ -1,6 +1,6 @@
 import { BLUEPRINT_VERSION, BlueprintSchema } from './schema';
 import { migrateBlueprint } from './migrate';
-import type { Blueprint } from './types';
+import type { Blueprint, Output, Secret } from './types';
 import { getTarget } from '@/lib/targets/registry';
 import type { DeployTarget } from '@/lib/targets/types';
 
@@ -22,6 +22,11 @@ export interface CanvasEdgeData {
 export interface CanvasSnapshot {
   nodes: CanvasNodeData[];
   edges: CanvasEdgeData[];
+  // Blueprint-level secrets/outputs have no canvas representation yet, but they
+  // are durable schema fields. Carry them through the round-trip so an imported
+  // or hand-authored design doesn't lose them on the next autosave/export.
+  secrets?: Secret[];
+  outputs?: Output[];
 }
 
 export interface AppDefaults {
@@ -107,8 +112,8 @@ export function draftBlueprint(
       target: e.target,
       intent: e.intent,
     })),
-    secrets: [],
-    outputs: [],
+    secrets: snapshot.secrets ?? [],
+    outputs: snapshot.outputs ?? [],
     metadata: {
       createdAt: previousCreatedAt ?? now,
       updatedAt: now,
@@ -153,6 +158,8 @@ export function blueprintToCanvas(bp: Blueprint): CanvasSnapshot {
       const intent = heal(c);
       return intent ? [{ id: c.id, source: c.source, target: c.target, intent }] : [];
     }),
+    secrets: bp.secrets,
+    outputs: bp.outputs,
   };
 }
 

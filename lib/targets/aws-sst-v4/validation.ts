@@ -1,6 +1,6 @@
 import type { Blueprint, Resource } from '@/lib/core/blueprint/types';
 import type { Diagnostic, ValidationRule } from '@/lib/core/validation/types';
-import { camelCase } from '@/lib/core/codegen/strings';
+import { camelCase, kebabCase } from '@/lib/core/codegen/strings';
 import { parseSeconds } from './generator/config';
 
 // AWS / SST v4 design-level validation rules. Code-shape guarantees (no legacy
@@ -350,6 +350,53 @@ export const AWS_RULES: ValidationRule[] = [
         claim(camelCase(r.name), r);
         // renderCognito also declares `<var>Client = <var>.addClient("Web")`.
         if (r.kind === 'cognito') claim(`${camelCase(r.name)}Client`, r);
+      }
+      return out;
+    },
+  },
+  {
+    // Generated file paths are derived from kebabCase(name): workers
+    // (src/workers/<slug>.ts), Dynamo tables (app/actions/<slug>.ts +
+    // app/<slug>/page.tsx) and external-API helpers (lib/<slug>.ts).
+    // kebabCase is many-to-one ("ProcessJob" and "PROcessJob" both -> "process-job"),
+    // so two distinct, individually-valid names can collide on one path and the
+    // export silently drops a file (runtime.ts de-dupes by path) or cross-wires.
+    // var-name-collision uses camelCase and does NOT catch this.
+    id: 'kebab-path-collision',
+    run: (bp) => {
+      const SLUG_KINDS = new Set(['worker', 'dynamo', 'externalApi']);
+      const out: Diagnostic[] = [];
+      const seen = new Map<string, Resource>();
+      for (const r of bp.resources.filter((r) => SLUG_KINDS.has(r.kind))) {
+        const slug = kebabCase(r.name);
+        const prev = seen.get(slug);
+        if (prev && prev.id !== r.id) {
+          out.push({
+            rule: 'kebab-path-collision',
+            severity: 'error',
+            resourceId: r.id,
+            message: `"${r.name}" and "${prev.name}" both generate files under the path "${slug}" — the export would silently drop one or wire it to the wrong code.`,
+            hint: 'Rename one so they differ by more than letter case (e.g. "ProcessJobs" vs "ProcessJob").',
+          });
+        } else {
+          seen.set(slug, r);
+        }
+      }
+      // Mongo CRUD always emits the fixed slug "items" (app/actions/items.ts,
+      // app/items/page.tsx). A Dynamo table whose name kebabs to "items"
+      // collides with it — the surviving page can import the other store.
+      if (bp.resources.some((r) => r.kind === 'mongodb')) {
+        for (const r of bp.resources) {
+          if (r.kind === 'dynamo' && kebabCase(r.name) === 'items') {
+            out.push({
+              rule: 'kebab-path-collision',
+              severity: 'error',
+              resourceId: r.id,
+              message: `Dynamo table "${r.name}" generates the path "items", which collides with the MongoDB CRUD files.`,
+              hint: 'Rename the table (e.g. "AppTable") so it does not kebab-case to "items".',
+            });
+          }
+        }
       }
       return out;
     },
