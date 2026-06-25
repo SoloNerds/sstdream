@@ -231,6 +231,13 @@ function breakdownFor(r: Resource, nat: 'none' | 'ec2' | 'managed'): CostBreakdo
     case 'cognito':
       lines = [{ label: 'Cognito (free ≤ 50k MAU)', usd: 0 }];
       break;
+    case 'openauth':
+      // Self-hosted: a request-priced issuer Lambda + a small on-demand DynamoDB table.
+      lines = [
+        { label: 'Auth issuer (Lambda, request-priced)', usd: 0 },
+        { label: 'DynamoDB storage (on-demand)', usd: 1 },
+      ];
+      break;
     case 'clerk':
       lines = [{ label: 'Clerk (external / free tier)', usd: 0 }];
       break;

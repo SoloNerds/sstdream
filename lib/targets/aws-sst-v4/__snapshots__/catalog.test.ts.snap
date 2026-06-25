@@ -311,6 +311,15 @@ exports[`aws-sst-v4 catalog > matches snapshot 1`] = `
     ],
     "singleton": true,
   },
+  "openauth": {
+    "accent": "bg-amber-800",
+    "category": "config",
+    "component": "sst.aws.Auth",
+    "defaultName": "Auth",
+    "description": "Self-hosted OpenAuth issuer (the modern SST auth — Lambda + DynamoDB storage)",
+    "kind": "openauth",
+    "label": "OpenAuth",
+  },
   "postgres": {
     "accent": "bg-cyan-700",
     "category": "database",

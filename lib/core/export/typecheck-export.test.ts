@@ -57,7 +57,15 @@ declare module "@aws-sdk/client-iot-data-plane" { export const IoTDataPlaneClien
 declare module "@aws-sdk/client-sfn" { export const SFNClient: any; export const StartExecutionCommand: any; }
 declare module "react" { export type ReactNode = any; export const useState: any; }
 declare module "next" { export type NextConfig = any; }
-declare module "next/navigation" { export const useRouter: any; }
+declare module "next/navigation" { export const useRouter: any; export const redirect: any; }
+declare module "next/headers" { export const cookies: any; export const headers: any; }
+declare module "valibot" { export const object: any; export const string: any; }
+declare module "hono/aws-lambda" { export const handle: any; }
+declare module "@openauthjs/openauth" { export const issuer: any; }
+declare module "@openauthjs/openauth/subject" { export const createSubjects: any; }
+declare module "@openauthjs/openauth/ui/code" { export const CodeUI: any; }
+declare module "@openauthjs/openauth/provider/code" { export const CodeProvider: any; }
+declare module "@openauthjs/openauth/client" { export const createClient: any; }
 declare module "@anthropic-ai/sdk" { const Anthropic: any; export default Anthropic; }
 declare module "pg" { export const Pool: any; }
 declare module "ioredis" { export const Cluster: any; }

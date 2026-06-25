@@ -285,6 +285,14 @@ function renderCognito(r: Resource, plan: AwsPlan): string {
   return `const ${v} = new sst.aws.CognitoUserPool(${q(r.name)});\nconst ${v}Client = ${v}.addClient("Web");`;
 }
 
+// OpenAuth via sst.aws.Auth — deploys the issuer (Hono→Lambda) + an auto-provisioned
+// DynamoDB storage table. `issuer` points at the emitted auth/index.handler. Linked
+// into the app → Resource.<Name>.url. (verified: sst.dev/docs/component/aws/auth)
+function renderOpenAuth(r: Resource, plan: AwsPlan): string {
+  const v = plan.varNameById.get(r.id);
+  return `const ${v} = new sst.aws.Auth(${q(r.name)}, {\n  issuer: "auth/index.handler",\n});`;
+}
+
 function renderSubscriber(sub: AwsPlan['subscribers'][number], plan: AwsPlan): string {
   const p = sub.worker.props;
   const cfg = [`  handler: ${q(sub.handlerPath)},`];
@@ -465,6 +473,7 @@ export function generateSstConfig(bp: Blueprint): string {
   for (const r of byKind('ai')) statements.push(renderSecret(r, plan));
   for (const r of byKind('email')) statements.push(renderEmail(r, plan));
   for (const r of byKind('cognito')) statements.push(renderCognito(r, plan));
+  for (const r of byKind('openauth')) statements.push(renderOpenAuth(r, plan));
   for (const r of byKind('bucket')) statements.push(renderBucket(r, plan));
   for (const r of byKind('dynamo')) statements.push(renderDynamo(r, plan));
   const services = byKind('service');

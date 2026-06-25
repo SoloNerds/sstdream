@@ -327,6 +327,38 @@ describe('VPC NAT options + corrected Postgres cost', () => {
     expect(pkg.dependencies['@aws-sdk/client-sfn']).toBe('^3.0.0');
   });
 
+  it('OpenAuth emits sst.aws.Auth + the full issuer/client/callback flow + deps', () => {
+    const bp = draftBlueprint(
+      {
+        nodes: [
+          { id: 'nextjs_1', kind: 'nextjs', name: 'Web', props: {}, position: { x: 0, y: 0 } },
+          { id: 'auth_2', kind: 'openauth', name: 'Auth', props: {}, position: { x: 200, y: 0 } },
+        ],
+        edges: [{ id: 'e1', source: 'nextjs_1', target: 'auth_2', intent: 'usesOpenAuth' }],
+      },
+      'aws-sst-v4',
+      { name: 'auth-app', region: 'us-east-1', packageManager: 'yarn' },
+      NOW,
+    );
+    const files = generateFiles(bp);
+    const cfg = files.find((f) => f.path === 'sst.config.ts')!.content;
+    expect(cfg).toContain('new sst.aws.Auth("Auth", {');
+    expect(cfg).toContain('issuer: "auth/index.handler"');
+    expect(cfg).toMatch(/link: \[[^\]]*auth/);
+    // The verified flow files.
+    const issuer = files.find((f) => f.path === 'auth/index.ts')!.content;
+    expect(issuer).toContain('import { issuer } from "@openauthjs/openauth"');
+    expect(issuer).toContain('import { handle } from "hono/aws-lambda"');
+    expect(files.find((f) => f.path === 'auth/subjects.ts')!.content).toContain('createSubjects');
+    expect(files.find((f) => f.path === 'app/auth.ts')!.content).toContain('Resource.Auth.url');
+    expect(files.some((f) => f.path === 'app/api/auth/callback/route.ts')).toBe(true);
+    const pkg = JSON.parse(files.find((f) => f.path === 'package.additions.json')!.content) as {
+      dependencies: Record<string, string>;
+    };
+    expect(pkg.dependencies['@openauthjs/openauth']).toBeDefined();
+    expect(pkg.dependencies['hono']).toBeDefined();
+  });
+
   it('an aurora-only consumer design prices the floored NAT on the aurora node', () => {
     const bp = draftBlueprint(
       {

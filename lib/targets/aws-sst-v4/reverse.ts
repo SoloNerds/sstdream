@@ -31,6 +31,7 @@ const COMPONENT_KIND: Record<string, string> = {
   Task: 'task',
   StepFunctions: 'stepFunctions',
   CognitoUserPool: 'cognito',
+  Auth: 'openauth', // sst.aws.Auth (self-hosted OpenAuth issuer)
   Secret: 'secret', // sst.Secret (also how `ai` is rendered)
 };
 
