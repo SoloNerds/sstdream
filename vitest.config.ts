@@ -12,6 +12,7 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['lib/**/*.test.ts'],
+    // lib logic + the first component tests (rendered via react-dom/server — no jsdom).
+    include: ['lib/**/*.test.ts', 'components/**/*.test.tsx'],
   },
 });
