@@ -42,6 +42,15 @@ vercel env pull
 
 ## ${installs.length ? '4' : '3'}. Deploy
 
+**Push to GitHub and import at vercel.com** (recommended — every push then deploys), or
+add a one-click button to your repo's README (replace the URL with your repo):
+
+\`\`\`md
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/<you>/<your-repo>)
+\`\`\`
+
+…or deploy from the CLI:
+
 \`\`\`bash
 vercel --prod
 \`\`\`
