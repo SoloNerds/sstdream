@@ -291,6 +291,70 @@ describe('Vercel lane — codegen robustness', () => {
   });
 });
 
+describe('Vercel lane — expanded catalog (Edge Config, External API, Analytics, Speed Insights)', () => {
+  const bp = draftBlueprint(
+    {
+      nodes: [
+        { id: 'a', kind: 'app', name: 'Web', props: {}, position: { x: 0, y: 0 } },
+        { id: 'ec', kind: 'edgeConfig', name: 'Flags', props: {}, position: { x: 1, y: 0 } },
+        {
+          id: 'api',
+          kind: 'externalApi',
+          name: 'Weather',
+          props: { baseUrlEnv: 'WEATHER_BASE_URL', keyEnv: 'WEATHER_API_KEY' },
+          position: { x: 2, y: 0 },
+        },
+        { id: 'an', kind: 'analytics', name: 'Analytics', props: {}, position: { x: 3, y: 0 } },
+        {
+          id: 'si',
+          kind: 'speedInsights',
+          name: 'SpeedInsights',
+          props: {},
+          position: { x: 4, y: 0 },
+        },
+      ],
+      edges: [
+        { id: 'e1', source: 'a', target: 'ec', intent: 'readsConfig' },
+        { id: 'e2', source: 'a', target: 'api', intent: 'callsApi' },
+      ],
+    },
+    'vercel',
+    VERCEL_SAAS.app,
+    NOW,
+  );
+  const m = Object.fromEntries(generateFiles(bp).map((f) => [f.path, f.content]));
+
+  it('Edge Config emits a helper + env + dep (first-party, not retired)', () => {
+    expect(m['lib/edge-config.ts']).toContain('@vercel/edge-config');
+    const env = JSON.parse(m['required-env.json']) as { required: { name: string }[] };
+    expect(env.required.map((e) => e.name)).toContain('EDGE_CONFIG');
+    const pkg = JSON.parse(m['package.additions.json']) as { dependencies: Record<string, string> };
+    expect(pkg.dependencies['@vercel/edge-config']).toBeDefined();
+  });
+
+  it('External API emits a typed fetch helper keyed on its name + its env vars', () => {
+    expect(m['lib/weather.ts']).toContain('export async function weatherFetch');
+    const env = JSON.parse(m['required-env.json']) as { required: { name: string }[] };
+    const names = env.required.map((e) => e.name);
+    expect(names).toEqual(expect.arrayContaining(['WEATHER_BASE_URL', 'WEATHER_API_KEY']));
+  });
+
+  it('Analytics + Speed Insights inject into the layout + add deps', () => {
+    const layout = m['app/layout.tsx'];
+    expect(layout).toContain('import { Analytics } from "@vercel/analytics/next"');
+    expect(layout).toContain('<Analytics />');
+    expect(layout).toContain('import { SpeedInsights } from "@vercel/speed-insights/next"');
+    expect(layout).toContain('<SpeedInsights />');
+    const pkg = JSON.parse(m['package.additions.json']) as { dependencies: Record<string, string> };
+    expect(pkg.dependencies['@vercel/analytics']).toBeDefined();
+    expect(pkg.dependencies['@vercel/speed-insights']).toBeDefined();
+  });
+
+  it('the design validates clean', () => {
+    expect(validateBlueprint(bp).ok).toBe(true);
+  });
+});
+
 describe('Vercel lane — honesty validation rules (docs §10)', () => {
   const mk = (
     nodes: { id: string; kind: string; name: string; props?: Record<string, unknown> }[],

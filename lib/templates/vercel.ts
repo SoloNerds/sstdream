@@ -250,4 +250,113 @@ export const VERCEL_TEMPLATES: TemplateMeta[] = [
       e('e2', 'app_1', 'redis_3', 'writesToService'),
     ],
   ),
+  vercel(
+    'vercel-feature-flags',
+    'Feature Flags',
+    'Instant feature flags from Edge Config (read at the edge with no DB round-trip), data in Postgres.',
+    ['Edge Config', 'Starter'],
+    'vercel-flags',
+    [
+      n('app_1', 'app', 'Web', 60, 160),
+      n('edgeConfig_2', 'edgeConfig', 'Flags', 360, 80),
+      n('postgres_3', 'postgres', 'Db', 360, 240),
+    ],
+    [
+      e('e1', 'app_1', 'edgeConfig_2', 'readsConfig'),
+      e('e2', 'app_1', 'postgres_3', 'writesToService'),
+    ],
+  ),
+  vercel(
+    'vercel-weather',
+    'Weather App',
+    'Calls an external weather API through a typed fetch helper, with an Upstash Redis response cache.',
+    ['API', 'Starter'],
+    'vercel-weather',
+    [
+      n('app_1', 'app', 'Web', 60, 160),
+      n('externalApi_2', 'externalApi', 'Weather', 360, 80, {
+        baseUrlEnv: 'WEATHER_BASE_URL',
+        keyEnv: 'WEATHER_API_KEY',
+      }),
+      n('redis_3', 'redis', 'Cache', 360, 240),
+    ],
+    [e('e1', 'app_1', 'externalApi_2', 'callsApi'), e('e2', 'app_1', 'redis_3', 'writesToService')],
+  ),
+  vercel(
+    'vercel-analytics-saas',
+    'Analytics SaaS',
+    'A SaaS with Web Analytics + Speed Insights wired into the layout, Postgres data, and email.',
+    ['SaaS', 'Observability'],
+    'vercel-analytics-saas',
+    [
+      n('app_1', 'app', 'Web', 60, 200),
+      n('postgres_2', 'postgres', 'Db', 360, 80),
+      n('email_3', 'email', 'Mailer', 360, 200),
+      n('analytics_4', 'analytics', 'Analytics', 60, 60),
+      n('speedInsights_5', 'speedInsights', 'SpeedInsights', 60, 340),
+    ],
+    [
+      e('e1', 'app_1', 'postgres_2', 'writesToService'),
+      e('e2', 'app_1', 'email_3', 'sendsEmailThrough'),
+    ],
+  ),
+  vercel(
+    'vercel-ai-proxy',
+    'AI Proxy / Gateway',
+    'A typed proxy to an external AI provider (your code calls it — the builder makes no AI calls), with Redis rate-limiting and model config in Edge Config.',
+    ['API', 'AI'],
+    'vercel-ai-proxy',
+    [
+      n('app_1', 'app', 'Web', 60, 200),
+      n('externalApi_2', 'externalApi', 'AiProvider', 360, 80, {
+        baseUrlEnv: 'AI_BASE_URL',
+        keyEnv: 'AI_API_KEY',
+      }),
+      n('redis_3', 'redis', 'RateLimit', 360, 200),
+      n('edgeConfig_4', 'edgeConfig', 'ModelConfig', 360, 320),
+    ],
+    [
+      e('e1', 'app_1', 'externalApi_2', 'callsApi'),
+      e('e2', 'app_1', 'redis_3', 'writesToService'),
+      e('e3', 'app_1', 'edgeConfig_4', 'readsConfig'),
+    ],
+  ),
+  vercel(
+    'vercel-link-shortener',
+    'Link Shortener',
+    'Short links in Upstash Redis, click analytics in Postgres, and Web Analytics on the redirect.',
+    ['API', 'Starter'],
+    'vercel-shortener',
+    [
+      n('app_1', 'app', 'Web', 60, 180),
+      n('redis_2', 'redis', 'Links', 360, 80),
+      n('postgres_3', 'postgres', 'Clicks', 360, 220),
+      n('analytics_4', 'analytics', 'Analytics', 60, 60),
+    ],
+    [
+      e('e1', 'app_1', 'redis_2', 'writesToService'),
+      e('e2', 'app_1', 'postgres_3', 'writesToService'),
+    ],
+  ),
+  vercel(
+    'vercel-status-monitor',
+    'Status Monitor',
+    'A cron pings an external health API on a schedule and emails on failure; Speed Insights on the dashboard.',
+    ['Monitoring', 'Jobs'],
+    'vercel-status',
+    [
+      n('app_1', 'app', 'Web', 60, 200),
+      n('externalApi_2', 'externalApi', 'HealthApi', 360, 80, {
+        baseUrlEnv: 'HEALTH_BASE_URL',
+        keyEnv: 'HEALTH_API_KEY',
+      }),
+      n('email_3', 'email', 'Alerts', 360, 220),
+      n('cron_4', 'cron', 'Ping', 60, 60, DAILY),
+      n('speedInsights_5', 'speedInsights', 'SpeedInsights', 60, 360),
+    ],
+    [
+      e('e1', 'app_1', 'externalApi_2', 'callsApi'),
+      e('e2', 'app_1', 'email_3', 'sendsEmailThrough'),
+    ],
+  ),
 ];
