@@ -5,9 +5,7 @@ import './globals.css';
 export const metadata: Metadata = {
   // Absolute base so the og/twitter image URLs resolve when unfurled. Override via
   // NEXT_PUBLIC_SITE_URL at the public switch (#26); the Pages domain is the default.
-  metadataBase: new URL(
-    process.env.NEXT_PUBLIC_SITE_URL ?? 'https://miniature-funicular-gw2k35k.pages.github.io',
-  ),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://solonerds.github.io/sstdream'),
   title: 'SSTDREAM — draw your app, export a verified deployable project',
   description:
     'Visually design an AWS/SST v4 or Vercel app, simulate the wiring, and export clean, verified, type-checked, deployable files. No AI, no credentials — it runs in your browser.',
