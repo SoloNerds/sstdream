@@ -103,11 +103,24 @@ export const VERCEL_CATALOG: ResourceCatalog = {
   webhook: {
     kind: 'webhook',
     label: 'Webhook',
-    defaultName: 'StripeHook',
+    defaultName: 'Webhook',
     component: 'API route',
-    description: 'Inbound webhook (e.g. Stripe)',
+    description: 'Inbound webhook (Stripe or generic HMAC)',
     accent: 'bg-orange-600',
     category: 'network',
+    props: [
+      {
+        key: 'provider',
+        label: 'Provider',
+        type: 'select',
+        default: 'stripe',
+        options: [
+          { value: 'stripe', label: 'Stripe' },
+          { value: 'generic', label: 'Generic (HMAC signature)' },
+        ],
+        help: 'Stripe emits Stripe signature verification; Generic emits an HMAC check with a per-hook secret.',
+      },
+    ],
   },
   email: {
     kind: 'email',

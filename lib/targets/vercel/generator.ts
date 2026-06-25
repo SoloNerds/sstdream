@@ -12,6 +12,9 @@ import { generateVercelScaffold } from './scaffold';
 // so a free-text prop (Blob access, email sender) can never break the emitted TS.
 const q = (s: string): string => JSON.stringify(s);
 
+// "PaymentHook" -> "PAYMENT_HOOK" — for a per-webhook env var name.
+const screamingSnake = (s: string): string => kebabCase(s).replace(/-/g, '_').toUpperCase();
+
 const blobHelper = (access: string): string =>
   `import { put } from "@vercel/blob";
 
@@ -46,14 +49,17 @@ const redisHelper = (): string =>
 export const redis = Redis.fromEnv();
 `;
 
-const queueProducer = (topic: string): string =>
+const queueProducer = (topics: string[]): string =>
   `import { send } from "@vercel/queue";
 
-export const TOPIC = "${topic}";
+/** Queue topics in this project (each queue's name, kebab-cased). */
+export const TOPICS = {
+${topics.map((t) => `  ${q(t)}: ${q(t)},`).join('\n')}
+} as const;
 
-/** Publish a job to the Vercel Queue. */
-export async function enqueue(body: unknown) {
-  return send(TOPIC, body);
+/** Publish a job to a Vercel Queue topic. */
+export async function enqueue(topic: string, body: unknown) {
+  return send(topic, body);
 }
 `;
 
@@ -78,7 +84,7 @@ const cronRoute = (name: string): string =>
 }
 `;
 
-const webhookRoute = (name: string): string =>
+const stripeWebhookRoute = (name: string): string =>
   `import Stripe from "stripe";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
@@ -98,6 +104,26 @@ export async function POST(request: Request) {
 }
 `;
 
+const genericWebhookRoute = (name: string, secretEnv: string): string =>
+  `import crypto from "node:crypto";
+
+// Generic webhook for "${name}". Verifies an HMAC-SHA256 signature (header
+// "x-signature", hex) against ${secretEnv} before trusting the payload.
+export async function POST(request: Request) {
+  const body = await request.text();
+  const provided = Buffer.from(request.headers.get("x-signature") ?? "", "utf8");
+  const expected = Buffer.from(
+    crypto.createHmac("sha256", process.env.${secretEnv}!).update(body).digest("hex"),
+    "utf8",
+  );
+  if (provided.length !== expected.length || !crypto.timingSafeEqual(provided, expected)) {
+    return new Response("Invalid signature", { status: 401 });
+  }
+  // TODO: handle the verified payload for "${name}"
+  return new Response("ok");
+}
+`;
+
 const emailHelper = (from: string): string =>
   `import { Resend } from "resend";
 
@@ -108,14 +134,34 @@ export async function sendEmail(to: string, subject: string, html: string) {
 }
 `;
 
-function packageAdditions(present: Set<string>): string {
+// Verified versions (npm registry, 2026-06-25). @vercel/queue is 0.x beta — its
+// trigger format may change before GA (see docs/vercel-target.md §12).
+const DEP_VERSIONS: Record<string, string> = {
+  '@vercel/blob': '^2.4.0',
+  '@neondatabase/serverless': '^1.1.0',
+  '@upstash/redis': '^1.38.0',
+  '@vercel/queue': '^0.3.1',
+  resend: '^6.14.0',
+  stripe: '^22.3.0',
+};
+
+const webhookProvider = (r: Resource): string =>
+  typeof r.props.provider === 'string' && r.props.provider ? r.props.provider : 'stripe';
+
+function packageAdditions(bp: Blueprint): string {
+  const present = new Set(bp.resources.map((r) => r.kind));
   const deps: Record<string, string> = {};
-  if (present.has('blob')) deps['@vercel/blob'] = 'latest';
-  if (present.has('postgres')) deps['@neondatabase/serverless'] = 'latest';
-  if (present.has('redis')) deps['@upstash/redis'] = 'latest';
-  if (present.has('queue')) deps['@vercel/queue'] = 'latest';
-  if (present.has('email')) deps['resend'] = 'latest';
-  if (present.has('webhook')) deps['stripe'] = 'latest';
+  const add = (name: string) => {
+    deps[name] = DEP_VERSIONS[name];
+  };
+  if (present.has('blob')) add('@vercel/blob');
+  if (present.has('postgres')) add('@neondatabase/serverless');
+  if (present.has('redis')) add('@upstash/redis');
+  if (present.has('queue')) add('@vercel/queue');
+  if (present.has('email')) add('resend');
+  // stripe only when a webhook actually uses the Stripe provider.
+  if (bp.resources.some((r) => r.kind === 'webhook' && webhookProvider(r) === 'stripe'))
+    add('stripe');
   return `${JSON.stringify({ dependencies: deps, scripts: { deploy: 'vercel --prod' } }, null, 2)}\n`;
 }
 
@@ -159,7 +205,7 @@ export function generateVercel(bp: Blueprint): GeneratedFile[] {
   if (queues.length) {
     files.push({
       path: 'lib/queue.ts',
-      content: queueProducer(kebabCase(queues[0].name)),
+      content: queueProducer(queues.map((qn) => kebabCase(qn.name))),
       language: 'ts',
     });
   }
@@ -178,7 +224,11 @@ export function generateVercel(bp: Blueprint): GeneratedFile[] {
     });
   }
   for (const wh of bp.resources.filter((r) => r.kind === 'webhook')) {
-    files.push({ path: webhookPath(wh), content: webhookRoute(wh.name), language: 'ts' });
+    const content =
+      webhookProvider(wh) === 'stripe'
+        ? stripeWebhookRoute(wh.name)
+        : genericWebhookRoute(wh.name, `${screamingSnake(wh.name)}_WEBHOOK_SECRET`);
+    files.push({ path: webhookPath(wh), content, language: 'ts' });
   }
 
   // vercel.json (only if there's something to configure)
@@ -227,7 +277,7 @@ export function generateVercel(bp: Blueprint): GeneratedFile[] {
 
   files.push({
     path: 'package.additions.json',
-    content: packageAdditions(present),
+    content: packageAdditions(bp),
     language: 'json',
   });
 
