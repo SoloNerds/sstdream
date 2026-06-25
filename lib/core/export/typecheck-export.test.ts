@@ -76,6 +76,7 @@ declare module "flags/next" { export function flag<T = unknown>(opts: any): () =
 declare module "@flags-sdk/edge-config" { export const edgeConfigAdapter: any; }
 declare module "@vercel/firewall" { export const checkRateLimit: any; }
 declare module "@vercel/functions" { export const geolocation: any; export const ipAddress: any; export const waitUntil: any; }
+declare module "@vercel/sandbox" { export const Sandbox: any; }
 declare module "botid/client/core" { export const initBotId: any; }
 declare module "botid/server" { export const checkBotId: any; }
 declare module "botid/next/config" { export const withBotId: any; }

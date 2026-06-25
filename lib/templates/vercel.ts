@@ -511,4 +511,24 @@ export const VERCEL_TEMPLATES: TemplateMeta[] = [
     ],
     [e('e1', 'app_1', 'postgres_5', 'writesToService')],
   ),
+  vercel(
+    'vercel-ai-sandbox-ide',
+    'AI Code Sandbox IDE',
+    'An AI agent (AI Gateway) writes code, runs it in an ephemeral Sandbox microVM, orchestrates multi-step runs with a durable Workflow, stores artifacts in Blob, and rate-limits execution.',
+    ['AI', 'Flagship', 'Sandbox'],
+    'vercel-ai-ide',
+    [
+      n('app_1', 'app', 'Web', 60, 220),
+      n('aiGateway_2', 'aiGateway', 'Chat', 360, 80),
+      n('sandbox_3', 'sandbox', 'Sandbox', 360, 200),
+      n('workflow_4', 'workflow', 'RunPipeline', 360, 320),
+      n('blob_5', 'blob', 'Artifacts', 640, 120),
+      n('rateLimit_6', 'rateLimit', 'RateLimit', 60, 60),
+    ],
+    [
+      e('e1', 'app_1', 'sandbox_3', 'runsCode'),
+      e('e2', 'app_1', 'workflow_4', 'triggersWorkflow'),
+      e('e3', 'app_1', 'blob_5', 'storesFileIn'),
+    ],
+  ),
 ];

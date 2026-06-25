@@ -288,6 +288,17 @@ export const VERCEL_CATALOG: ResourceCatalog = {
     category: 'network',
     singleton: true,
   },
+  sandbox: {
+    kind: 'sandbox',
+    label: 'Sandbox',
+    defaultName: 'Sandbox',
+    component: '@vercel/sandbox',
+    description:
+      'Ephemeral microVM to run untrusted / AI-generated code (Sandbox.create + runCommand)',
+    accent: 'bg-purple-600',
+    category: 'compute',
+    singleton: true,
+  },
 };
 
 export const VERCEL_CATALOG_ORDER = [
@@ -304,6 +315,7 @@ export const VERCEL_CATALOG_ORDER = [
   'externalApi',
   'edgeMiddleware',
   'botId',
+  'sandbox',
   'featureFlags',
   'rateLimit',
   'afterResponse',
