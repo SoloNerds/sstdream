@@ -108,107 +108,125 @@ export function BuilderShell() {
   }, []);
 
   return (
-    <div className="flex h-screen flex-col">
-      <header className="flex items-center justify-between gap-4 border-b border-neutral-200 px-4 py-2 dark:border-neutral-800">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-bold">SSTDREAM</span>
-          <select
-            aria-label="Deploy lane"
-            value={targetId}
-            onChange={(e) => {
-              const { nodes } = useCanvasStore.getState();
-              if (
-                nodes.length > 0 &&
-                !window.confirm('Switching lanes clears the current canvas. Continue?')
-              ) {
-                return;
-              }
-              useCanvasStore.setState({ targetId: e.target.value as DeployTarget });
-              useCanvasStore.getState().reset();
-            }}
-            className="rounded border border-neutral-300 bg-transparent px-2 py-0.5 text-xs dark:border-neutral-700"
-          >
-            {listTargets().map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-          <div className="ml-1 flex overflow-hidden rounded-md border border-neutral-300 text-xs dark:border-neutral-700">
-            {(['design', 'infra'] as const).map((v) => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => setView(v)}
-                className={
-                  view === v
-                    ? 'bg-indigo-600 px-2.5 py-0.5 font-medium text-white'
-                    : 'px-2.5 py-0.5 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                }
-              >
-                {v === 'design' ? 'Design' : 'Infrastructure'}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Toolbar validation={validation} />
-          <ThemeToggle />
-        </div>
-      </header>
-      {recoveryKey && (
-        <div
-          role="alert"
-          className="flex items-center justify-between gap-4 border-b border-amber-300 bg-amber-50 px-4 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200"
+    <>
+      {/* The canvas builder needs a pointer + room. On phones/tablets, advise desktop
+          (we deliberately don't ship a responsive builder) and point to the gallery. */}
+      <div className="flex h-dvh flex-col items-center justify-center gap-4 p-8 text-center md:hidden">
+        <div className="text-lg font-semibold">The builder needs a wider screen</div>
+        <p className="max-w-sm text-sm text-neutral-500">
+          SSTDREAM&apos;s drag-and-drop canvas is built for desktop. Open this on a laptop to design
+          — or browse ready-made architectures from your phone.
+        </p>
+        <a
+          href="/gallery"
+          className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white"
         >
-          <span>
-            Your previous design could not be loaded (it may be corrupt or from a different
-            version). The raw data was preserved in this browser under the localStorage key{' '}
-            <code className="rounded bg-amber-100 px-1 font-mono dark:bg-amber-900">
-              {recoveryKey}
-            </code>
-            .
-          </span>
-          <button
-            type="button"
-            onClick={() => setRecoveryKey(null)}
-            className="shrink-0 rounded border border-amber-400 px-2 py-0.5 hover:bg-amber-100 dark:border-amber-600 dark:hover:bg-amber-900"
-          >
-            Dismiss
-          </button>
-        </div>
-      )}
-      <div className="flex min-h-0 flex-1">
-        <aside className="w-64 shrink-0 overflow-y-auto border-r border-neutral-200 dark:border-neutral-800">
-          <Palette />
-        </aside>
-        <main className="min-w-0 flex-1">{view === 'design' ? <Canvas /> : <InfraView />}</main>
-        <aside className="flex w-72 shrink-0 flex-col border-l border-neutral-200 dark:border-neutral-800">
-          <div className="flex shrink-0 border-b border-neutral-200 text-xs dark:border-neutral-800">
-            {(['properties', 'simulation', 'cost', 'advice'] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setTab(t)}
-                className={`flex-1 px-2 py-1.5 ${
-                  tab === t
-                    ? 'border-b-2 border-indigo-500 font-medium'
-                    : 'text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                }`}
-              >
-                {TAB_LABEL[t]}
-              </button>
-            ))}
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            {tab === 'properties' && <PropertiesPanel />}
-            {tab === 'simulation' && <SimulationPanel />}
-            {tab === 'cost' && <CostPanel />}
-            {tab === 'advice' && <RecommendationsPanel />}
-          </div>
-        </aside>
+          Browse the gallery
+        </a>
       </div>
-      <StatusBar validation={validation} />
-    </div>
+
+      <div className="hidden h-screen flex-col md:flex">
+        <header className="flex items-center justify-between gap-4 border-b border-neutral-200 px-4 py-2 dark:border-neutral-800">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-bold">SSTDREAM</span>
+            <select
+              aria-label="Deploy lane"
+              value={targetId}
+              onChange={(e) => {
+                const { nodes } = useCanvasStore.getState();
+                if (
+                  nodes.length > 0 &&
+                  !window.confirm('Switching lanes clears the current canvas. Continue?')
+                ) {
+                  return;
+                }
+                useCanvasStore.setState({ targetId: e.target.value as DeployTarget });
+                useCanvasStore.getState().reset();
+              }}
+              className="rounded border border-neutral-300 bg-transparent px-2 py-0.5 text-xs dark:border-neutral-700"
+            >
+              {listTargets().map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+            <div className="ml-1 flex overflow-hidden rounded-md border border-neutral-300 text-xs dark:border-neutral-700">
+              {(['design', 'infra'] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setView(v)}
+                  className={
+                    view === v
+                      ? 'bg-indigo-600 px-2.5 py-0.5 font-medium text-white'
+                      : 'px-2.5 py-0.5 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                  }
+                >
+                  {v === 'design' ? 'Design' : 'Infrastructure'}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Toolbar validation={validation} />
+            <ThemeToggle />
+          </div>
+        </header>
+        {recoveryKey && (
+          <div
+            role="alert"
+            className="flex items-center justify-between gap-4 border-b border-amber-300 bg-amber-50 px-4 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200"
+          >
+            <span>
+              Your previous design could not be loaded (it may be corrupt or from a different
+              version). The raw data was preserved in this browser under the localStorage key{' '}
+              <code className="rounded bg-amber-100 px-1 font-mono dark:bg-amber-900">
+                {recoveryKey}
+              </code>
+              .
+            </span>
+            <button
+              type="button"
+              onClick={() => setRecoveryKey(null)}
+              className="shrink-0 rounded border border-amber-400 px-2 py-0.5 hover:bg-amber-100 dark:border-amber-600 dark:hover:bg-amber-900"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+        <div className="flex min-h-0 flex-1">
+          <aside className="w-64 shrink-0 overflow-y-auto border-r border-neutral-200 dark:border-neutral-800">
+            <Palette />
+          </aside>
+          <main className="min-w-0 flex-1">{view === 'design' ? <Canvas /> : <InfraView />}</main>
+          <aside className="flex w-72 shrink-0 flex-col border-l border-neutral-200 dark:border-neutral-800">
+            <div className="flex shrink-0 border-b border-neutral-200 text-xs dark:border-neutral-800">
+              {(['properties', 'simulation', 'cost', 'advice'] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTab(t)}
+                  className={`flex-1 px-2 py-1.5 ${
+                    tab === t
+                      ? 'border-b-2 border-indigo-500 font-medium'
+                      : 'text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                  }`}
+                >
+                  {TAB_LABEL[t]}
+                </button>
+              ))}
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {tab === 'properties' && <PropertiesPanel />}
+              {tab === 'simulation' && <SimulationPanel />}
+              {tab === 'cost' && <CostPanel />}
+              {tab === 'advice' && <RecommendationsPanel />}
+            </div>
+          </aside>
+        </div>
+        <StatusBar validation={validation} />
+      </div>
+    </>
   );
 }
