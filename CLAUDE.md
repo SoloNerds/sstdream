@@ -67,17 +67,30 @@ A new lane is registered in `lib/targets/registry.ts` plus the `generate.ts`,
   runnable project** (scaffold: package.json/tsconfig/next.config/layout/page + **AGENTS.md**),
   with **full CRUD server actions + example pages** per Dynamo/Mongo table the app touches,
   worker roles for queue/bus/topic subscribers, API routes, cron, and S3 notifications.
-- **Worker roles** (in `generator/plan.ts`): subscriber (queue/bus/topic, name-first vs
-  object-first subscribe), route handler (handlesRoute → ApiGatewayV2), cron-invoked, bucket
-  notifier (handlesBucketEvents → bucket.notify), or standalone function.
+- **Worker roles** (in `generator/plan.ts`): subscriber (queue/bus/topic **or Dynamo stream**,
+  name-first vs object-first subscribe), route handler (handlesRoute → ApiGatewayV2),
+  cron-invoked, bucket notifier (handlesBucketEvents → bucket.notify), or standalone function.
+- **Dynamo streams**: `worker subscribesTo dynamo` enables the table stream (auto when wired)
+  and emits a name-first `table.subscribe("Name", {...})` + a DynamoDB-stream handler shape.
 - **Router** routes a bucket (`routeBucket`, router→bucket) and serves a StaticSite (router
   option, staticsite→router); paths live on the routed node's `routePath` prop.
 
+- **Vercel lane is at functional parity.** Runnable project scaffold (package.json/tsconfig/
+  next.config/layout/page + AGENTS.md), editable props, the doc §10 validation rules, and all
+  five engines (simulation / cost / expansion / audit / recommendations in `lib/targets/vercel/`).
+  9 catalog kinds; webhook supports Stripe + generic HMAC; deps pinned to verified versions.
+
+## Correctness backstops
+
+- **Snapshot tests** pin every generator's output; don't hand-edit `*.snap`.
+- **`parse-export.test.ts`** syntactically parses every generated file of every template.
+- **`typecheck-export.test.ts`** runs the TS type-checker over every generated project (both
+  lanes + a 21-kind kitchen-sink): catches undefined vars, broken local imports, type errors.
+- CI runs lint → **format:check** → test → build → typecheck.
+
 ## Known follow-ups
 
-- **Vercel lane parity**: the Vercel lane now ships a runnable project scaffold, editable
-  props, the doc §10 validation rules, and all five engines (simulation / cost / expansion /
-  audit / recommendations live in `lib/targets/vercel/`). Remaining frontier: more catalog
-  kinds (Workflow, Edge Config, External API), generalizing the Stripe-only webhook, and an
-  AI SDK v5 template. (Email is SES on AWS, Resend on Vercel.)
+- Vercel frontier: more catalog kinds (Workflow, Edge Config, External API), an AI SDK v5
+  template. (Email is SES on AWS, Resend on Vercel.)
+- `generator/runtime.ts` (~1100 lines) is a candidate for splitting (well-tested, so low-risk).
 - No in-app AI assistant (deferred by design until export quality is proven).
