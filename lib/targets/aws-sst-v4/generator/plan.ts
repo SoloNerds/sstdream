@@ -12,7 +12,7 @@ export interface SubscriberPlan {
   /** Resource id of the subscribed queue/bus/topic. */
   targetId: string;
   /** Kind of the subscribed resource — drives the subscribe() call shape. */
-  targetKind: 'queue' | 'bus' | 'snstopic';
+  targetKind: 'queue' | 'bus' | 'snstopic' | 'dynamo';
   handlerPath: string; // e.g. "src/workers/process-job.handler"
   handlerFile: string; // e.g. "src/workers/process-job.ts"
   linkVars: string[];

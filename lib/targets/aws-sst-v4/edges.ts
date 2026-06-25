@@ -34,9 +34,10 @@ export const AWS_EDGE_INTENTS: EdgeIntentMeta[] = [
   {
     intent: 'subscribesTo',
     label: 'subscribes to',
-    description: 'A worker consumes a queue/bus/topic (generates the subscribe() call).',
+    description:
+      'A worker consumes a queue/bus/topic, or a Dynamo table stream (generates the subscribe() call; Dynamo needs stream enabled).',
     from: ['worker'],
-    to: ['queue', 'bus', 'snstopic'],
+    to: ['queue', 'bus', 'snstopic', 'dynamo'],
   },
   {
     intent: 'invokes',

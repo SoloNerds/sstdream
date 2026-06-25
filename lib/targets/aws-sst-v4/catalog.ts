@@ -98,6 +98,20 @@ export const AWS_CATALOG: ResourceCatalog = {
         type: 'text',
         placeholder: 'createdAt',
       },
+      {
+        key: 'stream',
+        label: 'Stream',
+        type: 'select',
+        default: 'none',
+        options: [
+          { value: 'none', label: 'Off' },
+          { value: 'new-and-old-images', label: 'New + old images' },
+          { value: 'new-image', label: 'New image' },
+          { value: 'old-image', label: 'Old image' },
+          { value: 'keys-only', label: 'Keys only' },
+        ],
+        help: 'Enable a change stream so a Worker can subscribe to inserts/updates/deletes. Auto-enabled when a subscriber is wired.',
+      },
     ],
   },
   queue: {

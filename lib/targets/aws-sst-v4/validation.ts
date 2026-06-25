@@ -756,4 +756,25 @@ export const AWS_RULES: ValidationRule[] = [
         : [];
     },
   },
+  {
+    // docs §4.3/§6: a Dynamo stream subscriber requires the table's stream to be
+    // enabled. The generator auto-enables it when unset, so this only fires on an
+    // explicit contradiction — a subscriber wired while stream is turned off.
+    id: 'dynamo-subscriber-needs-stream',
+    run: (bp) =>
+      bp.resources
+        .filter((r) => r.kind === 'dynamo')
+        .filter(
+          (t) =>
+            t.props.stream === 'none' &&
+            bp.connections.some((c) => c.target === t.id && c.intent === 'subscribesTo'),
+        )
+        .map((t) => ({
+          rule: 'dynamo-subscriber-needs-stream',
+          severity: 'error' as const,
+          resourceId: t.id,
+          message: `"${t.name}" has a stream subscriber but its stream is disabled.`,
+          hint: 'Set the table\'s Stream prop (e.g. "new-and-old-images") or remove the subscriber.',
+        })),
+  },
 ];

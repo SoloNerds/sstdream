@@ -55,7 +55,7 @@ sst-env.d.ts
 
 - **Web** uploads to **Uploads** (\`uploadsTo\`) — App writes objects to a bucket (signed-URL upload). Adds link + S3 helper.
 - **Web** publishes to **Jobs** (\`publishesTo\`) — Sends messages/events to a queue, bus, or topic. Adds link + send helper.
-- **ProcessJob** subscribes to **Jobs** (\`subscribesTo\`) — A worker consumes a queue/bus/topic (generates the subscribe() call).
+- **ProcessJob** subscribes to **Jobs** (\`subscribesTo\`) — A worker consumes a queue/bus/topic, or a Dynamo table stream (generates the subscribe() call; Dynamo needs stream enabled).
 - **ProcessJob** writes to **AppTable** (\`writesTo\`) — Writes items to a Dynamo table. Adds link + Dynamo helper.
 
 > The full machine-readable design is \`sstdream.design.json\` (nodes, edges, intents,
