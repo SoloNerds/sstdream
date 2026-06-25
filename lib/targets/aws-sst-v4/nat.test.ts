@@ -126,6 +126,73 @@ describe('VPC NAT options + corrected Postgres cost', () => {
     expect(redisCost.lines.some((l) => /Valkey/.test(l.label))).toBe(true);
   });
 
+  it('a Fargate Service generates a Cluster + VPC (NAT floored to pull its image) + container files', () => {
+    const bp = draftBlueprint(
+      {
+        nodes: [
+          {
+            id: 'service_1',
+            kind: 'service',
+            name: 'Api',
+            props: { cpu: '0.5 vCPU', memory: '1 GB', port: 8080 },
+            position: { x: 0, y: 0 },
+          },
+          { id: 'postgres_2', kind: 'postgres', name: 'Db', props: {}, position: { x: 200, y: 0 } },
+        ],
+        edges: [{ id: 'e1', source: 'service_1', target: 'postgres_2', intent: 'queriesDb' }],
+      },
+      'aws-sst-v4',
+      { name: 'svc-app', region: 'us-east-1', packageManager: 'yarn' },
+      NOW,
+    );
+    const files = generateFiles(bp);
+    const cfg = files.find((f) => f.path === 'sst.config.ts')!.content;
+    // A service forces the VPC + ec2 NAT (private-subnet task needs egress to pull its image).
+    expect(cfg).toContain('nat: "ec2"');
+    expect(cfg).toContain('const cluster = new sst.aws.Cluster("Cluster", { vpc });');
+    expect(cfg).toContain('new sst.aws.Service("Api", {');
+    expect(cfg).toContain('cluster,');
+    expect(cfg).toContain('image: { context: "./services/api" }');
+    expect(cfg).toContain('cpu: "0.5 vCPU"');
+    // Public by default → ALB rule in the verified "PORT/protocol" string shape.
+    expect(cfg).toContain('rules: [{ listen: "80/http", forward: "8080/http" }]');
+    expect(cfg).toMatch(/link: \[[^\]]*db/i);
+    expect(cfg).toContain('api: api.url,'); // the public URL is exported
+    // Container starter files exist.
+    expect(files.some((f) => f.path === 'services/api/Dockerfile')).toBe(true);
+    expect(files.find((f) => f.path === 'services/api/server.mjs')!.content).toContain(
+      'createServer',
+    );
+    // Cost: Fargate + ALB.
+    const svcCost = estimateAwsCost(bp).perResource.find((r) => r.kind === 'service')!;
+    expect(svcCost.lines.some((l) => /Fargate/.test(l.label))).toBe(true);
+    expect(svcCost.lines.some((l) => /Load Balancer/.test(l.label))).toBe(true);
+  });
+
+  it('a private Service (public: no) omits the load balancer and the url output', () => {
+    const bp = draftBlueprint(
+      {
+        nodes: [
+          {
+            id: 'service_1',
+            kind: 'service',
+            name: 'Worker',
+            props: { public: 'no' },
+            position: { x: 0, y: 0 },
+          },
+        ],
+        edges: [],
+      },
+      'aws-sst-v4',
+      { name: 'svc-app', region: 'us-east-1', packageManager: 'yarn' },
+      NOW,
+    );
+    const cfg = generateFiles(bp).find((f) => f.path === 'sst.config.ts')!.content;
+    expect(cfg).toContain('new sst.aws.Service("Worker", {');
+    expect(cfg).not.toContain('loadBalancer');
+    expect(cfg).not.toContain('worker: worker.url');
+  });
+
   it('an aurora-only consumer design prices the floored NAT on the aurora node', () => {
     const bp = draftBlueprint(
       {

@@ -401,6 +401,45 @@ export const redis = new Cluster(
 );
 `;
 
+// ECS Fargate container starter. node:22-slim, installs deps (sst for Resource
+// access), runs the server. SST builds this Dockerfile from services/<name>/.
+const serviceDockerfile = (port: number): string =>
+  `FROM node:22-slim
+WORKDIR /app
+COPY package.json ./
+RUN npm install --omit=dev
+COPY . .
+EXPOSE ${port}
+CMD ["node", "server.mjs"]
+`;
+
+// A minimal HTTP server so the container is runnable out of the box. Linked
+// resources (DB, cache, bucket, queue…) resolve at runtime via Resource from "sst".
+const serviceServer = (name: string, port: number): string =>
+  `import { createServer } from "node:http";
+// import { Resource } from "sst"; // linked resources resolve here, e.g. Resource.<Name>.host
+
+const port = Number(process.env.PORT) || ${port};
+
+createServer((req, res) => {
+  res.writeHead(200, { "content-type": "application/json" });
+  res.end(JSON.stringify({ service: ${JSON.stringify(name)}, ok: true }));
+}).listen(port, () => console.log(\`${name} listening on :\${port}\`));
+`;
+
+const serviceContainerPackageJson = (slug: string): string =>
+  `${JSON.stringify(
+    {
+      name: slug,
+      private: true,
+      type: 'module',
+      scripts: { dev: 'node server.mjs', start: 'node server.mjs' },
+      dependencies: { sst: '^4.15.0' },
+    },
+    null,
+    2,
+  )}\n`;
+
 // External integrations (env-driven — no SST infra). Verified env-var names from
 // real projects: STRIPE_SECRET_KEY/STRIPE_WEBHOOK_SECRET, DATABASE_URL (Mongo), etc.
 const stripeLibFile = (): string =>
@@ -887,6 +926,26 @@ export function generateRuntimeFiles(bp: Blueprint): GeneratedFile[] {
   const redisRes = redisEdge ? resourceOf(redisEdge.target) : undefined;
   if (redisRes) {
     files.push({ path: 'lib/redis.ts', content: redisHelperFile(redisRes.name), language: 'ts' });
+  }
+
+  // ECS Fargate services: each gets its own container folder (Dockerfile + a tiny
+  // starter HTTP server that reads its linked resources via the SST `Resource` SDK).
+  for (const svc of bp.resources.filter((r) => r.kind === 'service')) {
+    const slug = kebabCase(svc.name);
+    const port = typeof svc.props.port === 'number' ? svc.props.port : 3000;
+    files.push(
+      { path: `services/${slug}/Dockerfile`, content: serviceDockerfile(port), language: 'text' },
+      {
+        path: `services/${slug}/server.mjs`,
+        content: serviceServer(svc.name, port),
+        language: 'text',
+      },
+      {
+        path: `services/${slug}/package.json`,
+        content: serviceContainerPackageJson(slug),
+        language: 'json',
+      },
+    );
   }
 
   const stripeRes = bp.resources.find(

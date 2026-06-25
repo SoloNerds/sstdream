@@ -340,6 +340,22 @@ export const AWS_TEMPLATES: TemplateMeta[] = [
     ],
   ),
   aws(
+    'aws-fargate-service',
+    'Containerized Service (Fargate)',
+    'A long-running container on ECS Fargate behind a load balancer, talking to Postgres and a Redis cache. SST generates the Cluster, the VPC (with fck-nat), and a starter Dockerfile. `sst dev` runs the container locally.',
+    ['Containers', 'Flagship', 'Fargate'],
+    'fargate-service',
+    [
+      n('service_1', 'service', 'Api', 80, 200, { cpu: '0.5 vCPU', memory: '1 GB', port: 3000 }),
+      n('postgres_2', 'postgres', 'Database', 400, 100),
+      n('redis_3', 'redis', 'Cache', 400, 320),
+    ],
+    [
+      e('edge_4', 'service_1', 'postgres_2', 'queriesDb'),
+      e('edge_5', 'service_1', 'redis_3', 'usesCache'),
+    ],
+  ),
+  aws(
     'aws-cached-api',
     'Cached API + Redis',
     'A read-heavy API: Postgres as the source of truth, ElastiCache Redis (cluster-mode, TLS) as the cache. Both share one auto-generated VPC; fck-nat keeps Lambdas online.',

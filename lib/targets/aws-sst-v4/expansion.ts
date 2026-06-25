@@ -174,6 +174,26 @@ function resourcesFor(
         P('EC2', 'Security group', { security: true, note: 'in-VPC access only' }),
         P('SSM', 'Link parameters', { note: 'Resource.<Cache>.{host,port,username,password}' }),
       ];
+    case 'service': {
+      const cpu = typeof r.props.cpu === 'string' ? r.props.cpu : '0.25 vCPU';
+      const out = [
+        P('ECS', 'Fargate service', { paid: true, note: `${cpu}, 1 task` }),
+        P('ECS', 'Task definition'),
+        P('IAM', 'Task role + execution role', { security: true, note: 'link grants attach here' }),
+        P('ECR', 'Image repository', { note: 'built + pushed from services/<name>/' }),
+        P('CloudWatch', 'Log group', { note: 'container logs' }),
+        P('EC2', 'Security group', { security: true }),
+      ];
+      if (r.props.public !== 'no') {
+        out.push(
+          P('ELB', 'Application Load Balancer', { paid: true, note: '~$16/mo + LCU' }),
+          P('ELB', 'Target group + listener'),
+        );
+      } else {
+        out.push(P('Cloud Map', 'Service discovery', { note: 'private in-VPC DNS' }));
+      }
+      return out;
+    }
     case 'cognito':
       return [
         P('Cognito', 'User Pool', { security: true }),
@@ -199,7 +219,7 @@ function resourcesFor(
 
 // `nat` is the effective NAT (effectiveAwsNat) — floored at "ec2" when app code
 // joins the VPC — so this view matches the generated sst.config.ts and the cost panel.
-function vpcGroup(nat: 'none' | 'ec2' | 'managed'): InfraGroup {
+function vpcGroup(nat: 'none' | 'ec2' | 'managed', bp: Blueprint): InfraGroup {
   const resources = [
     P('VPC', 'VPC'),
     P('VPC', 'Public subnets ×2'),
@@ -219,12 +239,17 @@ function vpcGroup(nat: 'none' | 'ec2' | 'managed'): InfraGroup {
     resources.push(P('EC2', 'NAT Gateway(s)', { paid: true, note: '~$32/mo per AZ' }));
     resources.push(P('EC2', 'Elastic IPs (NAT)'));
   }
+  // One shared ECS Cluster backs every Service.
+  if (bp.resources.some((r) => r.kind === 'service')) {
+    resources.push(P('ECS', 'Cluster', { note: 'shared by all Services (Fargate)' }));
+  }
   return { id: 'vpc', title: 'VPC (shared by databases / cache)', kind: 'vpc', resources };
 }
 
 const ORDER = [
   'nextjs',
   'staticsite',
+  'service',
   'postgres',
   'aurora',
   'redis',
@@ -266,9 +291,10 @@ export function expandAws(bp: Blueprint): InfraGroup[] {
   }
 
   const dbWithVpc = bp.resources.filter(
-    (r) => r.kind === 'postgres' || r.kind === 'aurora' || r.kind === 'redis',
+    (r) =>
+      r.kind === 'postgres' || r.kind === 'aurora' || r.kind === 'redis' || r.kind === 'service',
   );
-  if (dbWithVpc.length) groups.push(vpcGroup(effectiveAwsNat(bp)));
+  if (dbWithVpc.length) groups.push(vpcGroup(effectiveAwsNat(bp), bp));
 
   return groups;
 }
