@@ -37,6 +37,24 @@ const aws = (
 
 export const AWS_TEMPLATES: TemplateMeta[] = [
   aws(
+    'aws-event-analytics',
+    'Event-Driven Analytics',
+    'Fan-out app events to an SNS topic, warehouse them in Aurora Serverless v2, and enrich via a third-party API. Covers the eventing + relational-warehouse + external-API trio.',
+    ['Analytics', 'Events'],
+    'event-analytics',
+    [
+      n('nextjs_1', 'nextjs', 'Web', 60, 200),
+      n('snstopic_2', 'snstopic', 'Events', 360, 60),
+      n('aurora_3', 'aurora', 'Warehouse', 360, 200),
+      n('externalApi_4', 'externalApi', 'Enrichment', 360, 340),
+    ],
+    [
+      e('edge_5', 'nextjs_1', 'snstopic_2', 'publishesTo'),
+      e('edge_6', 'nextjs_1', 'aurora_3', 'queriesDb'),
+      e('edge_7', 'nextjs_1', 'externalApi_4', 'callsApi'),
+    ],
+  ),
+  aws(
     'aws-full-saas',
     'Full SaaS',
     'The kitchen sink: Clerk auth, Stripe payments, DynamoDB CRUD, SES email, S3 uploads, and a daily cron — everything wired.',
