@@ -56,6 +56,7 @@ declare module "next" { export type NextConfig = any; }
 declare module "next/navigation" { export const useRouter: any; }
 declare module "@anthropic-ai/sdk" { const Anthropic: any; export default Anthropic; }
 declare module "pg" { export const Pool: any; }
+declare module "ioredis" { export const Cluster: any; }
 declare module "mongodb" { export const MongoClient: any; export const ObjectId: any; }
 declare module "@clerk/nextjs" { export const ClerkProvider: any; }
 declare module "@clerk/nextjs/server" { export const auth: any; export const clerkMiddleware: any; }

@@ -222,6 +222,15 @@ function renderAurora(r: Resource, plan: AwsPlan): string {
   return `const ${v} = new sst.aws.Aurora(${q(r.name)}, {\n  engine: "postgres",\n  vpc,\n});`;
 }
 
+// ElastiCache Redis/Valkey — also requires the shared Vpc. Cluster mode is on by
+// default (the runtime helper uses ioredis Cluster + TLS). engine: "valkey" opts
+// into the cheaper, wire-compatible fork; "redis" (default) is omitted.
+function renderRedis(r: Resource, plan: AwsPlan): string {
+  const v = plan.varNameById.get(r.id);
+  const engine = r.props.engine === 'valkey' ? '\n  engine: "valkey",' : '';
+  return `const ${v} = new sst.aws.Redis(${q(r.name)}, {\n  vpc,${engine}\n});`;
+}
+
 // Cognito user pool + a web client. Linked → Resource.<Pool>.id; the pool/client
 // ids are injected into the Next.js app as NEXT_PUBLIC_COGNITO_* env (see renderNextjs).
 function renderCognito(r: Resource, plan: AwsPlan): string {
@@ -365,7 +374,7 @@ export function generateSstConfig(bp: Blueprint): string {
   for (const r of byKind('cognito')) statements.push(renderCognito(r, plan));
   for (const r of byKind('bucket')) statements.push(renderBucket(r, plan));
   for (const r of byKind('dynamo')) statements.push(renderDynamo(r, plan));
-  const vpcResources = [...byKind('postgres'), ...byKind('aurora')];
+  const vpcResources = [...byKind('postgres'), ...byKind('aurora'), ...byKind('redis')];
   if (vpcResources.length) {
     const nat = effectiveAwsNat(bp);
     statements.push(
@@ -375,6 +384,7 @@ export function generateSstConfig(bp: Blueprint): string {
     );
     for (const r of byKind('postgres')) statements.push(renderPostgres(r, plan));
     for (const r of byKind('aurora')) statements.push(renderAurora(r, plan));
+    for (const r of byKind('redis')) statements.push(renderRedis(r, plan));
   }
   // DLQ targets must be declared before the queues that reference their .arn.
   {

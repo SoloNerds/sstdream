@@ -339,4 +339,20 @@ export const AWS_TEMPLATES: TemplateMeta[] = [
       e('edge_7', 'worker_4', 'dynamo_2', 'readsFrom'),
     ],
   ),
+  aws(
+    'aws-cached-api',
+    'Cached API + Redis',
+    'A read-heavy API: Postgres as the source of truth, ElastiCache Redis (cluster-mode, TLS) as the cache. Both share one auto-generated VPC; fck-nat keeps Lambdas online.',
+    ['API', 'Performance', 'Cache'],
+    'cached-api',
+    [
+      n('nextjs_1', 'nextjs', 'Web', 80, 200),
+      n('redis_2', 'redis', 'Cache', 400, 100),
+      n('postgres_3', 'postgres', 'Database', 400, 320),
+    ],
+    [
+      e('edge_4', 'nextjs_1', 'redis_2', 'usesCache'),
+      e('edge_5', 'nextjs_1', 'postgres_3', 'queriesDb'),
+    ],
+  ),
 ];

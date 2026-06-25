@@ -163,6 +163,17 @@ function resourcesFor(
         P('Secrets Manager', 'Master credentials', { security: true }),
         P('SSM', 'Link parameters', { note: 'Resource.<Db>.{host,port,…}' }),
       ];
+    case 'redis':
+      return [
+        P('ElastiCache', 'Replication group', {
+          paid: true,
+          note: r.props.engine === 'valkey' ? 'cache.t4g.micro Valkey' : 'cache.t4g.micro Redis',
+        }),
+        P('ElastiCache', 'Subnet group'),
+        P('ElastiCache', 'Parameter group'),
+        P('EC2', 'Security group', { security: true, note: 'in-VPC access only' }),
+        P('SSM', 'Link parameters', { note: 'Resource.<Cache>.{host,port,username,password}' }),
+      ];
     case 'cognito':
       return [
         P('Cognito', 'User Pool', { security: true }),
@@ -208,7 +219,7 @@ function vpcGroup(nat: 'none' | 'ec2' | 'managed'): InfraGroup {
     resources.push(P('EC2', 'NAT Gateway(s)', { paid: true, note: '~$32/mo per AZ' }));
     resources.push(P('EC2', 'Elastic IPs (NAT)'));
   }
-  return { id: 'vpc', title: 'VPC (shared by Postgres)', kind: 'vpc', resources };
+  return { id: 'vpc', title: 'VPC (shared by databases / cache)', kind: 'vpc', resources };
 }
 
 const ORDER = [
@@ -216,6 +227,7 @@ const ORDER = [
   'staticsite',
   'postgres',
   'aurora',
+  'redis',
   'dynamo',
   'bucket',
   'queue',
@@ -253,7 +265,9 @@ export function expandAws(bp: Blueprint): InfraGroup[] {
     if (resources) groups.push({ id: r.id, title: r.name, kind: r.kind, resources });
   }
 
-  const dbWithVpc = bp.resources.filter((r) => r.kind === 'postgres' || r.kind === 'aurora');
+  const dbWithVpc = bp.resources.filter(
+    (r) => r.kind === 'postgres' || r.kind === 'aurora' || r.kind === 'redis',
+  );
   if (dbWithVpc.length) groups.push(vpcGroup(effectiveAwsNat(bp)));
 
   return groups;

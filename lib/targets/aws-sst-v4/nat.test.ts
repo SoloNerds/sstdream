@@ -84,6 +84,48 @@ describe('VPC NAT options + corrected Postgres cost', () => {
     expect(natLines).toHaveLength(1);
   });
 
+  it('Redis joins the shared VPC, links its consumer, and emits the ioredis Cluster helper', () => {
+    const bp = draftBlueprint(
+      {
+        nodes: [
+          { id: 'nextjs_1', kind: 'nextjs', name: 'Web', props: {}, position: { x: 0, y: 0 } },
+          {
+            id: 'redis_2',
+            kind: 'redis',
+            name: 'Cache',
+            props: { engine: 'valkey' },
+            position: { x: 200, y: 0 },
+          },
+        ],
+        edges: [{ id: 'e1', source: 'nextjs_1', target: 'redis_2', intent: 'usesCache' }],
+      },
+      'aws-sst-v4',
+      { name: 'cache-app', region: 'us-east-1', packageManager: 'yarn' },
+      NOW,
+    );
+    const files = generateFiles(bp);
+    const cfg = files.find((f) => f.path === 'sst.config.ts')!.content;
+    // Redis forces the shared VPC, and a consumer floors NAT at ec2.
+    expect(cfg).toContain('new sst.aws.Vpc("Vpc", {');
+    expect(cfg).toContain('nat: "ec2"');
+    expect(cfg).toContain('new sst.aws.Redis("Cache", {');
+    expect(cfg).toContain('engine: "valkey"');
+    // The Next.js app links the cache (so Resource.Cache resolves at runtime).
+    expect(cfg).toMatch(/link: \[[^\]]*cache/);
+    // ioredis Cluster + TLS helper, with the dep added.
+    const helper = files.find((f) => f.path === 'lib/redis.ts')!.content;
+    expect(helper).toContain('import { Cluster } from "ioredis"');
+    expect(helper).toContain('Resource.Cache.host');
+    expect(helper).toContain('checkServerIdentity: () => undefined');
+    const pkg = JSON.parse(files.find((f) => f.path === 'package.additions.json')!.content) as {
+      dependencies: Record<string, string>;
+    };
+    expect(pkg.dependencies['ioredis']).toBe('^5.0.0');
+    // Valkey is the cheaper node in the cost panel.
+    const redisCost = estimateAwsCost(bp).perResource.find((r) => r.kind === 'redis')!;
+    expect(redisCost.lines.some((l) => /Valkey/.test(l.label))).toBe(true);
+  });
+
   it('an aurora-only consumer design prices the floored NAT on the aurora node', () => {
     const bp = draftBlueprint(
       {
