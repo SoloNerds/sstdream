@@ -258,8 +258,9 @@ api.route("GET /", "src/get.handler")` (route key = `"METHOD /path"`; optional 3
 > Next.js `environment`), the **AI Chat** integration (`@anthropic-ai/sdk`, `claude-opus-4-8`),
 > and the **env-driven** integrations **Stripe** / **MongoDB** / **External API** / **Clerk**
 > (`@clerk/nextjs` + `clerkMiddleware`) — these emit `lib/*` helpers + `.env.example` keys, not
-> SST resources. Bus/SnsTopic/Router/StaticSite/ApiGatewayV2 are documented + verified here and
-> queued for the next generator pass.
+> SST resources. Bus/SnsTopic/Router/StaticSite/ApiGatewayV2 are implemented, as are the five
+> **modern components in §4.9** (Redis, Cluster+Service, Task, Realtime, Step Functions). The
+> AWS catalog is **26 kinds**.
 
 > **Next.js 16 note:** generated Route Handlers (`app/api/.../route.ts`) export async HTTP
 > methods; dynamic `params`/`searchParams` and `cookies()`/`headers()` are **async** (await
@@ -288,6 +289,41 @@ api.route("GET /", "src/get.handler")` (route key = `"METHOD /path"`; optional 3
 > private-subnet Lambdas have **no internet (or public AWS endpoint) access without NAT**
 > — and the `Vpc` docs list no default gateway endpoints — the generator floors NAT at
 > `"ec2"` (fck-nat, ~$4/mo) whenever any consumer is placed in the generated VPC.
+
+### 4.9 Modern components — containers + durable + realtime (verified 2026-06-25)
+
+Researched against live `sst.dev/docs` and shipped in the generator. All five carry a
+snapshot + a `typecheck-export` test.
+
+- **`sst.aws.Redis`** (ElastiCache) — **requires the shared `vpc`**, like Postgres:
+  `new sst.aws.Redis("Cache", { vpc, engine?: "valkey" })`. **Cluster mode is ON by
+  default**, so the runtime client is **ioredis `Cluster`** (not `new Redis`), and **TLS
+  is mandatory** with `checkServerIdentity` overridden (the cert CN ≠ the config endpoint).
+  Link → `Resource.Cache.{host,port,username,password}`. In-VPC traffic needs no NAT.
+- **`sst.aws.Cluster` + `sst.aws.Service`** (ECS Fargate) — a **Cluster requires a `vpc`**
+  and is just a namespace; a **Service requires a `cluster`**. `new sst.aws.Service("Web",
+{ cluster, image: { context }, cpu, memory, loadBalancer: { rules: [{ listen: "80/http",
+forward: "3000/http" }] }, link, dev: { command } })`. `service.url` exists **only** when
+  `loadBalancer` is set (else private/CloudMap). `loadBalancer.rules` use the **`"PORT/protocol"`
+  string** form. The task runs in **private subnets** and needs NAT to **pull its image** →
+  the generator floors NAT at `ec2`. In `sst dev` the service runs `dev.command` locally.
+- **`sst.aws.Task`** (one-off Fargate) — `new sst.aws.Task("Job", { cluster, image, link })`;
+  no load balancer. Run it from app code: `import { task } from "sst/aws/task";
+await task.run(Resource.Job)` → `{ tasks: [{ taskArn }] }` (the handle for `describe`/`stop`).
+  Billed per-run, no idle cost.
+- **`sst.aws.Realtime`** (IoT WebSocket pub/sub) — `new sst.aws.Realtime("Realtime",
+{ authorizer: "src/authorizer.handler" })`. The **authorizer is required** (no anonymous
+  connect) and uses `realtime.authorizer()` from `sst/aws/realtime`, returning `{ publish,
+subscribe }` topic ACLs. Subscribe with `realtime.subscribe("src/sub.handler", { filter })`
+  (**2-arg, no name**). IoT is **account-shared** → prefix every topic with
+  `${$app.name}/${$app.stage}/`. **No** sst publish helper — publish via
+  `@aws-sdk/client-iot-data-plane` against `Resource.Realtime.endpoint`.
+- **`sst.aws.StepFunctions`** (durable state machine) — builders are **static**:
+  `sst.aws.StepFunctions.lambdaInvoke({ name, function })` / `.succeed()` / `.choice()`
+  (`.when(jsonata, step)`), chained with `.next()`, composed into
+  `new sst.aws.StepFunctions("Wf", { definition, type: "standard" | "express" })`. Start an
+  execution from app code with `@aws-sdk/client-sfn` `StartExecutionCommand` against
+  `Resource.Wf.arn` (the only linked field). `choice` conditions are **JSONata**.
 
 ---
 
@@ -351,9 +387,11 @@ account, time, region, resources, detail }`, **no Records array**; the published
 - No hosted deploy, no AWS credential storage, no SST Console replacement.
 - No CloudFormation export.
 - No v2/CDK constructs.
-- **No AI assistant in MVP** (deferred until export quality is proven).
-- Raw Pulumi / low-level provider resources, VPC builder, ECS/Fargate, RDS/Postgres,
-  Stripe codegen, Cloudflare DNS automation: post-MVP.
+- **No AI assistant in the builder** (the AI Chat kind only _generates_ code; the builder
+  makes zero AI calls — the deliberate moat).
+- Raw Pulumi / low-level provider resources, hand-rolled VPC topology, AppSync/GraphQL,
+  Kinesis, EFS, Cloudflare DNS automation: post-MVP. (RDS/Postgres, ECS/Fargate
+  containers, Redis, Realtime, and Step Functions are now **implemented** — see §4.9.)
 
 ## 9. Deploy targets — multi-target export model
 
