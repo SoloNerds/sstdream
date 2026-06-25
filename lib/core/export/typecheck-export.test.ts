@@ -72,6 +72,10 @@ declare module "next/og" { export class ImageResponse { constructor(element: any
 declare module "workflow" { export const sleep: any; export const defineHook: any; }
 declare module "workflow/api" { export const start: any; export const getRun: any; }
 declare module "workflow/next" { export const withWorkflow: any; }
+declare module "flags/next" { export function flag<T = unknown>(opts: any): () => Promise<T>; export const createFlagsDiscoveryEndpoint: any; export const getProviderData: any; }
+declare module "@flags-sdk/edge-config" { export const edgeConfigAdapter: any; }
+declare module "@vercel/firewall" { export const checkRateLimit: any; }
+declare module "next/server" { export function after(fn: any): void; export const NextResponse: any; export type NextRequest = any; }
 declare module "resend" { export const Resend: any; }
 declare module "stripe" { const Stripe: any; export default Stripe; }
 declare module "node:crypto" { const crypto: any; export default crypto; }

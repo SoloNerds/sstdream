@@ -261,6 +261,70 @@ async function secondStep(prev: { input: string; done: boolean }) {
 }
 `;
 
+// Feature flags (verified: flags@4.2.0 — flags-sdk.dev). decide() is static unless
+// a flagsBackedBy→edgeConfig edge switches it to the Edge Config adapter.
+const flagsFile = (edgeConfigBacked: boolean): string =>
+  edgeConfigBacked
+    ? `import { flag } from "flags/next";
+import { edgeConfigAdapter } from "@flags-sdk/edge-config";
+
+// Values read from Vercel Edge Config at the edge (no redeploy to flip a flag).
+export const showNewDashboard = flag<boolean>({
+  key: "show-new-dashboard",
+  description: "Show the redesigned dashboard",
+  adapter: edgeConfigAdapter(),
+});
+`
+    : `import { flag } from "flags/next";
+
+// Type-safe feature flag. decide() may be sync or async and read request context.
+export const showNewDashboard = flag<boolean>({
+  key: "show-new-dashboard",
+  description: "Show the redesigned dashboard",
+  decide: () => false,
+});
+`;
+
+const flagsDiscoveryRoute = (): string =>
+  `import { createFlagsDiscoveryEndpoint, getProviderData } from "flags/next";
+import * as flags from "@/flags";
+
+// Exposes your flags to the Vercel Flags Explorer (needs FLAGS_SECRET).
+export const GET = createFlagsDiscoveryEndpoint(async () => getProviderData(flags));
+`;
+
+// Reusable rate-limit guard (verified: @vercel/firewall@1.2.1). The WAF rule itself
+// is a documented dashboard prerequisite — see the comment below.
+const rateLimitHelper = (): string =>
+  `import { checkRateLimit } from "@vercel/firewall";
+
+// PREREQUISITE: publish a WAF Custom Rule in the Vercel dashboard with condition
+// "@vercel/firewall" and a matching Rate limit ID, or checkRateLimit returns
+// { error: "not-found" }. Counters are tracked per-region.
+export async function isRateLimited(
+  ruleId: string,
+  request: Request,
+  rateLimitKey?: string,
+): Promise<boolean> {
+  const { rateLimited } = await checkRateLimit(ruleId, { request, rateLimitKey });
+  return rateLimited;
+}
+`;
+
+// Fire-and-forget after the response (verified: after() is built into next/server,
+// stable since Next 15.1 — no package). Best-effort; for guaranteed work use Queue/Cron.
+const afterExample = (): string =>
+  `import { after } from "next/server";
+
+export async function trackEvent(name: string): Promise<{ ok: true }> {
+  after(async () => {
+    // TODO: background work (log, notify, warm a cache…) — runs after the response.
+    console.log("after response:", name);
+  });
+  return { ok: true };
+}
+`;
+
 const workflowTriggerRoute = (name: string, slug: string): string =>
   `import { start } from "workflow/api";
 import { ${camel(name)} } from "@/workflows/${slug}";
@@ -319,6 +383,9 @@ const DEP_VERSIONS: Record<string, string> = {
   ai: '^7.0.0',
   '@ai-sdk/react': '^4.0.0',
   workflow: '^4.5.0',
+  flags: '^4.2.0',
+  '@flags-sdk/edge-config': '^0.1.2',
+  '@vercel/firewall': '^1.2.1',
   resend: '^6.14.0',
   stripe: '^22.3.0',
 };
@@ -344,6 +411,11 @@ function packageAdditions(bp: Blueprint): string {
     add('@ai-sdk/react');
   }
   if (present.has('workflow')) add('workflow');
+  if (present.has('featureFlags')) {
+    add('flags');
+    if (bp.connections.some((c) => c.intent === 'flagsBackedBy')) add('@flags-sdk/edge-config');
+  }
+  if (present.has('rateLimit')) add('@vercel/firewall');
   if (present.has('email')) add('resend');
   // stripe only when a webhook actually uses the Stripe provider.
   if (bp.resources.some((r) => r.kind === 'webhook' && webhookProvider(r) === 'stripe'))
@@ -418,6 +490,22 @@ export function generateVercel(bp: Blueprint): GeneratedFile[] {
       language: 'ts',
     });
   }
+  const flagsNode = bp.resources.find((r) => r.kind === 'featureFlags');
+  if (flagsNode) {
+    const backed = bp.connections.some(
+      (c) => c.source === flagsNode.id && c.intent === 'flagsBackedBy',
+    );
+    files.push({ path: 'flags.ts', content: flagsFile(backed), language: 'ts' });
+    files.push({
+      path: 'app/.well-known/vercel/flags/route.ts',
+      content: flagsDiscoveryRoute(),
+      language: 'ts',
+    });
+  }
+  if (has('rateLimit'))
+    files.push({ path: 'lib/rate-limit.ts', content: rateLimitHelper(), language: 'ts' });
+  if (has('afterResponse'))
+    files.push({ path: 'app/actions/background-task.ts', content: afterExample(), language: 'ts' });
 
   // Queue producer + consumers
   const queues = bp.resources.filter((r) => r.kind === 'queue');

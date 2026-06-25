@@ -416,6 +416,43 @@ export const VERCEL_TEMPLATES: TemplateMeta[] = [
     ],
   ),
   vercel(
+    'vercel-progressive-rollout',
+    'Progressive Rollout Platform',
+    'Feature flags backed by Edge Config (flip flags with no redeploy), the Flags Explorer endpoint, Postgres data, and background tracking via after().',
+    ['Flags', 'Platform'],
+    'vercel-rollout',
+    [
+      n('app_1', 'app', 'Web', 60, 200),
+      n('featureFlags_2', 'featureFlags', 'Flags', 360, 80),
+      n('edgeConfig_3', 'edgeConfig', 'Config', 640, 80),
+      n('postgres_4', 'postgres', 'Db', 360, 240),
+      n('afterResponse_5', 'afterResponse', 'Background', 60, 60),
+    ],
+    [
+      e('e1', 'app_1', 'featureFlags_2', 'readsFlags'),
+      e('e2', 'featureFlags_2', 'edgeConfig_3', 'flagsBackedBy'),
+      e('e3', 'app_1', 'postgres_4', 'writesToService'),
+    ],
+  ),
+  vercel(
+    'vercel-hardened-api',
+    'Hardened Public API',
+    'An abuse-resistant JSON API: WAF rate-limiting (checkRateLimit), Postgres storage, Upstash Redis, and a partner webhook.',
+    ['API', 'Security'],
+    'vercel-hardened-api',
+    [
+      n('app_1', 'app', 'Web', 60, 200),
+      n('rateLimit_2', 'rateLimit', 'RateLimit', 360, 80),
+      n('postgres_3', 'postgres', 'Db', 360, 220),
+      n('redis_4', 'redis', 'Cache', 360, 340),
+      n('webhook_5', 'webhook', 'PartnerHook', 60, 60, { provider: 'generic' }),
+    ],
+    [
+      e('e1', 'app_1', 'postgres_3', 'writesToService'),
+      e('e2', 'app_1', 'redis_4', 'writesToService'),
+    ],
+  ),
+  vercel(
     'vercel-doc-pipeline',
     'Document Processing Pipeline',
     'Upload to Blob, kick off a durable Workflow that extracts + summarizes via the AI Gateway, queue the heavy steps, and store results in Postgres.',
