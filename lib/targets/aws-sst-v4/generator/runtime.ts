@@ -1,6 +1,6 @@
 import type { Blueprint, Resource } from '@/lib/core/blueprint/types';
 import type { GeneratedFile } from '@/lib/core/codegen/types';
-import { kebabCase, pascalCase } from '@/lib/core/codegen/strings';
+import { camelCase, kebabCase, pascalCase } from '@/lib/core/codegen/strings';
 import { collectAwsEnv } from '../env';
 import { planAws } from './plan';
 
@@ -436,6 +436,37 @@ export async function publish(topic: string, payload: unknown) {
 }
 `;
 
+// Step Functions: each step is a plain Lambda; the app starts an execution via the
+// SFN SDK using the linked Resource.<Name>.arn (the only linked field).
+const sfnStepFile = (machineName: string, step: string): string =>
+  `/** "${step}" step of the ${machineName} workflow. Receives + returns the state. */
+export async function handler(input: Record<string, unknown>) {
+  console.log("${step}", input);
+  // TODO: your step logic. The return value becomes the next step's input.
+  return { ...input, ${camelCase(step)}: true };
+}
+`;
+
+const startWorkflowAction = (machineName: string): string =>
+  `"use server";
+
+import { Resource } from "sst";
+import { SFNClient, StartExecutionCommand } from "@aws-sdk/client-sfn";
+
+const sfn = new SFNClient({});
+
+/** Start a ${machineName} execution. Returns the execution ARN. */
+export async function start${pascalCase(machineName)}(input: Record<string, unknown>) {
+  const res = await sfn.send(
+    new StartExecutionCommand({
+      stateMachineArn: Resource.${machineName}.arn,
+      input: JSON.stringify(input),
+    }),
+  );
+  return { executionArn: res.executionArn };
+}
+`;
+
 // ECS Fargate container starter. node:22-slim, installs deps (sst for Resource
 // access), runs the server. SST builds this Dockerfile from services/<name>/.
 const serviceDockerfile = (port: number): string =>
@@ -856,6 +887,7 @@ function packageAdditions(flags: {
   postgres: boolean;
   redis: boolean;
   realtime: boolean;
+  stepFunctions: boolean;
   stripe: boolean;
   mongodb: boolean;
   clerk: boolean;
@@ -879,6 +911,7 @@ function packageAdditions(flags: {
   if (flags.postgres) deps['pg'] = '^8.0.0';
   if (flags.redis) deps['ioredis'] = '^5.0.0';
   if (flags.realtime) deps['@aws-sdk/client-iot-data-plane'] = '^3.0.0';
+  if (flags.stepFunctions) deps['@aws-sdk/client-sfn'] = '^3.0.0';
   if (flags.stripe) deps['stripe'] = '^22.0.0';
   if (flags.mongodb) deps['mongodb'] = '^7.0.0';
   if (flags.clerk) deps['@clerk/nextjs'] = '^7.0.0';
@@ -1017,6 +1050,30 @@ export function generateRuntimeFiles(bp: Blueprint): GeneratedFile[] {
   const redisRes = redisEdge ? resourceOf(redisEdge.target) : undefined;
   if (redisRes) {
     files.push({ path: 'lib/redis.ts', content: redisHelperFile(redisRes.name), language: 'ts' });
+  }
+
+  // Step Functions: emit the Validate/Process step Lambdas for each state machine,
+  // and a start action for every app/worker that wires `startsWorkflow`.
+  for (const sm of bp.resources.filter((r) => r.kind === 'stepFunctions')) {
+    const slug = kebabCase(sm.name);
+    files.push(
+      {
+        path: `src/${slug}-validate.ts`,
+        content: sfnStepFile(sm.name, 'Validate'),
+        language: 'ts',
+      },
+      { path: `src/${slug}-process.ts`, content: sfnStepFile(sm.name, 'Process'), language: 'ts' },
+    );
+  }
+  for (const conn of bp.connections.filter((c) => c.intent === 'startsWorkflow')) {
+    const sm = resourceOf(conn.target);
+    if (sm) {
+      files.push({
+        path: `app/actions/start-${kebabCase(sm.name)}.ts`,
+        content: startWorkflowAction(sm.name),
+        language: 'ts',
+      });
+    }
   }
 
   // IoT Realtime: the authorizer + a starter subscriber whenever a Realtime node
@@ -1303,6 +1360,7 @@ export function generateRuntimeFiles(bp: Blueprint): GeneratedFile[] {
       postgres: Boolean(pgRes),
       redis: Boolean(redisRes),
       realtime: bp.connections.some((c) => c.intent === 'usesRealtime'),
+      stepFunctions: bp.connections.some((c) => c.intent === 'startsWorkflow'),
       stripe: Boolean(stripeRes),
       mongodb: Boolean(mongoRes),
       clerk: Boolean(clerkRes),

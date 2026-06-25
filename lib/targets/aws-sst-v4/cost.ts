@@ -215,6 +215,19 @@ function breakdownFor(r: Resource, nat: 'none' | 'ec2' | 'managed'): CostBreakdo
       // messages). A rough small-app allowance.
       lines = [{ label: 'IoT Core (connections + messages)', usd: 1 }];
       break;
+    case 'stepFunctions':
+      // Standard: ~$25 / 1M state transitions. Express: per request + duration.
+      // No idle cost — a small-volume allowance.
+      lines = [
+        {
+          label:
+            r.props.type === 'express'
+              ? 'Step Functions Express (per-request)'
+              : 'Step Functions (state transitions)',
+          usd: 1,
+        },
+      ];
+      break;
     case 'cognito':
       lines = [{ label: 'Cognito (free ≤ 50k MAU)', usd: 0 }];
       break;

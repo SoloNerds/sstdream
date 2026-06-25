@@ -129,6 +129,14 @@ export const AWS_EDGE_INTENTS: EdgeIntentMeta[] = [
     to: ['realtime'],
   },
   {
+    intent: 'startsWorkflow',
+    label: 'starts',
+    description:
+      'App starts a Step Functions execution (links the state machine + emits a start action).',
+    from: ['nextjs', 'worker'],
+    to: ['stepFunctions'],
+  },
+  {
     intent: 'sendsEmail',
     label: 'sends email through',
     description: 'App/worker sends email via SES (link + SESv2 helper).',
@@ -222,6 +230,8 @@ const INTENT_BY_PAIR: Record<string, string> = {
   'task>email': 'sendsEmail',
   'nextjs>realtime': 'usesRealtime',
   'service>realtime': 'usesRealtime',
+  'nextjs>stepFunctions': 'startsWorkflow',
+  'worker>stepFunctions': 'startsWorkflow',
   'nextjs>email': 'sendsEmail',
   'worker>email': 'sendsEmail',
   'nextjs>stripe': 'usesStripe',

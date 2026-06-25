@@ -340,6 +340,22 @@ export const AWS_TEMPLATES: TemplateMeta[] = [
     ],
   ),
   aws(
+    'aws-order-workflow',
+    'Durable Order Workflow (Step Functions)',
+    'A Next.js app starts a durable Step Functions execution (Validate → Process → Done) for each order, with each step a Lambda. Orders persist in DynamoDB. Survives retries and long-running waits.',
+    ['Workflow', 'Flagship', 'Durable'],
+    'order-workflow',
+    [
+      n('nextjs_1', 'nextjs', 'Web', 80, 180),
+      n('stepFunctions_2', 'stepFunctions', 'OrderFlow', 400, 80, { type: 'standard' }),
+      n('dynamo_3', 'dynamo', 'Orders', 400, 300),
+    ],
+    [
+      e('edge_4', 'nextjs_1', 'stepFunctions_2', 'startsWorkflow'),
+      e('edge_5', 'nextjs_1', 'dynamo_3', 'writesTo'),
+    ],
+  ),
+  aws(
     'aws-realtime-chat',
     'Realtime Chat (WebSockets)',
     'Live WebSocket pub/sub over AWS IoT: a custom authorizer guards every connection, the Next.js app publishes messages, and a subscriber Lambda processes them. History persists in DynamoDB.',

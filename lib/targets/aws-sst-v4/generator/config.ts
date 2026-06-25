@@ -344,6 +344,33 @@ function renderRealtime(r: Resource, plan: AwsPlan): string {
   ].join('\n');
 }
 
+// A durable state machine. Builders are STATIC (sst.aws.StepFunctions.lambdaInvoke).
+// We emit a sensible Validate → Process → Done sequence (verified shape); extend the
+// definition with .choice()/.parallel()/.map() and more steps. Each step is a Lambda.
+function renderStepFunctions(r: Resource, plan: AwsPlan): string {
+  const v = plan.varNameById.get(r.id)!;
+  const slug = kebabCase(r.name);
+  const type = r.props.type === 'express' ? 'express' : 'standard';
+  const validate = `${v}Validate`;
+  const process = `${v}Process`;
+  const done = `${v}Done`;
+  return [
+    `const ${validate} = sst.aws.StepFunctions.lambdaInvoke({`,
+    `  name: "Validate",`,
+    `  function: ${q(`src/${slug}-validate.handler`)},`,
+    `});`,
+    `const ${process} = sst.aws.StepFunctions.lambdaInvoke({`,
+    `  name: "Process",`,
+    `  function: ${q(`src/${slug}-process.handler`)},`,
+    `});`,
+    `const ${done} = sst.aws.StepFunctions.succeed({ name: "Done" });`,
+    `const ${v} = new sst.aws.StepFunctions(${q(r.name)}, {`,
+    `  definition: ${validate}.next(${process}.next(${done})),`,
+    `  type: ${q(type)},`,
+    `});`,
+  ].join('\n');
+}
+
 function renderNextjs(r: Resource, plan: AwsPlan): string {
   const v = plan.varNameById.get(r.id);
   const links = plan.linkVarsById.get(r.id) ?? [];
@@ -495,6 +522,7 @@ export function generateSstConfig(bp: Blueprint): string {
   for (const r of byKind('bus')) statements.push(renderBus(r, plan));
   for (const r of byKind('snstopic')) statements.push(renderSnsTopic(r, plan));
   for (const r of byKind('realtime')) statements.push(renderRealtime(r, plan));
+  for (const r of byKind('stepFunctions')) statements.push(renderStepFunctions(r, plan));
   for (const r of byKind('apigatewayv2')) statements.push(renderApi(r, plan));
   for (const r of byKind('router')) statements.push(renderRouter(r, plan));
   for (const sub of plan.subscribers) statements.push(renderSubscriber(sub, plan));

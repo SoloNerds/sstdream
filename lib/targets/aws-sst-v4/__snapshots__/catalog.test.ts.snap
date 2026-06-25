@@ -558,6 +558,34 @@ exports[`aws-sst-v4 catalog > matches snapshot 1`] = `
       },
     ],
   },
+  "stepFunctions": {
+    "accent": "bg-fuchsia-700",
+    "category": "compute",
+    "component": "sst.aws.StepFunctions",
+    "defaultName": "Workflow",
+    "description": "Durable, multi-step state machine (the AWS analog to a durable workflow)",
+    "kind": "stepFunctions",
+    "label": "Step Functions",
+    "props": [
+      {
+        "default": "standard",
+        "help": "Standard is durable orchestration (per-transition billing). Express runs the whole flow in one Lambda context. Changing this REPLACES the machine (drops in-flight runs).",
+        "key": "type",
+        "label": "Type",
+        "options": [
+          {
+            "label": "Standard — durable, long-running",
+            "value": "standard",
+          },
+          {
+            "label": "Express — high-volume, <5min, at-least-once",
+            "value": "express",
+          },
+        ],
+        "type": "select",
+      },
+    ],
+  },
   "stripe": {
     "accent": "bg-indigo-600",
     "category": "config",
