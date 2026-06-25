@@ -123,6 +123,98 @@ describe('Vercel lane — runnable project scaffold', () => {
   });
 });
 
+describe('Vercel lane — editable props are wired into codegen', () => {
+  const withProps = draftBlueprint(
+    {
+      nodes: [
+        { id: 'a', kind: 'app', name: 'Web', props: {}, position: { x: 0, y: 0 } },
+        {
+          id: 'b',
+          kind: 'blob',
+          name: 'Files',
+          props: { access: 'private' },
+          position: { x: 1, y: 0 },
+        },
+        {
+          id: 'm',
+          kind: 'email',
+          name: 'Mailer',
+          props: { from: 'hi@acme.dev' },
+          position: { x: 2, y: 0 },
+        },
+        { id: 'q', kind: 'queue', name: 'Jobs', props: {}, position: { x: 3, y: 0 } },
+        {
+          id: 'c',
+          kind: 'consumer',
+          name: 'Worker',
+          props: { maxDuration: 120 },
+          position: { x: 4, y: 0 },
+        },
+        {
+          id: 'cr',
+          kind: 'cron',
+          name: 'Nightly',
+          props: { schedule: '0 0 * * *' },
+          position: { x: 5, y: 0 },
+        },
+      ],
+      edges: [
+        { id: 'e1', source: 'a', target: 'b', intent: 'storesFileIn' },
+        { id: 'e2', source: 'a', target: 'm', intent: 'sendsEmailThrough' },
+        { id: 'e3', source: 'a', target: 'q', intent: 'enqueuesTo' },
+        { id: 'e4', source: 'q', target: 'c', intent: 'consumedBy' },
+      ],
+    },
+    'vercel',
+    VERCEL_SAAS.app,
+    NOW,
+  );
+  const m = Object.fromEntries(generateFiles(withProps).map((f) => [f.path, f.content]));
+
+  it('blob access flows from the node prop', () => {
+    expect(m['lib/blob.ts']).toContain('access: "private"');
+  });
+
+  it('email from-address flows from the node prop (escaped)', () => {
+    expect(m['lib/email.ts']).toContain('from: "hi@acme.dev"');
+  });
+
+  it('cron schedule from the node prop reaches vercel.json', () => {
+    const vj = JSON.parse(m['vercel.json']) as { crons: { path: string; schedule: string }[] };
+    expect(vj.crons).toContainEqual({ path: '/api/cron/nightly', schedule: '0 0 * * *' });
+  });
+
+  it('consumer maxDuration reaches the vercel.json function config', () => {
+    const vj = JSON.parse(m['vercel.json']) as {
+      functions: Record<string, { maxDuration?: number }>;
+    };
+    expect(vj.functions['app/api/queues/worker/route.ts'].maxDuration).toBe(120);
+  });
+
+  it('a quote in a free-text prop is escaped, not injected', () => {
+    const evil = draftBlueprint(
+      {
+        nodes: [
+          { id: 'a', kind: 'app', name: 'Web', props: {}, position: { x: 0, y: 0 } },
+          {
+            id: 'm',
+            kind: 'email',
+            name: 'Mailer',
+            props: { from: 'a"; evil()//' },
+            position: { x: 1, y: 0 },
+          },
+        ],
+        edges: [{ id: 'e', source: 'a', target: 'm', intent: 'sendsEmailThrough' }],
+      },
+      'vercel',
+      VERCEL_SAAS.app,
+      NOW,
+    );
+    const lib = generateFiles(evil).find((f) => f.path === 'lib/email.ts')!.content;
+    expect(lib).toContain('from: "a\\"; evil()//"');
+  });
+});
+
 describe('Vercel lane — validation + export', () => {
   it('validates the SaaS template clean', () => {
     expect(validateBlueprint(bp).ok).toBe(true);
