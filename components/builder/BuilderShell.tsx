@@ -51,30 +51,41 @@ export function BuilderShell() {
     }
   }, []);
 
-  // Debounced autosave on any change.
+  // Debounced autosave on any change, with a flush on unmount / tab close so an
+  // edit made within the 400ms window is never lost.
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const unsub = useCanvasStore.subscribe((s) => {
+    // Reads the LATEST store state directly, so it's safe to call on flush too.
+    const save = () => {
+      const s = useCanvasStore.getState();
+      try {
+        const bp = canvasToBlueprint(
+          { nodes: s.nodes, edges: s.edges, secrets: s.secrets, outputs: s.outputs },
+          s.targetId,
+          s.app,
+          new Date().toISOString(),
+          createdAtRef.current ?? undefined,
+        );
+        // Capture the creation time of a brand-new design so later saves keep it.
+        createdAtRef.current ??= bp.metadata.createdAt;
+        saveBlueprint(bp);
+      } catch {
+        // invalid intermediate state (e.g. app name mid-edit) — skip this save
+      }
+    };
+    const unsub = useCanvasStore.subscribe(() => {
       clearTimeout(timer);
-      timer = setTimeout(() => {
-        try {
-          const bp = canvasToBlueprint(
-            { nodes: s.nodes, edges: s.edges, secrets: s.secrets, outputs: s.outputs },
-            s.targetId,
-            s.app,
-            new Date().toISOString(),
-            createdAtRef.current ?? undefined,
-          );
-          // Capture the creation time of a brand-new design so later saves keep it.
-          createdAtRef.current ??= bp.metadata.createdAt;
-          saveBlueprint(bp);
-        } catch {
-          // invalid intermediate state (e.g. app name mid-edit) — skip this autosave
-        }
-      }, 400);
+      timer = setTimeout(save, 400);
     });
+    // Tab close / navigation can happen mid-debounce — persist immediately.
+    const flush = () => {
+      if (timer) clearTimeout(timer);
+      save();
+    };
+    window.addEventListener('beforeunload', flush);
     return () => {
-      clearTimeout(timer);
+      window.removeEventListener('beforeunload', flush);
+      flush(); // flush any pending save on unmount instead of dropping it
       unsub();
     };
   }, []);
