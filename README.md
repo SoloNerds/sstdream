@@ -76,9 +76,10 @@ boolean); SST v4 runs Pulumi AWS provider **v7**.
 Tracked entirely in this repo's **Milestones**, **Issues**, and **Project board** —
 **all 11 milestones (M0–M10) are complete.** Both lanes are at **functional parity**: each
 ships a runnable project scaffold, validation, simulation, cost, the Infrastructure view,
-the security audit, and recommendations. The AWS catalog is deeper (21 kinds vs 9); the
-Vercel frontier is more catalog kinds (Workflow, Edge Config). See
-[docs/architecture-targets.md](docs/architecture-targets.md).
+the security audit, and recommendations. **AWS: 21 kinds. Vercel: 22 kinds** spanning the
+whole Vercel surface — AI Gateway, Workflows, Sandboxes, Edge Middleware, Feature Flags,
+BotID, Edge Config, Rate Limit, OG Image, Blob, Postgres/Redis, Queues, and more — all
+verified against live docs. See [docs/architecture-targets.md](docs/architecture-targets.md).
 
 | Milestone | Focus                                                                          | Status |
 | --------- | ------------------------------------------------------------------------------ | ------ |
@@ -104,7 +105,7 @@ second lane.
 ```bash
 yarn install
 yarn dev          # http://localhost:3000/builder
-yarn test         # 339 tests
+yarn test         # 447 tests
 yarn lint && yarn typecheck && yarn build
 ```
 
