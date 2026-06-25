@@ -4,16 +4,14 @@ name: Deploy to GitHub Pages
 # client-side (it never deploys your cloud — it generates files you run), so a
 # static export is a complete, faithful copy of the builder.
 #
-# Manual trigger for now: run it from the Actions tab ("Run workflow") when you
-# want to (re)publish. The configure-pages step below self-enables Pages, so
-# there's no separate Settings step. On the SoloNerds Enterprise plan you can
-# keep the published site PRIVATE (Settings → Pages → Visibility) — the repo
-# stays private regardless.
-#
-# When you open-source this, add `push: { branches: [main] }` under `on:` to
-# republish automatically on every push.
+# Pages is enabled (Settings → Pages → Source: GitHub Actions), so this now
+# republishes on every push to main; workflow_dispatch keeps a manual button.
+# The published site's visibility is set in Settings → Pages (keep it private on
+# the Enterprise plan if you like — the repo stays private regardless).
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 # Allow this workflow to publish to Pages via OIDC.
