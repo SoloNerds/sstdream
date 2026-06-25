@@ -5,6 +5,13 @@ template builder**. The website never deploys anything; it generates files you r
 yourself. Because of that, **correctness is the product**: every generated snippet must
 match a verified target fact, or it's a bug.
 
+## Where to start
+
+- 🟢 **[Good first issues](https://github.com/SoloNerds/sstdream/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)** — scoped, friendly tasks.
+- 🗺️ **[Roadmap project board](https://github.com/orgs/SoloNerds/projects)** — what's planned and in progress.
+- ➕ **[Add a template](docs/adding-a-template.md)** (~12 lines — lands on the gallery homepage).
+- 🛣️ **[Add a deploy target/lane](docs/adding-a-lane.md)** — bring Cloudflare, Fly.io, Render, raw SST…
+
 ## Ground rules
 
 - **Be kind.** This project follows the [Code of Conduct](CODE_OF_CONDUCT.md).
