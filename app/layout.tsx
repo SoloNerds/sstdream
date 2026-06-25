@@ -3,8 +3,15 @@ import type { ReactNode } from 'react';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'SSTDREAM',
-  description: 'Visual SST v4 deployment template builder',
+  title: 'SSTDREAM — draw your app, export a verified deployable project',
+  description:
+    'Visually design an AWS/SST v4 or Vercel app, simulate the wiring, and export clean, verified, type-checked, deployable files. No AI, no credentials — it runs in your browser.',
+  openGraph: {
+    title: 'SSTDREAM — visual SST v4 / Vercel architecture builder',
+    description:
+      'Draw your app. Simulate it. Export a verified, type-checked, deployable project. Zero AI, zero hallucinated APIs.',
+    type: 'website',
+  },
 };
 
 // Set the theme class before paint to avoid a flash of the wrong theme.
