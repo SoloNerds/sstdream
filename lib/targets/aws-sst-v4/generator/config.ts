@@ -260,6 +260,24 @@ function renderService(r: Resource, plan: AwsPlan): string {
   return lines.join('\n');
 }
 
+// ECS Fargate Task (one-off / batch) on the shared Cluster. No load balancer — it's
+// invoked on demand via task.run(Resource.<Name>). The container lives in tasks/<name>/.
+function renderTask(r: Resource, plan: AwsPlan): string {
+  const v = plan.varNameById.get(r.id);
+  const slug = kebabCase(r.name);
+  const links = plan.linkVarsById.get(r.id) ?? [];
+  const lines = [`const ${v} = new sst.aws.Task(${q(r.name)}, {`, `  cluster,`];
+  lines.push(`  image: { context: ${q(`./tasks/${slug}`)} },`);
+  if (typeof r.props.cpu === 'string' && r.props.cpu !== '0.25 vCPU')
+    lines.push(`  cpu: ${q(r.props.cpu)},`);
+  if (typeof r.props.memory === 'string' && r.props.memory && r.props.memory !== '0.5 GB')
+    lines.push(`  memory: ${q(r.props.memory)},`);
+  if (links.length) lines.push(`  link: ${linkArray(links)},`);
+  lines.push(`  dev: { command: "npm run task" },`);
+  lines.push(`});`);
+  return lines.join('\n');
+}
+
 // Cognito user pool + a web client. Linked → Resource.<Pool>.id; the pool/client
 // ids are injected into the Next.js app as NEXT_PUBLIC_COGNITO_* env (see renderNextjs).
 function renderCognito(r: Resource, plan: AwsPlan): string {
@@ -408,11 +426,13 @@ export function generateSstConfig(bp: Blueprint): string {
   for (const r of byKind('bucket')) statements.push(renderBucket(r, plan));
   for (const r of byKind('dynamo')) statements.push(renderDynamo(r, plan));
   const services = byKind('service');
+  const tasks = byKind('task');
   const vpcResources = [
     ...byKind('postgres'),
     ...byKind('aurora'),
     ...byKind('redis'),
     ...services,
+    ...tasks,
   ];
   if (vpcResources.length) {
     const nat = effectiveAwsNat(bp);
@@ -424,10 +444,11 @@ export function generateSstConfig(bp: Blueprint): string {
     for (const r of byKind('postgres')) statements.push(renderPostgres(r, plan));
     for (const r of byKind('aurora')) statements.push(renderAurora(r, plan));
     for (const r of byKind('redis')) statements.push(renderRedis(r, plan));
-    // One shared Cluster (just a namespace on the Vpc) backs every Service.
-    if (services.length) {
+    // One shared Cluster (just a namespace on the Vpc) backs every Service AND Task.
+    if (services.length || tasks.length) {
       statements.push('const cluster = new sst.aws.Cluster("Cluster", { vpc });');
       for (const r of services) statements.push(renderService(r, plan));
+      for (const r of tasks) statements.push(renderTask(r, plan));
     }
   }
   // DLQ targets must be declared before the queues that reference their .arn.

@@ -51,6 +51,7 @@ declare namespace React {
 // isn't covered fails loudly with "has no exported member", which is the cue
 // to add it. Local (relative + @/) imports still resolve to the real files.
 declare module "sst" { export const Resource: any; }
+declare module "sst/aws/task" { export const task: any; }
 declare module "react" { export type ReactNode = any; export const useState: any; }
 declare module "next" { export type NextConfig = any; }
 declare module "next/navigation" { export const useRouter: any; }

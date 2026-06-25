@@ -340,6 +340,19 @@ export const AWS_TEMPLATES: TemplateMeta[] = [
     ],
   ),
   aws(
+    'aws-batch-task',
+    'On-Demand Job Runner (Fargate Task)',
+    'A Next.js app kicks off a one-off Fargate Task (heavy batch work — video transcode, report build) with task.run(), and the task writes results to S3. No idle cost: the container only runs when invoked.',
+    ['Containers', 'Batch', 'Jobs'],
+    'job-runner',
+    [
+      n('nextjs_1', 'nextjs', 'Web', 80, 180),
+      n('task_2', 'task', 'ProcessJob', 400, 100, { cpu: '1 vCPU', memory: '2 GB' }),
+      n('bucket_3', 'bucket', 'Results', 400, 320),
+    ],
+    [e('edge_4', 'nextjs_1', 'task_2', 'runsTask'), e('edge_5', 'task_2', 'bucket_3', 'readsFrom')],
+  ),
+  aws(
     'aws-fargate-service',
     'Containerized Service (Fargate)',
     'A long-running container on ECS Fargate behind a load balancer, talking to Postgres and a Redis cache. SST generates the Cluster, the VPC (with fck-nat), and a starter Dockerfile. `sst dev` runs the container locally.',
