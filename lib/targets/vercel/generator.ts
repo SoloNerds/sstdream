@@ -2,6 +2,7 @@ import type { Blueprint, Resource } from '@/lib/core/blueprint/types';
 import type { GeneratedFile } from '@/lib/core/codegen/types';
 import { kebabCase } from '@/lib/core/codegen/strings';
 import { collectEnv } from './env';
+import { generateVercelScaffold } from './scaffold';
 
 // Vercel generator. Verified against docs/vercel-target.md: vercel.json crons + queue
 // experimentalTriggers, @vercel/blob with `access`, @neondatabase/serverless,
@@ -207,5 +208,17 @@ export function generateVercel(bp: Blueprint): GeneratedFile[] {
   });
 
   const seen = new Set<string>();
-  return files.filter((f) => (seen.has(f.path) ? false : (seen.add(f.path), true)));
+  const integration = files.filter((f) => (seen.has(f.path) ? false : (seen.add(f.path), true)));
+
+  // Wrap the integration files in a complete, runnable Next.js project so the
+  // export is `vercel`-ready, not loose fragments (mirrors the AWS lane).
+  const additions = integration.find((f) => f.path === 'package.additions.json');
+  const parsed = additions
+    ? (JSON.parse(additions.content) as { dependencies?: Record<string, string> })
+    : {};
+  const scaffold = generateVercelScaffold(bp, integration, parsed.dependencies ?? {});
+
+  const out = [...integration, ...scaffold];
+  const seenOut = new Set<string>();
+  return out.filter((f) => (seenOut.has(f.path) ? false : (seenOut.add(f.path), true)));
 }

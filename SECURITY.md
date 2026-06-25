@@ -12,7 +12,7 @@ correct and must not introduce an injection or misconfiguration into your projec
 Please **do not open a public issue** for a security problem. Instead:
 
 - Use GitHub's **private vulnerability reporting** (Security → Report a vulnerability), or
-- Contact the maintainers at **[INSERT A SECURITY CONTACT EMAIL]**.
+- Contact the maintainers at @Nimdy.
 
 Please include a description, reproduction steps, and (if relevant) the design that
 triggers it. We'll acknowledge your report and work with you on a fix and disclosure
