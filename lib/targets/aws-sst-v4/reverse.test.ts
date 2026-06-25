@@ -3,6 +3,19 @@ import { parseAwsConfig } from './reverse';
 import { generateFiles } from '@/lib/core/codegen/generate';
 import { draftBlueprint } from '@/lib/core/blueprint/serialize';
 import { AWS_TEMPLATES } from '@/lib/templates/aws';
+import { REVERSE_CORPUS } from './reverse-corpus';
+
+// Multiset difference: which expected items aren't covered by `got`.
+function missing(expected: string[], got: string[]): string[] {
+  const pool = [...got];
+  const out: string[] = [];
+  for (const e of expected) {
+    const i = pool.indexOf(e);
+    if (i === -1) out.push(e);
+    else pool.splice(i, 1);
+  }
+  return out;
+}
 
 const NOW = '2026-06-08T00:00:00.000Z';
 
@@ -103,6 +116,31 @@ realtime.subscribe("src/sub.handler", { filter: "x" });`;
         // Every expected infra node is recovered (the parser may also recover
         // subscriber workers that the template modeled as separate nodes — fine).
         for (const e of expected) expect(recovered).toContain(e);
+      });
+    }
+  });
+
+  // Adversarial corpus — diverse real-world configs (authored by a stress workflow):
+  // weird formatting, comments inside link arrays, mixed quotes, inline resources,
+  // multi-line links, the modern kinds, tricky names, forward refs. Each must recover
+  // its expected kinds + names and at least its expected edge count.
+  describe('handles a real-world adversarial corpus', () => {
+    for (const c of REVERSE_CORPUS) {
+      it(c.label, () => {
+        const { nodes, edges } = parseAwsConfig(c.config);
+        expect(
+          missing(
+            c.expectKinds,
+            nodes.map((n) => n.kind),
+          ),
+        ).toEqual([]);
+        expect(
+          missing(
+            c.expectNames,
+            nodes.map((n) => n.name),
+          ),
+        ).toEqual([]);
+        expect(edges.length).toBeGreaterThanOrEqual(c.expectEdgesAtLeast);
       });
     }
   });
