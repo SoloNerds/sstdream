@@ -1,0 +1,293 @@
+import type { Blueprint, Resource } from '@/lib/core/blueprint/types';
+import type { CostBreakdown, CostEstimate, CostLine } from '@/lib/core/cost/types';
+import { effectiveAwsNat } from './generator/plan';
+
+// AWS cost model — rough monthly estimates for a single "moderate traffic" profile,
+// us-east-1 on-demand. Numbers are illustrative ballparks for design-time guidance,
+// NOT a billing forecast. Single source of truth for prices + assumptions.
+
+const PRICES = {
+  lambdaRequestPer1M: 0.2,
+  lambdaGbSecond: 0.0000166667,
+  s3StorageGbMonth: 0.023,
+  s3PutPer1k: 0.005,
+  s3GetPer1k: 0.0004,
+  dynamoWritePer1M: 1.25,
+  dynamoReadPer1M: 0.25,
+  dynamoStorageGbMonth: 0.25,
+  sqsPer1M: 0.4,
+  cfTransferGbOut: 0.085,
+  cfRequestPer10k: 0.0075,
+};
+
+const PROFILE = {
+  requestsPerMonth: 1_000_000,
+  lambdaDurationMs: 200,
+  lambdaMemoryMb: 1024,
+  workerInvocationsPerMonth: 1_000_000,
+  bucketStorageGb: 5,
+  bucketPutPerMonth: 100_000,
+  bucketGetPerMonth: 1_000_000,
+  dynamoWritesPerMonth: 1_000_000,
+  dynamoReadsPerMonth: 1_000_000,
+  dynamoStorageGb: 5,
+  queueRequestsPerMonth: 1_000_000,
+  cdnTransferGb: 50,
+  cdnRequestsPerMonth: 1_000_000,
+  nextjsAssetsGb: 1,
+};
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+function lambdaLines(invocations: number, durationMs: number, memoryMb: number): CostLine[] {
+  const requestCost = (invocations / 1_000_000) * PRICES.lambdaRequestPer1M;
+  const gbSeconds = invocations * (durationMs / 1000) * (memoryMb / 1024);
+  const computeCost = gbSeconds * PRICES.lambdaGbSecond;
+  return [
+    { label: 'Lambda requests', usd: round2(requestCost) },
+    { label: 'Lambda compute', usd: round2(computeCost) },
+  ];
+}
+
+function s3Lines(storageGb: number, puts: number, gets: number): CostLine[] {
+  return [
+    { label: 'S3 storage', usd: round2(storageGb * PRICES.s3StorageGbMonth) },
+    { label: 'S3 PUT', usd: round2((puts / 1000) * PRICES.s3PutPer1k) },
+    { label: 'S3 GET', usd: round2((gets / 1000) * PRICES.s3GetPer1k) },
+  ];
+}
+
+function cloudfrontLines(transferGb: number, requests: number): CostLine[] {
+  return [
+    { label: 'CloudFront transfer', usd: round2(transferGb * PRICES.cfTransferGbOut) },
+    { label: 'CloudFront requests', usd: round2((requests / 10_000) * PRICES.cfRequestPer10k) },
+  ];
+}
+
+// `nat` is the effective NAT for the resource's shared VPC ('none' suppresses
+// the line — the one generated VPC's NAT is attributed to a single DB node).
+function breakdownFor(r: Resource, nat: 'none' | 'ec2' | 'managed'): CostBreakdown {
+  let lines: CostLine[] = [];
+  switch (r.kind) {
+    case 'nextjs': {
+      // OpenNext deploys more than the SSR Lambda. Cost the image-optimization
+      // Lambda too (1536MB, ~10% of requests) so this agrees with the
+      // Infrastructure view's expansion, which lists it.
+      const imageReqs = PROFILE.requestsPerMonth * 0.1;
+      const imageCost =
+        (imageReqs / 1_000_000) * PRICES.lambdaRequestPer1M +
+        imageReqs * (PROFILE.lambdaDurationMs / 1000) * (1536 / 1024) * PRICES.lambdaGbSecond;
+      lines = [
+        ...lambdaLines(PROFILE.requestsPerMonth, PROFILE.lambdaDurationMs, PROFILE.lambdaMemoryMb),
+        { label: 'Image-opt Lambda (1536MB, ~10% of reqs)', usd: round2(imageCost) },
+        { label: 'S3 (assets)', usd: round2(PROFILE.nextjsAssetsGb * PRICES.s3StorageGbMonth) },
+        ...cloudfrontLines(PROFILE.cdnTransferGb, PROFILE.cdnRequestsPerMonth),
+      ];
+      break;
+    }
+    case 'staticsite':
+      lines = [
+        { label: 'S3 (static assets)', usd: round2(1 * PRICES.s3StorageGbMonth) },
+        ...cloudfrontLines(PROFILE.cdnTransferGb, PROFILE.cdnRequestsPerMonth),
+      ];
+      break;
+    case 'bucket':
+      lines = s3Lines(
+        PROFILE.bucketStorageGb,
+        PROFILE.bucketPutPerMonth,
+        PROFILE.bucketGetPerMonth,
+      );
+      break;
+    case 'dynamo':
+      lines = [
+        {
+          label: 'Writes',
+          usd: round2((PROFILE.dynamoWritesPerMonth / 1e6) * PRICES.dynamoWritePer1M),
+        },
+        {
+          label: 'Reads',
+          usd: round2((PROFILE.dynamoReadsPerMonth / 1e6) * PRICES.dynamoReadPer1M),
+        },
+        { label: 'Storage', usd: round2(PROFILE.dynamoStorageGb * PRICES.dynamoStorageGbMonth) },
+      ];
+      break;
+    case 'queue':
+      lines = [
+        {
+          label: 'SQS requests',
+          usd: round2((PROFILE.queueRequestsPerMonth / 1e6) * PRICES.sqsPer1M),
+        },
+      ];
+      break;
+    case 'bus':
+      lines = [{ label: 'EventBridge events (1M)', usd: 1 }];
+      break;
+    case 'snstopic':
+      lines = [{ label: 'SNS messages (1M)', usd: 0.5 }];
+      break;
+    case 'apigatewayv2':
+      lines = [{ label: 'HTTP API requests (1M)', usd: 1 }];
+      break;
+    case 'router':
+      lines = cloudfrontLines(PROFILE.cdnTransferGb, PROFILE.cdnRequestsPerMonth);
+      break;
+    case 'worker':
+      lines = lambdaLines(
+        PROFILE.workerInvocationsPerMonth,
+        PROFILE.lambdaDurationMs,
+        PROFILE.lambdaMemoryMb,
+      );
+      break;
+    case 'cron':
+      lines = [{ label: 'EventBridge schedule', usd: 0 }];
+      break;
+    case 'secret':
+      lines = [{ label: 'SSM (free tier)', usd: 0 }];
+      break;
+    case 'ai':
+      lines = [{ label: 'Anthropic API (usage-based)', usd: 0 }];
+      break;
+    case 'email':
+      lines = [{ label: 'SES (~10k emails)', usd: 1 }];
+      break;
+    case 'postgres': {
+      // SST VPCs have NO NAT by default; the only standing VPC cost is CloudMap DNS.
+      lines = [
+        { label: 'RDS Postgres (db.t4g.micro)', usd: 11.5 },
+        { label: 'Storage (20GB gp3)', usd: 2.3 },
+        { label: 'VPC (CloudMap DNS)', usd: 0.5 },
+      ];
+      if (nat === 'ec2') lines.push({ label: 'fck-nat EC2 (t4g.nano)', usd: 4 });
+      else if (nat === 'managed') lines.push({ label: 'NAT Gateway', usd: 32 });
+      break;
+    }
+    case 'aurora': {
+      lines = [
+        { label: 'Aurora Serverless v2 (0.5 ACU min)', usd: 44 },
+        { label: 'Storage (10GB)', usd: 1 },
+        { label: 'VPC (CloudMap DNS)', usd: 0.5 },
+      ];
+      if (nat === 'ec2') lines.push({ label: 'fck-nat EC2 (t4g.nano)', usd: 4 });
+      else if (nat === 'managed') lines.push({ label: 'NAT Gateway', usd: 32 });
+      break;
+    }
+    case 'redis': {
+      // ElastiCache node runs 24/7. Valkey is ~20% cheaper than Redis OSS.
+      const valkey = r.props.engine === 'valkey';
+      lines = [
+        valkey
+          ? { label: 'ElastiCache Valkey (cache.t4g.micro)', usd: 9 }
+          : { label: 'ElastiCache Redis (cache.t4g.micro)', usd: 12 },
+      ];
+      // Only the shared-VPC owner carries the VPC line (nat is 'none' for the rest).
+      if (nat !== 'none') lines.push({ label: 'VPC (CloudMap DNS)', usd: 0.5 });
+      if (nat === 'ec2') lines.push({ label: 'fck-nat EC2 (t4g.nano)', usd: 4 });
+      else if (nat === 'managed') lines.push({ label: 'NAT Gateway', usd: 32 });
+      break;
+    }
+    case 'service': {
+      // Fargate runs 24/7 per task. Rough vCPU/mem pricing for the chosen size.
+      const cpuUsd: Record<string, number> = {
+        '0.25 vCPU': 9,
+        '0.5 vCPU': 18,
+        '1 vCPU': 36,
+        '2 vCPU': 72,
+        '4 vCPU': 144,
+      };
+      const cpu = typeof r.props.cpu === 'string' ? r.props.cpu : '0.25 vCPU';
+      lines = [{ label: `Fargate (${cpu}, 1 task)`, usd: cpuUsd[cpu] ?? 9 }];
+      if (r.props.public !== 'no') lines.push({ label: 'Application Load Balancer', usd: 16 });
+      if (nat !== 'none') lines.push({ label: 'VPC (CloudMap DNS)', usd: 0.5 });
+      if (nat === 'ec2') lines.push({ label: 'fck-nat EC2 (t4g.nano)', usd: 4 });
+      else if (nat === 'managed') lines.push({ label: 'NAT Gateway', usd: 32 });
+      break;
+    }
+    case 'task':
+      // Fargate billed per-run by the second — no idle cost. The standing cost is
+      // just the shared VPC/NAT (attributed to the VPC owner).
+      lines = [{ label: 'Fargate Task (per-run, no idle)', usd: 0 }];
+      if (nat !== 'none') lines.push({ label: 'VPC (CloudMap DNS)', usd: 0.5 });
+      if (nat === 'ec2') lines.push({ label: 'fck-nat EC2 (t4g.nano)', usd: 4 });
+      else if (nat === 'managed') lines.push({ label: 'NAT Gateway', usd: 32 });
+      break;
+    case 'realtime':
+      // AWS IoT Core: no idle/provisioned cost — usage-priced (connection-minutes +
+      // messages). A rough small-app allowance.
+      lines = [{ label: 'IoT Core (connections + messages)', usd: 1 }];
+      break;
+    case 'stepFunctions':
+      // Standard: ~$25 / 1M state transitions. Express: per request + duration.
+      // No idle cost — a small-volume allowance.
+      lines = [
+        {
+          label:
+            r.props.type === 'express'
+              ? 'Step Functions Express (per-request)'
+              : 'Step Functions (state transitions)',
+          usd: 1,
+        },
+      ];
+      break;
+    case 'appsync':
+      // AppSync is request-priced (~$4/million queries) + the resolver Lambda. Small.
+      lines = [
+        { label: 'AppSync (per query)', usd: 1 },
+        { label: 'Resolver Lambda (request-priced)', usd: 0 },
+      ];
+      break;
+    case 'cognito':
+      lines = [{ label: 'Cognito (free ≤ 50k MAU)', usd: 0 }];
+      break;
+    case 'openauth':
+      // Self-hosted: a request-priced issuer Lambda + a small on-demand DynamoDB table.
+      lines = [
+        { label: 'Auth issuer (Lambda, request-priced)', usd: 0 },
+        { label: 'DynamoDB storage (on-demand)', usd: 1 },
+      ];
+      break;
+    case 'clerk':
+      lines = [{ label: 'Clerk (external / free tier)', usd: 0 }];
+      break;
+    case 'stripe':
+    case 'mongodb':
+    case 'externalApi':
+      lines = [{ label: 'External / usage-based', usd: 0 }];
+      break;
+    default:
+      lines = [];
+  }
+  const monthlyUsd = round2(lines.reduce((sum, l) => sum + l.usd, 0));
+  return { resourceId: r.id, name: r.name, kind: r.kind, monthlyUsd, lines };
+}
+
+export function estimateAwsCost(bp: Blueprint): CostEstimate {
+  // One shared VPC → one NAT; charge it on the first DB node only. The
+  // generator floors NAT at "ec2" when consumers join the VPC (see plan.ts).
+  const nat = effectiveAwsNat(bp);
+  const firstVpcNode = bp.resources.find(
+    (r) =>
+      r.kind === 'postgres' ||
+      r.kind === 'aurora' ||
+      r.kind === 'redis' ||
+      r.kind === 'service' ||
+      r.kind === 'task',
+  );
+  const perResource = bp.resources.map((r) =>
+    breakdownFor(r, r.id === firstVpcNode?.id ? nat : 'none'),
+  );
+  const totalMonthlyUsd = round2(perResource.reduce((sum, r) => sum + r.monthlyUsd, 0));
+  return {
+    perResource,
+    totalMonthlyUsd,
+    region: bp.app.region,
+    assumptions: [
+      '~1M requests/month, 200ms avg @ 1024MB Lambda (Next.js adds an image-opt Lambda @ 1536MB on ~10% of requests)',
+      'S3: 5GB storage, 100k PUT, 1M GET',
+      'DynamoDB on-demand: 1M writes, 1M reads, 5GB',
+      'SQS: 1M requests; CloudFront: 50GB out, 1M requests',
+      'VPCs have NO NAT by default; fck-nat (ec2) ≈ $4/mo (added when app code joins the VPC to reach the DB), managed gateway ≈ $32/mo/AZ',
+    ],
+    disclaimer:
+      'Rough design-time ballpark (us-east-1 on-demand). Not a billing forecast — your real costs depend on actual traffic, region, and free-tier usage.',
+  };
+}

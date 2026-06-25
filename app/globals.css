@@ -1,0 +1,73 @@
+@import 'tailwindcss';
+
+/* Class-based dark mode — a toggle adds `.dark` on <html> (default follows system). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: #ffffff;
+  --foreground: #0f172a;
+  --panel: #ffffff;
+  --canvas: #f1f5f9;
+  --edge: #64748b;
+  --edge-label-bg: #ffffff;
+}
+
+.dark {
+  --background: #0b0f1a;
+  --foreground: #e2e8f0;
+  --panel: #0e1424;
+  --canvas: #0c111d;
+  --edge: #64748b;
+  --edge-label-bg: #111827;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/* ── React Flow canvas theming ───────────────────────────────────── */
+.react-flow {
+  background-color: var(--canvas);
+}
+
+.react-flow__edge-text {
+  fill: var(--foreground);
+  font-weight: 500;
+}
+.react-flow__edge-textbg {
+  fill: var(--edge-label-bg);
+}
+
+.react-flow__handle {
+  width: 9px;
+  height: 9px;
+  border-radius: 9999px;
+  background: var(--edge);
+  border: 1.5px solid var(--background);
+}
+
+.react-flow__controls {
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.2);
+}
+.react-flow__controls-button {
+  background: var(--panel);
+  border-bottom: 1px solid color-mix(in oklab, var(--foreground) 12%, transparent);
+}
+.react-flow__controls-button svg {
+  fill: var(--foreground);
+}
+.react-flow__minimap {
+  background: var(--panel) !important;
+  border-radius: 8px;
+}
+.react-flow__attribution {
+  display: none;
+}

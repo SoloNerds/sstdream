@@ -1,0 +1,63 @@
+name: Deploy to GitHub Pages
+
+# Builds the static export and publishes it to GitHub Pages. The site is purely
+# client-side (it never deploys your cloud — it generates files you run), so a
+# static export is a complete, faithful copy of the builder.
+#
+# Pages is enabled (Settings → Pages → Source: GitHub Actions), so this now
+# republishes on every push to main; workflow_dispatch keeps a manual button.
+# The published site's visibility is set in Settings → Pages (keep it private on
+# the Enterprise plan if you like — the repo stays private regardless).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Allow this workflow to publish to Pages via OIDC.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One concurrent deploy; let an in-progress run finish rather than cancelling.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      # Run configure-pages FIRST so we can read the ACTUAL base path GitHub will
+      # serve from. A private repo on Enterprise serves at a root *.pages.github.io
+      # subdomain (base_path = ""); a public project site serves at /<repo>. Using
+      # the reported value keeps asset URLs correct in both cases. enablement: true
+      # turns Pages on automatically.
+      - uses: actions/configure-pages@v5
+        id: pages
+        with:
+          enablement: true
+      - name: Build static export
+        env:
+          PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+        run: yarn build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

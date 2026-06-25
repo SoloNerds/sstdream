@@ -1,0 +1,26 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`AWS cost estimation — AI Processing App > produces a positive, deterministic total (snapshot) 1`] = `
+[
+  [
+    "Web",
+    9.07,
+  ],
+  [
+    "Uploads",
+    1.02,
+  ],
+  [
+    "Jobs",
+    0.4,
+  ],
+  [
+    "ProcessJob",
+    3.53,
+  ],
+  [
+    "AppTable",
+    2.75,
+  ],
+]
+`;

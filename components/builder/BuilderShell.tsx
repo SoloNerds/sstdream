@@ -1,0 +1,232 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import { Palette } from './Palette';
+import { Canvas } from './Canvas';
+import { InfraView } from './InfraView';
+import { PropertiesPanel } from './PropertiesPanel';
+import { SimulationPanel } from './SimulationPanel';
+import { CostPanel } from './CostPanel';
+import { RecommendationsPanel } from './RecommendationsPanel';
+import { Toolbar } from './Toolbar';
+import { StatusBar } from './StatusBar';
+import { ThemeToggle } from './ThemeToggle';
+import { useValidation } from './useValidation';
+
+const TAB_LABEL = {
+  properties: 'Props',
+  simulation: 'Sim',
+  cost: 'Cost',
+  advice: 'Tips',
+} as const;
+import { useCanvasStore } from '@/lib/canvas/store';
+import { isTargetImplemented, listTargets } from '@/lib/targets/registry';
+import type { DeployTarget } from '@/lib/targets/types';
+import { loadBlueprint, saveBlueprint } from '@/lib/core/blueprint/persistence';
+import { blueprintToCanvas, canvasToBlueprint } from '@/lib/core/blueprint/serialize';
+import { readDesignFromHash } from '@/lib/core/blueprint/share';
+import type { Blueprint } from '@/lib/core/blueprint/types';
+
+export function BuilderShell() {
+  const targetId = useCanvasStore((s) => s.targetId);
+  const validation = useValidation();
+  const [tab, setTab] = useState<'properties' | 'simulation' | 'cost' | 'advice'>('properties');
+  const [view, setView] = useState<'design' | 'infra'>('design');
+  const [recoveryKey, setRecoveryKey] = useState<string | null>(null);
+  // The original createdAt of the active design, so autosave preserves it
+  // instead of overwriting it with `now` on every keystroke. Seeded from the
+  // restored design, or captured from the first save of a brand-new design.
+  const createdAtRef = useRef<string | null>(null);
+
+  // On mount: a shared-design link (#d=...) wins over the local autosave, so a
+  // link always opens the design it points at. Otherwise restore localStorage.
+  useEffect(() => {
+    const openDesign = (bp: Blueprint) => {
+      createdAtRef.current = bp.metadata.createdAt;
+      const s = useCanvasStore.getState();
+      useCanvasStore.setState({ targetId: bp.target.deploy });
+      s.setApp({ name: bp.app.name, region: bp.app.region, packageManager: bp.app.packageManager });
+      s.loadSnapshot(blueprintToCanvas(bp));
+    };
+
+    const shared = readDesignFromHash(window.location.hash);
+    if (shared && isTargetImplemented(shared.target.deploy)) {
+      openDesign(shared);
+      return;
+    }
+
+    const result = loadBlueprint();
+    if (result.status === 'loaded' && isTargetImplemented(result.blueprint.target.deploy)) {
+      const bp = result.blueprint;
+      createdAtRef.current = bp.metadata.createdAt;
+      const s = useCanvasStore.getState();
+      useCanvasStore.setState({ targetId: bp.target.deploy });
+      s.setApp({ name: bp.app.name, region: bp.app.region, packageManager: bp.app.packageManager });
+      s.loadSnapshot(blueprintToCanvas(bp));
+    } else if (result.status === 'unreadable') {
+      setRecoveryKey(result.recoveryKey);
+    }
+  }, []);
+
+  // Debounced autosave on any change, with a flush on unmount / tab close so an
+  // edit made within the 400ms window is never lost.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // Reads the LATEST store state directly, so it's safe to call on flush too.
+    const save = () => {
+      const s = useCanvasStore.getState();
+      try {
+        const bp = canvasToBlueprint(
+          { nodes: s.nodes, edges: s.edges, secrets: s.secrets, outputs: s.outputs },
+          s.targetId,
+          s.app,
+          new Date().toISOString(),
+          createdAtRef.current ?? undefined,
+        );
+        // Capture the creation time of a brand-new design so later saves keep it.
+        createdAtRef.current ??= bp.metadata.createdAt;
+        saveBlueprint(bp);
+      } catch {
+        // invalid intermediate state (e.g. app name mid-edit) — skip this save
+      }
+    };
+    const unsub = useCanvasStore.subscribe(() => {
+      clearTimeout(timer);
+      timer = setTimeout(save, 400);
+    });
+    // Tab close / navigation can happen mid-debounce — persist immediately.
+    const flush = () => {
+      if (timer) clearTimeout(timer);
+      save();
+    };
+    window.addEventListener('beforeunload', flush);
+    return () => {
+      window.removeEventListener('beforeunload', flush);
+      flush(); // flush any pending save on unmount instead of dropping it
+      unsub();
+    };
+  }, []);
+
+  return (
+    <>
+      {/* The canvas builder needs a pointer + room. On phones/tablets, advise desktop
+          (we deliberately don't ship a responsive builder) and point to the gallery. */}
+      <div className="flex h-dvh flex-col items-center justify-center gap-4 p-8 text-center md:hidden">
+        <div className="text-lg font-semibold">The builder needs a wider screen</div>
+        <p className="max-w-sm text-sm text-neutral-500">
+          SSTDREAM&apos;s drag-and-drop canvas is built for desktop. Open this on a laptop to design
+          — or browse ready-made architectures from your phone.
+        </p>
+        <a
+          href="/gallery"
+          className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white"
+        >
+          Browse the gallery
+        </a>
+      </div>
+
+      <div className="hidden h-screen flex-col md:flex">
+        <header className="flex items-center justify-between gap-4 border-b border-neutral-200 px-4 py-2 dark:border-neutral-800">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-bold">SSTDREAM</span>
+            <select
+              aria-label="Deploy lane"
+              value={targetId}
+              onChange={(e) => {
+                const { nodes } = useCanvasStore.getState();
+                if (
+                  nodes.length > 0 &&
+                  !window.confirm('Switching lanes clears the current canvas. Continue?')
+                ) {
+                  return;
+                }
+                useCanvasStore.setState({ targetId: e.target.value as DeployTarget });
+                useCanvasStore.getState().reset();
+              }}
+              className="rounded border border-neutral-300 bg-transparent px-2 py-0.5 text-xs dark:border-neutral-700"
+            >
+              {listTargets().map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+            <div className="ml-1 flex overflow-hidden rounded-md border border-neutral-300 text-xs dark:border-neutral-700">
+              {(['design', 'infra'] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setView(v)}
+                  className={
+                    view === v
+                      ? 'bg-indigo-600 px-2.5 py-0.5 font-medium text-white'
+                      : 'px-2.5 py-0.5 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                  }
+                >
+                  {v === 'design' ? 'Design' : 'Infrastructure'}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Toolbar validation={validation} />
+            <ThemeToggle />
+          </div>
+        </header>
+        {recoveryKey && (
+          <div
+            role="alert"
+            className="flex items-center justify-between gap-4 border-b border-amber-300 bg-amber-50 px-4 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200"
+          >
+            <span>
+              Your previous design could not be loaded (it may be corrupt or from a different
+              version). The raw data was preserved in this browser under the localStorage key{' '}
+              <code className="rounded bg-amber-100 px-1 font-mono dark:bg-amber-900">
+                {recoveryKey}
+              </code>
+              .
+            </span>
+            <button
+              type="button"
+              onClick={() => setRecoveryKey(null)}
+              className="shrink-0 rounded border border-amber-400 px-2 py-0.5 hover:bg-amber-100 dark:border-amber-600 dark:hover:bg-amber-900"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+        <div className="flex min-h-0 flex-1">
+          <aside className="w-64 shrink-0 overflow-y-auto border-r border-neutral-200 dark:border-neutral-800">
+            <Palette />
+          </aside>
+          <main className="min-w-0 flex-1">{view === 'design' ? <Canvas /> : <InfraView />}</main>
+          <aside className="flex w-72 shrink-0 flex-col border-l border-neutral-200 dark:border-neutral-800">
+            <div className="flex shrink-0 border-b border-neutral-200 text-xs dark:border-neutral-800">
+              {(['properties', 'simulation', 'cost', 'advice'] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTab(t)}
+                  className={`flex-1 px-2 py-1.5 ${
+                    tab === t
+                      ? 'border-b-2 border-indigo-500 font-medium'
+                      : 'text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                  }`}
+                >
+                  {TAB_LABEL[t]}
+                </button>
+              ))}
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {tab === 'properties' && <PropertiesPanel />}
+              {tab === 'simulation' && <SimulationPanel />}
+              {tab === 'cost' && <CostPanel />}
+              {tab === 'advice' && <RecommendationsPanel />}
+            </div>
+          </aside>
+        </div>
+        <StatusBar validation={validation} />
+      </div>
+    </>
+  );
+}

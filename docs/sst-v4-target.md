@@ -1,0 +1,421 @@
+# SST v4 Compatibility Target — `sst-v4-target.md`
+
+> **This is the source of truth for SSTDREAM's code generator and validator.**
+> Every component renderer and validation rule is built against the facts in this
+> document. Do not change a renderer without updating the matching section here.
+
+- **Doc version:** `0.1.0`
+- **Verified against live SST docs on:** `2026-06-08` (re-verified; `sst` latest is **v4.15.2**, no v5)
+- **SST major:** `4` (Pulumi AWS **v7** era; the `$config` model continued from v3/"Ion")
+- **Underlying Pulumi AWS provider:** `v7` (SST v3 was v6)
+- **TypeScript:** `5+` required for config types
+- **Provenance:** every fact below was confirmed against `sst.dev/docs/*` on the date
+  above. Each component section lists the exact doc URL it was verified from. Re-verify
+  on each SST minor bump — provider/component APIs drift (see **Drift Watch**).
+
+---
+
+## 0. Hard rules (non-negotiable for the generator)
+
+These map 1:1 to the "do not screw ourselves" list. Treat as compile-time invariants.
+
+1. **Never** generate `import { SSTConfig } from "sst"` or anything from `sst/constructs` (that is v2/CDK).
+2. **Never** `import` a provider package (`@pulumi/aws`, `@pulumi/cloudflare`, `@pulumi/pulumi`) in `sst.config.ts`. SST injects them as globals.
+3. All resources are defined **inside `async run()`** — never inside `app()`.
+4. Config is `export default $config({ app(input){...}, async run(){...} })`.
+5. First line of `sst.config.ts` is the triple-slash platform reference.
+6. Use `sst.aws.*` built-in components; use links, not manual IAM.
+7. Runtime/app code accesses linked resources via `import { Resource } from "sst"`.
+8. Every component renderer carries a `// verified: sst-v4-target.md@0.1.0 (2026-06-08)`
+   provenance comment and has a snapshot test.
+
+---
+
+## 1. Canonical `sst.config.ts` shape
+
+Source: <https://sst.dev/docs/reference/config/>
+
+```ts
+/// <reference path="./.sst/platform/config.d.ts" />
+
+export default $config({
+  app(input) {
+    return {
+      name: 'my-app', // required; prefixes resource names
+      home: 'aws', // required: "aws" | "cloudflare" | "local"
+      removal: input.stage === 'production' ? 'retain' : 'remove',
+      protect: input.stage === 'production',
+      providers: {
+        aws: { region: 'us-east-1' }, // optional; object OR version string
+      },
+    };
+  },
+  async run() {
+    const bucket = new sst.aws.Bucket('MyBucket');
+    return { bucket: bucket.name }; // outputs -> CLI + .sst/outputs.json
+  },
+});
+```
+
+### `app(input)` reference
+
+| Field       | Required | Type / values                          | Notes                                                                                                                    |
+| ----------- | -------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `name`      | ✅       | `string`                               | Prefixes all resource names.                                                                                             |
+| `home`      | ✅       | `"aws" \| "cloudflare" \| "local"`     | Where SST stores **state + secrets**. `aws` = S3 + SSM.                                                                  |
+| `removal`   | ❌       | `"remove" \| "retain" \| "retain-all"` | Default `"retain"`. **No `"destroy"`.** `retain` keeps S3+Dynamo, removes the rest; `retain-all` keeps everything.       |
+| `protect`   | ❌       | `boolean`                              | If `true`, `sst remove` errors out.                                                                                      |
+| `providers` | ❌       | `Record<string, string \| object>`     | Value is a version string (`aws: "7.x"`) **or** a config object (`aws: { region }`). Omit → home provider with defaults. |
+
+- `input.stage` is the CLI stage (required, non-optional string). Docs use `input.stage`, not `input?.stage`.
+- `run()` returns `void | Record<string, any>`; a returned object becomes the app outputs.
+
+---
+
+## 2. Providers
+
+Sources: <https://sst.dev/docs/providers/>, <https://sst.dev/docs/all-providers/>
+
+- **Preloaded (no `sst add` needed): AWS and Cloudflare.** Their namespaces (`sst.aws.*`, `sst.cloudflare.*`, and raw `aws.*` / `cloudflare.*`) are available out of the box.
+- **Every other provider** (Stripe, **Vercel**, PlanetScale, GitHub, Auth0, GCP, Azure, …) requires `sst add <provider>`, which (1) installs the package, (2) adds it to `providers`, (3) registers its global namespace.
+- Provider versions are **pinned** to `sst.config.ts` and **do not auto-update**. After any manual change to `providers`, run `sst install`.
+- Low-level Pulumi resources are reachable without imports via the global namespace (`new aws.s3.BucketV2(...)`, `await aws.getCallerIdentity({})`). Pulumi SDK helpers come via `$util` etc. — **only inside `run()`**.
+
+**Generator consequence:** if a blueprint uses any non-preloaded provider, the exporter
+**must** generate the `sst add <provider>` / `sst install` instructions and a warning.
+
+---
+
+## 3. v3 → v4 migration (context for generated notes)
+
+Source: <https://sst.dev/docs/migrate-from-v3/>
+
+> "SST v4 upgrades the underlying Pulumi AWS provider from v6 to v7."
+
+Flow: upgrade SST → `sst diff` → `sst refresh` (per stage; **no `--target`**) → `sst deploy`.
+No code changes unless you use `transform`s or `@pulumi/aws` directly (then apply Pulumi
+AWS v7 breaking changes: `tagsAll` not `tags`; S3 `BucketV2`→`Bucket`; `assumeRole`→`assumeRoles`).
+Known unofficial friction during refresh (dual-provider-state hangs, Dynamo `rangeKey`
+coercion) tracked in SST GitHub issues — surface as a README caveat, not a blocker.
+
+---
+
+## 4. Component reference (MVP catalog)
+
+> Exact verified signatures. **`subscribe()` is NOT uniform across components** — see callout.
+
+### 4.1 `sst.aws.Nextjs`
+
+Source: <https://sst.dev/docs/component/aws/nextjs/>
+
+```ts
+new sst.aws.Nextjs('Web', {
+  path: '.', // dir relative to sst.config.ts (default ".")
+  link: [uploads, jobs, table], // grants perms + SDK access
+  environment: { NEXT_PUBLIC_APP_NAME: '...' },
+  // server?: { memory, architecture, runtime, timeout }  domain?: string | {...}
+});
+// outputs: .url ; .nodes.{server,assets,cdn}
+```
+
+Builds via OpenNext internally (don't import it). Deploys to **AWS** (Lambda+S3+CloudFront).
+
+### 4.2 `sst.aws.Bucket`
+
+Source: <https://sst.dev/docs/component/aws/bucket>
+
+```ts
+new sst.aws.Bucket('Uploads', {
+  access: 'public', // "public" | "cloudfront"  — NO `public` boolean
+  cors: {
+    // defaults to true; set false to disable
+    allowHeaders: ['*'],
+    allowMethods: ['GET', 'PUT', 'POST', 'DELETE', 'HEAD'],
+    allowOrigins: ['*'],
+    exposeHeaders: ['ETag'],
+    maxAge: '0 seconds',
+  },
+});
+// props: .name .arn .domain ; method: .notify(...)
+```
+
+### 4.3 `sst.aws.Dynamo`
+
+Source: <https://sst.dev/docs/component/aws/dynamo/>
+
+```ts
+const table = new sst.aws.Dynamo('AppTable', {
+  fields: { pk: 'string', sk: 'string' }, // type: "string"|"number"|"binary"
+  primaryIndex: { hashKey: 'pk', rangeKey: 'sk' }, // rangeKey optional
+  // globalIndexes: { GSI1: { hashKey, rangeKey? } }
+  // localIndexes:  { LSI1: { rangeKey } }
+  // stream: "keys-only"|"new-image"|"old-image"|"new-and-old-images"
+  // ttl: "expireAt"  deletionProtection: true
+});
+
+// ⚠️ Dynamo.subscribe IS name-first AND requires stream enabled:
+table.subscribe('ProcessRows', 'src/sub.handler', {
+  /* filters? */
+});
+```
+
+### 4.4 `sst.aws.Queue`
+
+Source: <https://sst.dev/docs/component/aws/queue/>
+
+```ts
+const jobs = new sst.aws.Queue('Jobs', {
+  // fifo?: true | { contentBasedDeduplication }
+  // dlq?: arn | { queue, retry }   visibilityTimeout?: "30 seconds"
+});
+
+// ⚠️⚠️ Queue.subscribe is SUBSCRIBER-FIRST (NO name arg).
+// Put handler/link/timeout in the FIRST FunctionArgs object:
+jobs.subscribe({
+  handler: 'src/workers/process-job.handler',
+  link: [uploads, table],
+  timeout: '60 seconds',
+});
+// 2nd arg = QueueSubscriberArgs (filters/batch/transform ONLY):
+//   jobs.subscribe("src/x.handler", { filters: [...] })
+```
+
+> **⚠️ Subscriber timeout vs visibility timeout (verified 2026-06-10):** AWS validates
+> that a subscriber Lambda's `timeout` is **≤ the queue's `visibilityTimeout`** when the
+> event-source mapping is created — _"Your function's timeout must be less than or equal
+> to the queue's visibility timeout. Lambda validates this requirement when you create or
+> update an event source mapping and will return an error"_
+> (<https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-configure.html>). The SST
+> default `visibilityTimeout` is `"30 seconds"`, so a queue with a default 60s subscriber
+> **fails `sst deploy`** unless `visibilityTimeout` is raised. AWS recommends ≈ **6×** the
+> function timeout; the generator emits `visibilityTimeout` = 6× the largest subscriber
+> timeout (capped at the SQS max of 12 hours) on any queue that has subscribers — an
+> explicit `visibilityTimeout` prop wins, gated by a rule that it covers the subscribers.
+> **DLQ:** a queue→queue edge emits `dlq: <target>.arn` (the verified ARN form above);
+> DLQ targets are declared before the queues that reference them, cycles are a
+> validation error, and DLQs are exempt from the no-subscriber warning.
+
+### 4.5 `sst.aws.Function`
+
+Source: <https://sst.dev/docs/component/aws/function/>
+
+```ts
+new sst.aws.Function('MyFn', {
+  handler: 'src/lambda.handler', // {path}/{file}.{method} for node/python
+  runtime: 'nodejs24.x', // default; node18/20/22/24, go, rust, python3.9–3.14
+  link: [bucket],
+  environment: { DEBUG: 'true' }, // total <= 4 KB
+  timeout: '20 seconds', // default; 1s–900s
+});
+```
+
+Officially supported runtimes: **Node.js, Go**. Python/Rust are community-supported.
+
+### 4.6 Cron — **use `sst.aws.CronV2`** (`sst.aws.Cron` is deprecated in 2026)
+
+Source: <https://sst.dev/docs/component/aws/cron-v2/>
+
+```ts
+new sst.aws.CronV2('DailyJob', {
+  function: 'src/cron.handler', // prop is `function` (or `task`), NOT `job`
+  schedule: 'rate(1 day)', // "rate(...)" | "cron(...)" | "at(...)"
+  // timezone: "America/New_York"  retries: 3  dlq: <arn>
+});
+```
+
+### 4.7 `sst.Secret`
+
+Source: <https://sst.dev/docs/component/secret/>
+
+```ts
+const secret = new sst.Secret('MySecret'); // capital first letter
+new sst.aws.Nextjs('Web', { link: [secret] });
+// set out-of-band: `sst secret set MySecret <value> [--stage prod] [--fallback]`
+// runtime: Resource.MySecret.value
+```
+
+### 4.8 Additional components (verified 2026-06-08)
+
+- **`sst.aws.Email`** (SES) — `new sst.aws.Email("Mailer", { sender })`; `sender` is an
+  email or a domain (domain verifies via `dns`). Link → `Resource.Mailer.sender`; send with
+  `@aws-sdk/client-sesv2` `SendEmailCommand` (`FromEmailAddress: Resource.Mailer.sender`).
+  New SES accounts start in sandbox.
+- **`sst.aws.Postgres`** (RDS) — **requires a `vpc`**: `const vpc = new sst.aws.Vpc("Vpc");
+new sst.aws.Postgres("Db", { vpc })`. Link exposes
+  `Resource.Db.{host,port,username,password,database}` → use the `pg` driver. **Not Aurora.**
+- **`sst.aws.Aurora`** — distinct (Aurora Serverless v2): `new sst.aws.Aurora("Db",
+{ engine: "postgres", vpc })`.
+- **`sst.aws.ApiGatewayV2`** — `const api = new sst.aws.ApiGatewayV2("Api");
+api.route("GET /", "src/get.handler")` (route key = `"METHOD /path"`; optional 3rd-arg
+  config for `link`/`auth`/`memory`).
+- **`sst.aws.Bus`** / **`sst.aws.SnsTopic`** — `new sst.aws.Bus("Bus")` /
+  `new sst.aws.SnsTopic("Topic")`, each with `.subscribe(...)`; link exposes `.arn`/`.name`.
+- **`sst.aws.Router`** / **`sst.aws.StaticSite`** / **`sst.aws.Vpc`** — routing, static
+  hosting, and the network the databases need.
+
+> **Implemented in the generator:** Email, Postgres (with auto-VPC), **Cognito**
+> (`CognitoUserPool` + `addClient`, `Resource.<Pool>.id`, NEXT*PUBLIC_COGNITO*\* injected via
+> Next.js `environment`), the **AI Chat** integration (`@anthropic-ai/sdk`, `claude-opus-4-8`),
+> and the **env-driven** integrations **Stripe** / **MongoDB** / **External API** / **Clerk**
+> (`@clerk/nextjs` + `clerkMiddleware`) — these emit `lib/*` helpers + `.env.example` keys, not
+> SST resources. Bus/SnsTopic/Router/StaticSite/ApiGatewayV2 are implemented, as are the five
+> **modern components in §4.9** (Redis, Cluster+Service, Task, Realtime, Step Functions). The
+> AWS catalog is **26 kinds**.
+
+> **Next.js 16 note:** generated Route Handlers (`app/api/.../route.ts`) export async HTTP
+> methods; dynamic `params`/`searchParams` and `cookies()`/`headers()` are **async** (await
+> them). Our generated routes don't read dynamic params, so they're 16-clean as-is.
+
+> **VPC / NAT defaults (verified 2026-06-09, via the resource-expansion sweep):**
+> `new sst.aws.Vpc("Vpc")` creates **NO NAT** by default ("NAT is disabled"). The only
+> standing cost of a bare VPC is the **CloudMap private-DNS namespace (~$0.50/mo)**. NAT is
+> opt-in: `nat: "ec2"` = **fck-nat** t4g.nano instances (~$4/mo, ≈10× cheaper) for internet
+> egress from private subnets; `nat: "managed"` = NAT Gateway(s), **~$32/mo per AZ**. Lambdas
+> in the VPC only need NAT to reach the **public internet** — RDS access inside the VPC does
+> not. So `sst.aws.Postgres` ≈ **$14/mo** (RDS $11.5 + 20 GB $2.3) + ~$0.50 VPC, **not ~$47**.
+> Also verified: `sst.aws.Bucket` **never** creates a CloudFront distribution (`access` only
+> edits the bucket policy); `sst.aws.CognitoUserPool` creates **no** Identity Pool (separate
+> component). SST v4 is **pure Pulumi** (no CloudFormation); the authoritative live graph is
+> `sst diff --json` (needs AWS creds) — our generator instead ships a verified static map.
+
+> **DB consumers must join the VPC (verified 2026-06-10):** linking a Postgres/Aurora
+> grants **credentials, not network reachability** — the consumer's function must also be
+> placed in the VPC. `sst.aws.Function` and `sst.aws.Nextjs` both accept `vpc` (a `Vpc`
+> component instance directly, or `{ privateSubnets, securityGroups }`); on `Nextjs` it
+> applies to the server function. The canonical Postgres example passes `vpc` to **both**
+> the database and the consumer: `new sst.aws.Nextjs("MyWeb", { link: [database], vpc })`.
+> `Queue.subscribe`, `ApiGatewayV2.route`, `CronV2`'s `function`, and `Bucket.notify`'s
+> `function` all take the same `FunctionArgs`, so `vpc` is valid there too. Because
+> private-subnet Lambdas have **no internet (or public AWS endpoint) access without NAT**
+> — and the `Vpc` docs list no default gateway endpoints — the generator floors NAT at
+> `"ec2"` (fck-nat, ~$4/mo) whenever any consumer is placed in the generated VPC.
+
+### 4.9 Modern components — containers + durable + realtime (verified 2026-06-25)
+
+Researched against live `sst.dev/docs` and shipped in the generator. All five carry a
+snapshot + a `typecheck-export` test.
+
+- **`sst.aws.Redis`** (ElastiCache) — **requires the shared `vpc`**, like Postgres:
+  `new sst.aws.Redis("Cache", { vpc, engine?: "valkey" })`. **Cluster mode is ON by
+  default**, so the runtime client is **ioredis `Cluster`** (not `new Redis`), and **TLS
+  is mandatory** with `checkServerIdentity` overridden (the cert CN ≠ the config endpoint).
+  Link → `Resource.Cache.{host,port,username,password}`. In-VPC traffic needs no NAT.
+- **`sst.aws.Cluster` + `sst.aws.Service`** (ECS Fargate) — a **Cluster requires a `vpc`**
+  and is just a namespace; a **Service requires a `cluster`**. `new sst.aws.Service("Web",
+{ cluster, image: { context }, cpu, memory, loadBalancer: { rules: [{ listen: "80/http",
+forward: "3000/http" }] }, link, dev: { command } })`. `service.url` exists **only** when
+  `loadBalancer` is set (else private/CloudMap). `loadBalancer.rules` use the **`"PORT/protocol"`
+  string** form. The task runs in **private subnets** and needs NAT to **pull its image** →
+  the generator floors NAT at `ec2`. In `sst dev` the service runs `dev.command` locally.
+- **`sst.aws.Task`** (one-off Fargate) — `new sst.aws.Task("Job", { cluster, image, link })`;
+  no load balancer. Run it from app code: `import { task } from "sst/aws/task";
+await task.run(Resource.Job)` → `{ tasks: [{ taskArn }] }` (the handle for `describe`/`stop`).
+  Billed per-run, no idle cost.
+- **`sst.aws.Realtime`** (IoT WebSocket pub/sub) — `new sst.aws.Realtime("Realtime",
+{ authorizer: "src/authorizer.handler" })`. The **authorizer is required** (no anonymous
+  connect) and uses `realtime.authorizer()` from `sst/aws/realtime`, returning `{ publish,
+subscribe }` topic ACLs. Subscribe with `realtime.subscribe("src/sub.handler", { filter })`
+  (**2-arg, no name**). IoT is **account-shared** → prefix every topic with
+  `${$app.name}/${$app.stage}/`. **No** sst publish helper — publish via
+  `@aws-sdk/client-iot-data-plane` against `Resource.Realtime.endpoint`.
+- **`sst.aws.StepFunctions`** (durable state machine) — builders are **static**:
+  `sst.aws.StepFunctions.lambdaInvoke({ name, function })` / `.succeed()` / `.choice()`
+  (`.when(jsonata, step)`), chained with `.next()`, composed into
+  `new sst.aws.StepFunctions("Wf", { definition, type: "standard" | "express" })`. Start an
+  execution from app code with `@aws-sdk/client-sfn` `StartExecutionCommand` against
+  `Resource.Wf.arn` (the only linked field). `choice` conditions are **JSONata**.
+
+---
+
+## 5. Runtime resource access (generated app code)
+
+Source: <https://sst.dev/docs/linking/>, <https://sst.dev/docs/reference/sdk/>
+
+```ts
+import { Resource } from 'sst'; // bare `sst` package
+const name = Resource.Uploads.name; // <Name> = component name in sst.config.ts
+```
+
+- A resource appears on `Resource` **only if linked** to the consuming component.
+- SST generates `sst-env.d.ts` for typed autocomplete.
+- AWS SDK clients needed per resource: S3 → `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner`; SQS → `@aws-sdk/client-sqs`; Dynamo → `@aws-sdk/client-dynamodb` (or `lib-dynamodb`).
+
+> **Subscriber event shapes are NOT uniform (verified 2026-06-10):** generated handlers
+> must branch on the event source.
+>
+> - **SQS (Queue):** `{ Records: [{ body: string }] }` — payload is `JSON.parse(record.body)`.
+> - **SNS (SnsTopic):** `{ Records: [{ Sns: { Message: string } }] }` — payload is
+>   `JSON.parse(record.Sns.Message)` (sample event quoted at
+>   <https://docs.aws.amazon.com/lambda/latest/dg/with-sns.html>). Lambda triggers support
+>   **standard topics only — FIFO topics can't target Lambda**.
+> - **EventBridge (Bus):** ONE event object — `{ version, id, "detail-type", source,
+account, time, region, resources, detail }`, **no Records array**; the published
+>   payload arrives under `detail`
+>   (<https://docs.aws.amazon.com/eventbridge/latest/ref/eventbridge-events.html>).
+
+---
+
+## 6. Validator rules (corrected)
+
+- **ERROR** config not `export default $config(...)`; missing triple-slash ref.
+- **ERROR** any `sst/constructs` or `SSTConfig` import.
+- **ERROR** any provider package import.
+- **ERROR** resources outside `run()`; Pulumi/provider calls inside `app()`.
+- **ERROR** `removal` value not in `{remove, retain, retain-all}` (reject `destroy`).
+- **ERROR** linked-resource usage in app code without `import { Resource } from "sst"`.
+- **ERROR** Queue subscriber generated name-first / link in 2nd arg (must be subscriber-first FunctionArgs).
+- **ERROR** Dynamo `subscribe` without `stream` enabled.
+- **ERROR** Cron emitted as `sst.aws.Cron` or using `job` prop (must be `CronV2` + `function`).
+- **ERROR** Bucket `public: true` (must be `access: "public"`).
+- **WARN** production `removal` not `retain` / `protect` not `true`.
+- **WARN** non-preloaded provider used without generated `sst add` / `sst install` notes.
+- **INFO** AWS & Cloudflare preloaded.
+
+---
+
+## 7. Drift Watch (re-verify each SST minor)
+
+- `openNextVersion` default tracks installed SST/Next.js version (pinned in SST source).
+- Pulumi AWS provider version (`v7.x` now; v8 will remove deprecated `*V2` S3 resources).
+- `Cron` → `CronV2` (already deprecated; a future major may remove `Cron`).
+- Exact pinned provider versions in docs examples are illustrative — never hardcode.
+
+---
+
+## 8. Explicit non-goals (MVP)
+
+- No hosted deploy, no AWS credential storage, no SST Console replacement.
+- No CloudFormation export.
+- No v2/CDK constructs.
+- **No AI assistant in the builder** (the AI Chat kind only _generates_ code; the builder
+  makes zero AI calls — the deliberate moat).
+- Raw Pulumi / low-level provider resources, hand-rolled VPC topology, AppSync/GraphQL,
+  Kinesis, EFS, Cloudflare DNS automation: post-MVP. (RDS/Postgres, ECS/Fargate
+  containers, Redis, Realtime, and Step Functions are now **implemented** — see §4.9.)
+
+## 9. Deploy targets — multi-target export model
+
+SSTDREAM treats the **deploy target as a per-blueprint selector** (`target.deploy`).
+The visual builder, simulation, cost, and recommendation layers are target-aware; only
+the **exporter** changes per target. Nothing is ever deployed from the website — every
+target produces files the user runs themselves.
+
+- **`aws` (MVP, this doc):** export real SST v4 files (`sst.config.ts` + runtime code).
+  App deploys to AWS via `sst.aws.Nextjs` (OpenNext → Lambda+S3+CloudFront). User runs
+  `sst deploy` themselves.
+- **`vercel` (fast-follow, separate exporter track):** "SST deploy to Vercel" is **not**
+  a built-in SST concept — `sst.aws.Nextjs` is AWS-only, and Vercel-in-SST is just a
+  non-preloaded **provider** (`sst add vercel`) for managing Vercel projects/DNS. So the
+  Vercel target is a **native, non-SST exporter** producing `vercel.json` + `vercel` CLI
+  deploy steps (and optionally SST-managed Vercel DNS for users who want it). It reuses
+  the same blueprint, simulation, cost, and recommendation layers; only generation differs.
+
+**Two lanes, one shell (corrected model).** AWS/SST and Vercel are **separate product
+lanes**, not one canvas with a different export button — see
+[architecture-targets.md](architecture-targets.md) for the full spec. Per-lane: the
+**catalog** (node types), **edge intents** (what a connection _means_), **validation
+rules**, **generators**, **file manifest**, and **docs**. Shared: the **UI shell**, the
+blueprint **envelope** (version/target/app/metadata), and the **simulation / cost /
+recommendation engines** (frameworks that run over whichever lane's catalog is active).
+`target` selects the lane: `"aws-sst-v4" | "vercel"`. This document is the AWS-SST-v4
+lane's source of truth; Vercel has its own (pending M10 verification).

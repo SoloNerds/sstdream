@@ -1,0 +1,57 @@
+name: Bug report
+description: Something is wrong — wrong generated output, a UI bug, or a crash.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! For a **generator** bug, the most useful thing you can give us
+        is the design and the expected-vs-actual output. The design is self-describing:
+        export your project and attach `sstdream.design.json` (it round-trips).
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Generated output (AWS / SST)
+        - Generated output (Vercel)
+        - Validation / export gate
+        - Simulation / cost / recommendations
+        - Builder UI / canvas
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you see, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Add a … node
+        2. Connect it to …
+        3. Export → look at `…`
+    validations:
+      required: true
+  - type: textarea
+    id: design
+    attributes:
+      label: Design (sstdream.design.json)
+      description: Paste or attach the exported design JSON if relevant.
+      render: json
+  - type: textarea
+    id: output
+    attributes:
+      label: Expected vs actual generated output
+      description: For correctness bugs, the exact generated snippet and what it should be.
+      render: typescript
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      placeholder: e.g. Chrome 138 / Firefox 141, hosted site or local yarn dev
