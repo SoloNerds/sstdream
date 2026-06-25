@@ -2,7 +2,7 @@
 
 **Draw your app. Simulate it. Export SST. Deploy it yourself.**
 
-[![CI](https://github.com/Nimdy/sstdream/actions/workflows/ci.yml/badge.svg)](https://github.com/Nimdy/sstdream/actions/workflows/ci.yml)
+[![CI](https://github.com/SoloNerds/sstdream/actions/workflows/ci.yml/badge.svg)](https://github.com/SoloNerds/sstdream/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 SSTDREAM is a cutting-edge **SST v4 deployment template builder**. You design your
