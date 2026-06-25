@@ -49,6 +49,30 @@ describe('AWS simulation — data flow', () => {
     expect(trace.events.some((e) => e.label.includes('never triggered'))).toBe(true);
   });
 
+  it('flags an unwired database as never accessed (not just buckets/dynamo)', () => {
+    const trace = sim({
+      nodes: [
+        { id: 'n1', kind: 'nextjs', name: 'Web', props: {}, position: { x: 0, y: 0 } },
+        { id: 'p1', kind: 'postgres', name: 'Db', props: {}, position: { x: 1, y: 0 } },
+      ],
+      edges: [],
+    });
+    expect(
+      trace.events.some((e) => e.status === 'warning' && e.label === 'Db is never accessed'),
+    ).toBe(true);
+  });
+
+  it('does not flag a database that is actually queried', () => {
+    const trace = sim({
+      nodes: [
+        { id: 'n1', kind: 'nextjs', name: 'Web', props: {}, position: { x: 0, y: 0 } },
+        { id: 'p1', kind: 'postgres', name: 'Db', props: {}, position: { x: 1, y: 0 } },
+      ],
+      edges: [{ id: 'e1', source: 'n1', target: 'p1', intent: 'queriesDb' }],
+    });
+    expect(trace.events.some((e) => e.label.includes('never accessed'))).toBe(false);
+  });
+
   it('traces a cron → worker → table flow', () => {
     const trace = sim({
       nodes: [

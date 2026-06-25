@@ -184,7 +184,11 @@ export function simulateAws(bp: Blueprint): SimTrace {
     }
   }
 
-  for (const r of bp.resources.filter((res) => res.kind === 'bucket' || res.kind === 'dynamo')) {
+  // Storage/database nodes reached by nothing are dead weight. Buckets and all
+  // database kinds are accessed the same way (an app/worker edge into them), so
+  // an unvisited one is a real "does everything talk?" gap.
+  const STORAGE_KINDS = new Set(['bucket', 'dynamo', 'postgres', 'aurora', 'mongodb']);
+  for (const r of bp.resources.filter((res) => STORAGE_KINDS.has(res.kind))) {
     if (!visited.has(r.id)) {
       events.push({
         id: eid(),

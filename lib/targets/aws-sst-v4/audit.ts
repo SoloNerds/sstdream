@@ -36,7 +36,7 @@ export function auditAws(bp: Blueprint): SecurityFinding[] {
   }
 
   // App handles data/payments but has no auth.
-  const hasData = ['dynamo', 'postgres', 'mongodb', 'bucket', 'stripe'].some(has);
+  const hasData = ['dynamo', 'postgres', 'aurora', 'mongodb', 'bucket', 'stripe'].some(has);
   const hasAuth = has('cognito') || has('clerk');
   if (has('nextjs') && hasData && !hasAuth) {
     out.push({

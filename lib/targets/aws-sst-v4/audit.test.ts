@@ -40,6 +40,22 @@ describe('AWS security & ops audit', () => {
     expect(titles('aws-cms')).toContain('No authentication configured');
   });
 
+  it('treats Aurora as data — a Next.js + Aurora + no-auth app is flagged', () => {
+    const bp = draftBlueprint(
+      {
+        nodes: [
+          { id: 'n1', kind: 'nextjs', name: 'Web', props: {}, position: { x: 0, y: 0 } },
+          { id: 'a1', kind: 'aurora', name: 'Db', props: {}, position: { x: 1, y: 0 } },
+        ],
+        edges: [{ id: 'e', source: 'n1', target: 'a1', intent: 'queriesDb' }],
+      },
+      'aws-sst-v4',
+      APP,
+      NOW,
+    );
+    expect(titles(bp)).toContain('No authentication configured');
+  });
+
   it('does NOT warn about auth when Clerk is present, but flags server-key hygiene', () => {
     const t = titles('aws-clerk-saas');
     expect(t).not.toContain('No authentication configured');
