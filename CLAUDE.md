@@ -83,7 +83,7 @@ A new lane is registered in `lib/targets/registry.ts` plus the `generate.ts`,
   Cron, Webhook (Stripe/HMAC), External API, **Edge Middleware** (Next 16 `proxy.ts`),
   **BotID** (withBotId wrap), **Sandbox** (`@vercel/sandbox`), **Feature Flags** (flags SDK +
   optional Edge Config adapter), Rate Limit (`@vercel/firewall`), Background Task (`after()`),
-  Email (Resend), **AI Gateway** (AI SDK v7 — *the builder makes zero AI calls*, only emits
+  Email (Resend), **AI Gateway** (AI SDK v7 — _the builder makes zero AI calls_, only emits
   code), OG Image (`next/og`), Analytics, Speed Insights. All deps pinned to verified npm
   versions; new kinds carry a `verified: <doc>@<date>` note + a snapshot/typecheck-export test.
 
@@ -97,7 +97,9 @@ A new lane is registered in `lib/targets/registry.ts` plus the `generate.ts`,
 
 ## Known follow-ups
 
-- Vercel frontier: more catalog kinds (Workflow, Edge Config, External API), an AI SDK v5
-  template. (Email is SES on AWS, Resend on Vercel.)
+- Vercel catalog now spans the full surface (22 kinds). Remaining is niche/dashboard-only
+  (Domains, Log Drains, Connect) — not code-gen-able. (Email is SES on AWS, Resend on Vercel.)
 - `generator/runtime.ts` (~1100 lines) is a candidate for splitting (well-tested, so low-risk).
-- No in-app AI assistant (deferred by design until export quality is proven).
+- The public demo + repo go public via roadmap issue #26 (the deliberate final switch).
+- No in-app AI assistant in the builder (deferred by design; the AI Gateway kind only
+  _generates_ code that calls AI — the builder itself makes zero AI calls).
