@@ -2,6 +2,9 @@
 
 **Draw your app. Simulate it. Export SST. Deploy it yourself.**
 
+[![CI](https://github.com/Nimdy/sstdream/actions/workflows/ci.yml/badge.svg)](https://github.com/Nimdy/sstdream/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 SSTDREAM is a cutting-edge **SST v4 deployment template builder**. You design your
 full-stack app visually, watch the architecture **simulate** to confirm everything wires
 up correctly, see **cost estimates** and **best-practice recommendations**, then **export
@@ -106,3 +109,21 @@ yarn lint && yarn typecheck && yarn build
 
 Open `/builder`, pick a lane (AWS / Vercel), **Load template**, then **Simulate**,
 check **Cost** / **Tips**, and **Export** the project (copy files or download the ZIP).
+
+## Contributing
+
+Contributions are welcome — new resource kinds, edges, validation rules, lanes, or builder
+polish. Because the website forges files you actually deploy, **correctness is the
+product**: every generated snippet must match a verified target fact. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for the workflow and the correctness contract, and
+[CLAUDE.md](CLAUDE.md) for the architecture. Be excellent to each other —
+[Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Security
+
+The builder runs entirely in your browser and never touches your cloud credentials. Report
+vulnerabilities privately — see [SECURITY.md](SECURITY.md).
+
+## License
+
+[MIT](LICENSE) © SSTDREAM contributors.
