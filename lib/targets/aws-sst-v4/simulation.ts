@@ -169,6 +169,23 @@ export function simulateAws(bp: Blueprint): SimTrace {
     }
   }
 
+  // Follow dead-letter edges from any reached queue so the DLQ target shows in
+  // the trace and isn't mistaken for unreached. A DLQ legitimately has no
+  // consumer, so it's surfaced as a hop, not walked for subscribers.
+  for (const dlq of bp.connections.filter((c) => c.intent === 'deadLettersTo')) {
+    if (visited.has(dlq.source) && !visited.has(dlq.target)) {
+      visited.add(dlq.target);
+      events.push({
+        id: eid(),
+        edgeId: dlq.id,
+        sourceId: dlq.source,
+        targetId: dlq.target,
+        status: 'ok',
+        label: `${name(dlq.source)} dead-letters to ${name(dlq.target)}`,
+      });
+    }
+  }
+
   for (const w of bp.resources.filter((r) => r.kind === 'worker')) {
     const isNotifier = bp.connections.some(
       (c) => c.source === w.id && c.intent === 'handlesBucketEvents',

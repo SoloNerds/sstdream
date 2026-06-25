@@ -73,6 +73,24 @@ describe('AWS simulation — data flow', () => {
     expect(trace.events.some((e) => e.label.includes('never accessed'))).toBe(false);
   });
 
+  it('traces a dead-letter edge to the DLQ target (no longer invisible)', () => {
+    const trace = sim({
+      nodes: [
+        { id: 'n1', kind: 'nextjs', name: 'Web', props: {}, position: { x: 0, y: 0 } },
+        { id: 'q1', kind: 'queue', name: 'Jobs', props: {}, position: { x: 1, y: 0 } },
+        { id: 'dlq', kind: 'queue', name: 'JobsDlq', props: {}, position: { x: 2, y: 0 } },
+        { id: 'w1', kind: 'worker', name: 'Proc', props: {}, position: { x: 3, y: 0 } },
+      ],
+      edges: [
+        { id: 'e1', source: 'n1', target: 'q1', intent: 'publishesTo' },
+        { id: 'e2', source: 'w1', target: 'q1', intent: 'subscribesTo' },
+        { id: 'e3', source: 'q1', target: 'dlq', intent: 'deadLettersTo' },
+      ],
+    });
+    expect(trace.ok).toBe(true);
+    expect(trace.events.some((e) => e.label === 'Jobs dead-letters to JobsDlq')).toBe(true);
+  });
+
   it('traces a cron → worker → table flow', () => {
     const trace = sim({
       nodes: [

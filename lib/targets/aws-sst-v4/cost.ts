@@ -69,13 +69,22 @@ function cloudfrontLines(transferGb: number, requests: number): CostLine[] {
 function breakdownFor(r: Resource, nat: 'none' | 'ec2' | 'managed'): CostBreakdown {
   let lines: CostLine[] = [];
   switch (r.kind) {
-    case 'nextjs':
+    case 'nextjs': {
+      // OpenNext deploys more than the SSR Lambda. Cost the image-optimization
+      // Lambda too (1536MB, ~10% of requests) so this agrees with the
+      // Infrastructure view's expansion, which lists it.
+      const imageReqs = PROFILE.requestsPerMonth * 0.1;
+      const imageCost =
+        (imageReqs / 1_000_000) * PRICES.lambdaRequestPer1M +
+        imageReqs * (PROFILE.lambdaDurationMs / 1000) * (1536 / 1024) * PRICES.lambdaGbSecond;
       lines = [
         ...lambdaLines(PROFILE.requestsPerMonth, PROFILE.lambdaDurationMs, PROFILE.lambdaMemoryMb),
+        { label: 'Image-opt Lambda (1536MB, ~10% of reqs)', usd: round2(imageCost) },
         { label: 'S3 (assets)', usd: round2(PROFILE.nextjsAssetsGb * PRICES.s3StorageGbMonth) },
         ...cloudfrontLines(PROFILE.cdnTransferGb, PROFILE.cdnRequestsPerMonth),
       ];
       break;
+    }
     case 'staticsite':
       lines = [
         { label: 'S3 (static assets)', usd: round2(1 * PRICES.s3StorageGbMonth) },
@@ -194,7 +203,7 @@ export function estimateAwsCost(bp: Blueprint): CostEstimate {
     totalMonthlyUsd,
     region: bp.app.region,
     assumptions: [
-      '~1M requests/month, 200ms avg @ 1024MB Lambda',
+      '~1M requests/month, 200ms avg @ 1024MB Lambda (Next.js adds an image-opt Lambda @ 1536MB on ~10% of requests)',
       'S3: 5GB storage, 100k PUT, 1M GET',
       'DynamoDB on-demand: 1M writes, 1M reads, 5GB',
       'SQS: 1M requests; CloudFront: 50GB out, 1M requests',
