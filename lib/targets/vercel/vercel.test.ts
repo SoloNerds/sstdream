@@ -215,6 +215,108 @@ describe('Vercel lane — editable props are wired into codegen', () => {
   });
 });
 
+describe('Vercel lane — honesty validation rules (docs §10)', () => {
+  const mk = (
+    nodes: { id: string; kind: string; name: string; props?: Record<string, unknown> }[],
+    edges: { id: string; source: string; target: string; intent: string }[] = [],
+  ) =>
+    draftBlueprint(
+      {
+        nodes: nodes.map((n) => ({ ...n, props: n.props ?? {}, position: { x: 0, y: 0 } })),
+        edges,
+      },
+      'vercel',
+      VERCEL_SAAS.app,
+      NOW,
+    );
+  const rules = (bp: ReturnType<typeof mk>, rule: string) =>
+    validateBlueprint(bp).diagnostics.filter((d) => d.rule === rule);
+
+  it('rejects a non-numeric / malformed cron schedule', () => {
+    expect(
+      rules(
+        mk([{ id: 'c', kind: 'cron', name: 'Daily', props: { schedule: 'every day' } }]),
+        'cron-schedule-format',
+      ),
+    ).toHaveLength(1);
+    expect(
+      rules(
+        mk([{ id: 'c', kind: 'cron', name: 'Daily', props: { schedule: '0 5 * MON *' } }]),
+        'cron-schedule-format',
+      ),
+    ).toHaveLength(1);
+    // both day-of-month and day-of-week set
+    expect(
+      rules(
+        mk([{ id: 'c', kind: 'cron', name: 'Daily', props: { schedule: '0 5 1 * 1' } }]),
+        'cron-schedule-format',
+      ),
+    ).toHaveLength(1);
+    // a valid daily schedule passes
+    expect(
+      rules(
+        mk([{ id: 'c', kind: 'cron', name: 'Daily', props: { schedule: '0 5 * * *' } }]),
+        'cron-schedule-format',
+      ),
+    ).toHaveLength(0);
+  });
+
+  it('warns about a sub-daily cron (Hobby allows once/day)', () => {
+    expect(
+      rules(
+        mk([{ id: 'c', kind: 'cron', name: 'Often', props: { schedule: '*/5 * * * *' } }]),
+        'cron-frequency',
+      ),
+    ).toHaveLength(1);
+    expect(
+      rules(
+        mk([{ id: 'c', kind: 'cron', name: 'Daily', props: { schedule: '0 5 * * *' } }]),
+        'cron-frequency',
+      ),
+    ).toHaveLength(0);
+  });
+
+  it('warns when a consumer maxDuration exceeds the plan max', () => {
+    expect(
+      rules(
+        mk([{ id: 'c', kind: 'consumer', name: 'W', props: { maxDuration: 900 } }]),
+        'consumer-max-duration',
+      ),
+    ).toHaveLength(1);
+    expect(
+      rules(
+        mk([{ id: 'c', kind: 'consumer', name: 'W', props: { maxDuration: 300 } }]),
+        'consumer-max-duration',
+      ),
+    ).toHaveLength(0);
+  });
+
+  it('blocks two crons whose names kebab to the same route', () => {
+    const bp = mk([
+      { id: 'c1', kind: 'cron', name: 'Daily' },
+      { id: 'c2', kind: 'cron', name: 'DAIly' },
+    ]);
+    expect(rules(bp, 'kebab-path-collision')).toHaveLength(1);
+    expect(validateBlueprint(bp).ok).toBe(false);
+  });
+
+  it('notes a standard app needs no vercel.json (only when nothing requires one)', () => {
+    expect(
+      rules(
+        mk([
+          { id: 'a', kind: 'app', name: 'Web' },
+          { id: 'b', kind: 'blob', name: 'Files' },
+        ]),
+        'standard-app-no-vercel-json',
+      ),
+    ).toHaveLength(1);
+    // a design with a cron DOES need vercel.json — no info
+    expect(
+      rules(mk([{ id: 'c', kind: 'cron', name: 'Daily' }]), 'standard-app-no-vercel-json'),
+    ).toHaveLength(0);
+  });
+});
+
 describe('Vercel lane — validation + export', () => {
   it('validates the SaaS template clean', () => {
     expect(validateBlueprint(bp).ok).toBe(true);
