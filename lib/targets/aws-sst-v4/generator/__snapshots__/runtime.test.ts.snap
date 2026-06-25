@@ -78,6 +78,40 @@ from the same command.
 > props). Parse it before structural changes; keep it in sync by re-importing into
 > SSTDREAM and re-exporting.
 
+## Stages (dev / staging / production)
+
+Every \`sst\` command takes a \`--stage\`, and **each stage is a fully isolated copy** of
+this app (its own resources, secrets, and state). \`sst dev\` uses your **personal** stage
+(your username) so you never collide with a teammate or with \`production\`.
+
+\`\`\`bash
+sst dev                                   # your personal dev stage (Live Lambda)
+sst deploy --stage staging                # a shared staging copy
+sst deploy --stage production             # production
+\`\`\`
+
+Make resources **stage-aware** by branching on \`$app.stage\` inside \`run()\` — the generated
+\`app()\` already does this for \`removal\`/\`protect\`. Common patterns:
+
+\`\`\`ts
+const isProd = $app.stage === "production";
+
+new sst.aws.Nextjs("Web", {
+  // a custom domain only on production
+  domain: isProd ? "app.example.com" : undefined,
+});
+
+new sst.aws.Service("Api", {
+  cluster,
+  // smaller/cheaper in non-prod stages
+  cpu: isProd ? "1 vCPU" : "0.25 vCPU",
+  scaling: isProd ? { min: 2, max: 8 } : { min: 1, max: 1 },
+});
+\`\`\`
+
+**Secrets are per-stage** — set them once per stage:
+\`sst secret set MySecret <value> --stage production\`.
+
 ## Secrets & environment
 
 - **SST secrets** (set out-of-band, not in \`.env\`):
