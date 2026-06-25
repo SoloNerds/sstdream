@@ -20,12 +20,12 @@ clean, current SST v4 files** you drop into your own project and deploy yourself
 ```
 Visit site
   → open the cloud builder
-  → pick a deploy target (AWS now · Vercel fast-follow)
-  → build from scratch or start from a template
+  → pick a lane (AWS/SST or Vercel — both complete)
+  → build from scratch, start from a template, OR paste existing code ("From code")
   → SIMULATE — verify every resource talks to every other (no deploy)
-  → review COST ESTIMATE + RECOMMENDATIONS
-  → EXPORT the complete file set
-  → drop into your project, run sst yourself
+  → review COST ESTIMATE + the SST-Console-style Infrastructure view + RECOMMENDATIONS
+  → EXPORT the complete, type-checked file set
+  → drop into your project, run `sst dev` / `vercel` yourself
 ```
 
 ## What it is
@@ -37,10 +37,14 @@ Visit site
   prod `retain`/`protect`, linking, etc.).
 - A **versioned, correctness-first generator** that emits **SST v4** (`$config`,
   `sst.aws.*`, links) — never legacy `sst/constructs`/CDK, never provider imports.
-- **Two independent lanes, one UI shell.** AWS/SST and Vercel have _different_ catalogs,
-  edge meanings, validators, and generators — a `Queue`/`Worker` on AWS does **not** map
-  to anything on Vercel (background jobs there use Inngest/QStash/etc.). You pick the lane
-  up front. See [docs/architecture-targets.md](docs/architecture-targets.md).
+- A **reverse-engineer** ("From code"): paste an existing `sst.config.ts` (or a Vercel
+  `package.json`) and it draws the architecture **back out** as an editable design —
+  and tells you honestly what it couldn't model, never silently dropping anything.
+- **Two complete lanes, one UI shell.** AWS/SST (**28 kinds** — serverless + ECS Fargate
+  containers, Redis, Realtime, Step Functions, AppSync, OpenAuth, …) and Vercel (**22 kinds**
+  — AI Gateway, Workflows, Sandboxes, Edge Middleware, Feature Flags, …) have _different_
+  catalogs, edges, validators, and generators. You pick the lane up front. See
+  [docs/architecture-targets.md](docs/architecture-targets.md).
 
 ## What it is NOT
 
@@ -48,15 +52,17 @@ Visit site
 - ❌ No AWS/Vercel credential storage.
 - ❌ No SST Console replacement.
 - ❌ No CloudFormation / no SST v2 / no CDK constructs.
-- ❌ No AI assistant in the MVP (deferred until export quality is proven; the
-  architecture stays AI-ready).
+- ❌ **No AI or network calls in the builder** — by design. AI-codegen tools hallucinate
+  infrastructure; SSTDREAM emits only **verified, type-checked, doc-provenanced** code, and
+  never touches your credentials. (The AI Gateway / AI Chat kinds only _generate_ code that
+  calls AI — the builder itself makes zero AI calls.)
 
 ## Targets
 
-| Target     | Status      | How it deploys                                                                                                  |
-| ---------- | ----------- | --------------------------------------------------------------------------------------------------------------- |
-| **AWS**    | MVP         | Real SST v4 files → `sst.aws.Nextjs` (OpenNext → Lambda/S3/CloudFront). User runs `sst deploy`.                 |
-| **Vercel** | Fast-follow | Native exporter (`vercel.json` + `vercel` CLI). SST does not deploy Next.js to Vercel; only the export changes. |
+| Target      | Status   | How it deploys                                                                                                                |
+| ----------- | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **AWS/SST** | Complete | Real SST v4 files (`sst.aws.*`, links). 28 kinds. User runs `sst dev` / `sst deploy`.                                         |
+| **Vercel**  | Complete | Native exporter (`vercel.json` + `vercel` CLI). 22 kinds. SST does not deploy Next.js to Vercel; the export changes per lane. |
 
 ## Correctness is the product
 
@@ -76,10 +82,11 @@ boolean); SST v4 runs Pulumi AWS provider **v7**.
 Tracked entirely in this repo's **Milestones**, **Issues**, and **Project board** —
 **all 11 milestones (M0–M10) are complete.** Both lanes are at **functional parity**: each
 ships a runnable project scaffold, validation, simulation, cost, the Infrastructure view,
-the security audit, and recommendations. **AWS: 26 kinds** (serverless + **containers**: ECS
-Fargate Service/Task, Redis, Realtime IoT pub/sub, Step Functions, …). **Vercel: 22 kinds**
-spanning the whole Vercel surface — AI Gateway, Workflows, Sandboxes, Edge Middleware, Feature
-Flags, BotID, Edge Config, Rate Limit, OG Image, and more — all verified against live docs. See
+the security audit, recommendations, and a **reverse-engineer** (paste code → diagram).
+**AWS: 28 kinds** (serverless + **containers**: ECS Fargate Service/Task, Redis, Realtime IoT
+pub/sub, Step Functions, AppSync GraphQL, OpenAuth, …). **Vercel: 22 kinds** spanning the whole
+Vercel surface — AI Gateway, Workflows, Sandboxes, Edge Middleware, Feature Flags, BotID, Edge
+Config, Rate Limit, OG Image, and more — all verified against live docs. See
 [docs/architecture-targets.md](docs/architecture-targets.md).
 
 | Milestone | Focus                                                                          | Status |
@@ -106,7 +113,7 @@ second lane.
 ```bash
 yarn install
 yarn dev          # http://localhost:3000/builder
-yarn test         # 447 tests
+yarn test         # 536 tests
 yarn lint && yarn typecheck && yarn build
 ```
 
