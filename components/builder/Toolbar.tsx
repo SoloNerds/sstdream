@@ -85,9 +85,9 @@ export function Toolbar({ validation }: { validation: ValidationResult }) {
           size="sm"
           variant="outline"
           onClick={onShare}
-          title="Copy a shareable link to this design"
+          title="Copy a shareable link to this design (secret values are stripped)"
         >
-          {shared ? 'Link copied!' : 'Share'}
+          {shared ? 'Copied — no secrets' : 'Share'}
         </Button>
         <Button
           size="sm"
