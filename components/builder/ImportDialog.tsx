@@ -95,6 +95,19 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
                   editable design — resources become nodes, <code>link:</code> arrays become edges.
                   Auto-infra (Vpc, Cluster) is folded in; env-only integrations (Stripe, Mongo)
                   can&apos;t be recovered from code.
+                  <br />
+                  <strong>Infra split across files</strong> (e.g. <code>packages/infra/*.ts</code>)?
+                  Run{' '}
+                  <a
+                    href="https://github.com/SoloNerds/sstdream/blob/main/scripts/sstdream-collect.mjs"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-indigo-600 underline dark:text-indigo-400"
+                  >
+                    sstdream-collect
+                  </a>{' '}
+                  in your project — it bundles + <strong>sanitizes</strong> them (secrets redacted,{' '}
+                  <code>.env</code> skipped) into one blob to paste here.
                 </>
               )}
             </p>
