@@ -39,6 +39,19 @@ export function collectEnv(bp: Blueprint): EnvVar[] {
   }
   if (has('cron'))
     vars.push({ name: 'CRON_SECRET', scope: 'server', environments: ['production'] });
+  if (has('edgeConfig')) vars.push({ name: 'EDGE_CONFIG', scope: 'server', environments: ALL });
+  for (const api of bp.resources.filter((r) => r.kind === 'externalApi')) {
+    const baseUrl =
+      typeof api.props.baseUrlEnv === 'string' && api.props.baseUrlEnv
+        ? api.props.baseUrlEnv
+        : `${screamingSnake(api.name)}_BASE_URL`;
+    const key =
+      typeof api.props.keyEnv === 'string' && api.props.keyEnv
+        ? api.props.keyEnv
+        : `${screamingSnake(api.name)}_API_KEY`;
+    vars.push({ name: baseUrl, scope: 'server', environments: ALL });
+    vars.push({ name: key, scope: 'server', environments: ALL });
+  }
 
   // Dedupe by name (multiple Stripe webhooks share STRIPE_* vars).
   const seen = new Set<string>();

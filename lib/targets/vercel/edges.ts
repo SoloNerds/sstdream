@@ -44,6 +44,20 @@ export const VERCEL_EDGE_INTENTS: EdgeIntentMeta[] = [
     from: ['app'],
     to: ['email'],
   },
+  {
+    intent: 'readsConfig',
+    label: 'reads config from',
+    description: 'App reads low-latency config from Edge Config. Generates a helper + env.',
+    from: ['app'],
+    to: ['edgeConfig'],
+  },
+  {
+    intent: 'callsApi',
+    label: 'calls',
+    description: 'App calls a third-party HTTP API. Generates a typed fetch helper + env.',
+    from: ['app'],
+    to: ['externalApi'],
+  },
 ];
 
 const INTENT_BY_PAIR: Record<string, string> = {
@@ -53,6 +67,8 @@ const INTENT_BY_PAIR: Record<string, string> = {
   'app>queue': 'enqueuesTo',
   'queue>consumer': 'consumedBy',
   'app>email': 'sendsEmailThrough',
+  'app>edgeConfig': 'readsConfig',
+  'app>externalApi': 'callsApi',
 };
 
 export function vercelDefaultIntent(fromKind: string, toKind: string): string | null {

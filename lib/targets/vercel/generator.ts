@@ -49,6 +49,40 @@ const redisHelper = (): string =>
 export const redis = Redis.fromEnv();
 `;
 
+const edgeConfigHelper = (): string =>
+  `import { get, getAll } from "@vercel/edge-config";
+
+// Vercel Edge Config (first-party, read-optimized). Connection is the EDGE_CONFIG env var.
+export async function getConfig<T = unknown>(key: string): Promise<T | undefined> {
+  return get<T>(key);
+}
+
+export async function getAllConfig(): Promise<Record<string, unknown>> {
+  return getAll();
+}
+`;
+
+const externalApiHelper = (name: string, baseUrlEnv: string, keyEnv: string): string =>
+  `// Typed fetch helper for the "${name}" API. Base URL + key come from env (server-only).
+const BASE_URL = process.env.${baseUrlEnv} ?? "";
+
+export async function ${name.charAt(0).toLowerCase()}${name.slice(1)}Fetch<T = unknown>(
+  path: string,
+  init?: RequestInit,
+): Promise<T> {
+  const res = await fetch(\`\${BASE_URL}\${path}\`, {
+    ...init,
+    headers: {
+      "content-type": "application/json",
+      authorization: \`Bearer \${process.env.${keyEnv} ?? ""}\`,
+      ...(init?.headers as Record<string, string> | undefined),
+    },
+  });
+  if (!res.ok) throw new Error(\`${name} API \${res.status}\`);
+  return res.json() as Promise<T>;
+}
+`;
+
 const queueProducer = (topics: string[]): string =>
   `import { send } from "@vercel/queue";
 
@@ -141,6 +175,9 @@ const DEP_VERSIONS: Record<string, string> = {
   '@neondatabase/serverless': '^1.1.0',
   '@upstash/redis': '^1.38.0',
   '@vercel/queue': '^0.3.1',
+  '@vercel/edge-config': '^1.4.0',
+  '@vercel/analytics': '^2.0.0',
+  '@vercel/speed-insights': '^2.0.0',
   resend: '^6.14.0',
   stripe: '^22.3.0',
 };
@@ -158,6 +195,9 @@ function packageAdditions(bp: Blueprint): string {
   if (present.has('postgres')) add('@neondatabase/serverless');
   if (present.has('redis')) add('@upstash/redis');
   if (present.has('queue')) add('@vercel/queue');
+  if (present.has('edgeConfig')) add('@vercel/edge-config');
+  if (present.has('analytics')) add('@vercel/analytics');
+  if (present.has('speedInsights')) add('@vercel/speed-insights');
   if (present.has('email')) add('resend');
   // stripe only when a webhook actually uses the Stripe provider.
   if (bp.resources.some((r) => r.kind === 'webhook' && webhookProvider(r) === 'stripe'))
@@ -191,6 +231,19 @@ export function generateVercel(bp: Blueprint): GeneratedFile[] {
   }
   if (has('postgres')) files.push({ path: 'lib/db.ts', content: dbHelper(), language: 'ts' });
   if (has('redis')) files.push({ path: 'lib/redis.ts', content: redisHelper(), language: 'ts' });
+  if (has('edgeConfig'))
+    files.push({ path: 'lib/edge-config.ts', content: edgeConfigHelper(), language: 'ts' });
+  for (const api of bp.resources.filter((r) => r.kind === 'externalApi')) {
+    files.push({
+      path: `lib/${kebabCase(api.name)}.ts`,
+      content: externalApiHelper(
+        api.name,
+        strProp(api, 'baseUrlEnv', `${screamingSnake(api.name)}_BASE_URL`),
+        strProp(api, 'keyEnv', `${screamingSnake(api.name)}_API_KEY`),
+      ),
+      language: 'ts',
+    });
+  }
   const emailNode = bp.resources.find((r) => r.kind === 'email');
   if (emailNode) {
     files.push({

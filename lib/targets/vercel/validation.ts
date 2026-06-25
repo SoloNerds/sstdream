@@ -240,6 +240,7 @@ export const VERCEL_RULES: ValidationRule[] = [
         cron: 'cron',
         consumer: 'queues',
         webhook: 'webhooks',
+        externalApi: 'lib', // lib/<slug>.ts helpers can collide too
       };
       const out: Diagnostic[] = [];
       const seen = new Map<string, Resource>();
