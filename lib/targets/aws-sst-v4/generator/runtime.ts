@@ -1,6 +1,6 @@
 import type { Blueprint, Resource } from '@/lib/core/blueprint/types';
 import type { GeneratedFile } from '@/lib/core/codegen/types';
-import { kebabCase } from '@/lib/core/codegen/strings';
+import { kebabCase, pascalCase } from '@/lib/core/codegen/strings';
 import { collectAwsEnv } from '../env';
 import { planAws } from './plan';
 
@@ -439,6 +439,60 @@ const serviceContainerPackageJson = (slug: string): string =>
     null,
     2,
   )}\n`;
+
+// Fargate Task container: a one-off batch job that runs to completion and exits.
+const taskDockerfile = (): string =>
+  `FROM node:22-slim
+WORKDIR /app
+COPY package.json ./
+RUN npm install --omit=dev
+COPY . .
+CMD ["node", "task.mjs"]
+`;
+
+const taskRunner = (name: string): string =>
+  `// import { Resource } from "sst"; // linked resources resolve here, e.g. Resource.<Name>.name
+
+async function main() {
+  console.log(${JSON.stringify(`Running task: ${name}`)});
+  // TODO: your batch work here. The task exits when this returns.
+}
+
+main()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+`;
+
+const taskContainerPackageJson = (slug: string): string =>
+  `${JSON.stringify(
+    {
+      name: slug,
+      private: true,
+      type: 'module',
+      scripts: { task: 'node task.mjs' },
+      dependencies: { sst: '^4.15.0' },
+    },
+    null,
+    2,
+  )}\n`;
+
+// Server action that kicks off a one-off Fargate task. Verified SDK shape:
+// task.run(Resource.<Name>) → { tasks: [{ taskArn }] } (sst/aws/task).
+const runTaskAction = (taskName: string): string =>
+  `"use server";
+
+import { Resource } from "sst";
+import { task } from "sst/aws/task";
+
+/** Start the "${taskName}" Fargate task. Returns the task ARN (poll with task.describe). */
+export async function run${pascalCase(taskName)}() {
+  const ret = await task.run(Resource.${taskName});
+  return { taskArn: ret.tasks[0].taskArn };
+}
+`;
 
 // External integrations (env-driven — no SST infra). Verified env-var names from
 // real projects: STRIPE_SECRET_KEY/STRIPE_WEBHOOK_SECRET, DATABASE_URL (Mongo), etc.
@@ -946,6 +1000,32 @@ export function generateRuntimeFiles(bp: Blueprint): GeneratedFile[] {
         language: 'json',
       },
     );
+  }
+
+  // Fargate Tasks: each gets a tasks/<name>/ batch container (runs and exits), and
+  // every app that wires `runsTask` gets a server action calling task.run().
+  for (const tk of bp.resources.filter((r) => r.kind === 'task')) {
+    const slug = kebabCase(tk.name);
+    files.push(
+      { path: `tasks/${slug}/Dockerfile`, content: taskDockerfile(), language: 'text' },
+      { path: `tasks/${slug}/task.mjs`, content: taskRunner(tk.name), language: 'text' },
+      {
+        path: `tasks/${slug}/package.json`,
+        content: taskContainerPackageJson(slug),
+        language: 'json',
+      },
+    );
+  }
+  for (const conn of bp.connections.filter((c) => c.intent === 'runsTask')) {
+    const tk = resourceOf(conn.target);
+    if (tk) {
+      const slug = kebabCase(tk.name);
+      files.push({
+        path: `app/actions/run-${slug}.ts`,
+        content: runTaskAction(tk.name),
+        language: 'ts',
+      });
+    }
   }
 
   const stripeRes = bp.resources.find(

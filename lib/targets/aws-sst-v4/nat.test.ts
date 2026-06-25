@@ -193,6 +193,56 @@ describe('VPC NAT options + corrected Postgres cost', () => {
     expect(cfg).not.toContain('worker: worker.url');
   });
 
+  it('a Fargate Task reuses the Cluster, emits a task.run() action + batch container', () => {
+    const bp = draftBlueprint(
+      {
+        nodes: [
+          { id: 'nextjs_1', kind: 'nextjs', name: 'Web', props: {}, position: { x: 0, y: 0 } },
+          {
+            id: 'task_2',
+            kind: 'task',
+            name: 'ProcessJob',
+            props: { cpu: '1 vCPU' },
+            position: { x: 200, y: 0 },
+          },
+          {
+            id: 'bucket_3',
+            kind: 'bucket',
+            name: 'Results',
+            props: {},
+            position: { x: 400, y: 0 },
+          },
+        ],
+        edges: [
+          { id: 'e1', source: 'nextjs_1', target: 'task_2', intent: 'runsTask' },
+          { id: 'e2', source: 'task_2', target: 'bucket_3', intent: 'readsFrom' },
+        ],
+      },
+      'aws-sst-v4',
+      { name: 'job-app', region: 'us-east-1', packageManager: 'yarn' },
+      NOW,
+    );
+    const files = generateFiles(bp);
+    const cfg = files.find((f) => f.path === 'sst.config.ts')!.content;
+    // A task forces the VPC + ec2 NAT and reuses the shared Cluster (no service needed).
+    expect(cfg).toContain('nat: "ec2"');
+    expect(cfg).toContain('const cluster = new sst.aws.Cluster("Cluster", { vpc });');
+    expect(cfg).toContain('new sst.aws.Task("ProcessJob", {');
+    expect(cfg).toContain('image: { context: "./tasks/process-job" }');
+    // The task links the bucket; the app links the task (to call task.run()).
+    expect(cfg).toMatch(/new sst\.aws\.Task[\s\S]*?link: \[[^\]]*results/i);
+    expect(cfg).toMatch(/new sst\.aws\.Nextjs[\s\S]*?link: \[[^\]]*processJob/);
+    // The server action uses the verified sst/aws/task SDK shape.
+    const action = files.find((f) => f.path === 'app/actions/run-process-job.ts')!.content;
+    expect(action).toContain('import { task } from "sst/aws/task"');
+    expect(action).toContain('task.run(Resource.ProcessJob)');
+    expect(action).toContain('ret.tasks[0].taskArn');
+    expect(files.some((f) => f.path === 'tasks/process-job/Dockerfile')).toBe(true);
+    // Per-run, no idle cost.
+    const taskCost = estimateAwsCost(bp).perResource.find((r) => r.kind === 'task')!;
+    expect(taskCost.lines.some((l) => /per-run/.test(l.label))).toBe(true);
+  });
+
   it('an aurora-only consumer design prices the floored NAT on the aurora node', () => {
     const bp = draftBlueprint(
       {

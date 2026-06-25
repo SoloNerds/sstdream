@@ -202,6 +202,14 @@ function breakdownFor(r: Resource, nat: 'none' | 'ec2' | 'managed'): CostBreakdo
       else if (nat === 'managed') lines.push({ label: 'NAT Gateway', usd: 32 });
       break;
     }
+    case 'task':
+      // Fargate billed per-run by the second — no idle cost. The standing cost is
+      // just the shared VPC/NAT (attributed to the VPC owner).
+      lines = [{ label: 'Fargate Task (per-run, no idle)', usd: 0 }];
+      if (nat !== 'none') lines.push({ label: 'VPC (CloudMap DNS)', usd: 0.5 });
+      if (nat === 'ec2') lines.push({ label: 'fck-nat EC2 (t4g.nano)', usd: 4 });
+      else if (nat === 'managed') lines.push({ label: 'NAT Gateway', usd: 32 });
+      break;
     case 'cognito':
       lines = [{ label: 'Cognito (free ≤ 50k MAU)', usd: 0 }];
       break;
@@ -226,7 +234,11 @@ export function estimateAwsCost(bp: Blueprint): CostEstimate {
   const nat = effectiveAwsNat(bp);
   const firstVpcNode = bp.resources.find(
     (r) =>
-      r.kind === 'postgres' || r.kind === 'aurora' || r.kind === 'redis' || r.kind === 'service',
+      r.kind === 'postgres' ||
+      r.kind === 'aurora' ||
+      r.kind === 'redis' ||
+      r.kind === 'service' ||
+      r.kind === 'task',
   );
   const perResource = bp.resources.map((r) =>
     breakdownFor(r, r.id === firstVpcNode?.id ? nat : 'none'),

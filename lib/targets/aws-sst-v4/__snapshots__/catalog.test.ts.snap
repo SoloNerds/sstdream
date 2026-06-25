@@ -557,6 +557,54 @@ exports[`aws-sst-v4 catalog > matches snapshot 1`] = `
     "kind": "stripe",
     "label": "Stripe",
   },
+  "task": {
+    "accent": "bg-amber-700",
+    "category": "compute",
+    "component": "sst.aws.Task",
+    "defaultName": "Task",
+    "description": "One-off / on-demand Fargate job (run via task.run; reuses the Cluster)",
+    "kind": "task",
+    "label": "Task (Batch)",
+    "props": [
+      {
+        "default": "0.25 vCPU",
+        "help": "Fargate vCPU for the job. Billed per-run by the second (1-min minimum) — no idle cost.",
+        "key": "cpu",
+        "label": "CPU",
+        "options": [
+          {
+            "label": "0.25 vCPU",
+            "value": "0.25 vCPU",
+          },
+          {
+            "label": "0.5 vCPU",
+            "value": "0.5 vCPU",
+          },
+          {
+            "label": "1 vCPU",
+            "value": "1 vCPU",
+          },
+          {
+            "label": "2 vCPU",
+            "value": "2 vCPU",
+          },
+          {
+            "label": "4 vCPU",
+            "value": "4 vCPU",
+          },
+        ],
+        "type": "select",
+      },
+      {
+        "default": "0.5 GB",
+        "help": "Fargate memory, e.g. "0.5 GB", "2 GB". Must form a valid CPU/memory pair.",
+        "key": "memory",
+        "label": "Memory",
+        "placeholder": "0.5 GB",
+        "type": "text",
+      },
+    ],
+  },
   "worker": {
     "accent": "bg-violet-600",
     "category": "compute",

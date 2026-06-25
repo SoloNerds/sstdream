@@ -4,6 +4,14 @@ export function camelCase(name: string): string {
   return name[0].toLowerCase() + name.slice(1);
 }
 
+/** "resize images" -> "ResizeImages", "process-job" -> "ProcessJob". For identifiers. */
+export function pascalCase(name: string): string {
+  const camel = name.replace(/[\s_-]+(.)?/g, (_, c: string | undefined) =>
+    c ? c.toUpperCase() : '',
+  );
+  return camel ? camel[0].toUpperCase() + camel.slice(1) : camel;
+}
+
 /** "ProcessJob" -> "process-job", "AppTable" -> "app-table". */
 export function kebabCase(name: string): string {
   return name

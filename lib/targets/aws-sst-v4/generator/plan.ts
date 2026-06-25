@@ -103,16 +103,20 @@ export function effectiveAwsNat(bp: Blueprint): 'none' | 'ec2' | 'managed' {
   // any consumer that joins it to reach the cache + the public internet needs egress.
   const vpcResources = bp.resources.filter(
     (r) =>
-      r.kind === 'postgres' || r.kind === 'aurora' || r.kind === 'redis' || r.kind === 'service',
+      r.kind === 'postgres' ||
+      r.kind === 'aurora' ||
+      r.kind === 'redis' ||
+      r.kind === 'service' ||
+      r.kind === 'task',
   );
   if (!vpcResources.length) return 'none';
   const vals = vpcResources.map((r) => (typeof r.props.nat === 'string' ? r.props.nat : 'none'));
   if (vals.includes('managed')) return 'managed';
   if (vals.includes('ec2')) return 'ec2';
-  // A Fargate Service runs in private subnets and needs egress to PULL its image,
-  // so it floors NAT on its own (even with no DB/cache consumers).
-  const hasService = bp.resources.some((r) => r.kind === 'service');
-  return hasService || vpcConsumerIds(bp).size ? 'ec2' : 'none';
+  // A Fargate Service/Task runs in private subnets and needs egress to PULL its
+  // image, so it floors NAT on its own (even with no DB/cache consumers).
+  const hasContainer = bp.resources.some((r) => r.kind === 'service' || r.kind === 'task');
+  return hasContainer || vpcConsumerIds(bp).size ? 'ec2' : 'none';
 }
 
 const DECL_ORDER: Record<string, number> = {
@@ -131,6 +135,7 @@ const DECL_ORDER: Record<string, number> = {
   router: 3,
   worker: 4,
   service: 4,
+  task: 4,
   nextjs: 5,
   staticsite: 5,
 };
@@ -160,6 +165,7 @@ export function planAws(bp: Blueprint): AwsPlan {
       r.kind === 'aurora' ||
       r.kind === 'redis' ||
       r.kind === 'service' ||
+      r.kind === 'task' ||
       r.kind === 'queue' ||
       r.kind === 'bus' ||
       r.kind === 'snstopic' ||

@@ -194,6 +194,13 @@ function resourcesFor(
       }
       return out;
     }
+    case 'task':
+      return [
+        P('ECS', 'Fargate task definition', { note: 'run on demand via task.run()' }),
+        P('IAM', 'Task role + execution role', { security: true, note: 'link grants attach here' }),
+        P('ECR', 'Image repository', { note: 'built + pushed from tasks/<name>/' }),
+        P('CloudWatch', 'Log group'),
+      ];
     case 'cognito':
       return [
         P('Cognito', 'User Pool', { security: true }),
@@ -239,9 +246,9 @@ function vpcGroup(nat: 'none' | 'ec2' | 'managed', bp: Blueprint): InfraGroup {
     resources.push(P('EC2', 'NAT Gateway(s)', { paid: true, note: '~$32/mo per AZ' }));
     resources.push(P('EC2', 'Elastic IPs (NAT)'));
   }
-  // One shared ECS Cluster backs every Service.
-  if (bp.resources.some((r) => r.kind === 'service')) {
-    resources.push(P('ECS', 'Cluster', { note: 'shared by all Services (Fargate)' }));
+  // One shared ECS Cluster backs every Service and Task.
+  if (bp.resources.some((r) => r.kind === 'service' || r.kind === 'task')) {
+    resources.push(P('ECS', 'Cluster', { note: 'shared by all Services/Tasks (Fargate)' }));
   }
   return { id: 'vpc', title: 'VPC (shared by databases / cache)', kind: 'vpc', resources };
 }
@@ -250,6 +257,7 @@ const ORDER = [
   'nextjs',
   'staticsite',
   'service',
+  'task',
   'postgres',
   'aurora',
   'redis',
@@ -292,7 +300,11 @@ export function expandAws(bp: Blueprint): InfraGroup[] {
 
   const dbWithVpc = bp.resources.filter(
     (r) =>
-      r.kind === 'postgres' || r.kind === 'aurora' || r.kind === 'redis' || r.kind === 'service',
+      r.kind === 'postgres' ||
+      r.kind === 'aurora' ||
+      r.kind === 'redis' ||
+      r.kind === 'service' ||
+      r.kind === 'task',
   );
   if (dbWithVpc.length) groups.push(vpcGroup(effectiveAwsNat(bp), bp));
 
