@@ -76,10 +76,11 @@ boolean); SST v4 runs Pulumi AWS provider **v7**.
 Tracked entirely in this repo's **Milestones**, **Issues**, and **Project board** —
 **all 11 milestones (M0–M10) are complete.** Both lanes are at **functional parity**: each
 ships a runnable project scaffold, validation, simulation, cost, the Infrastructure view,
-the security audit, and recommendations. **AWS: 21 kinds. Vercel: 22 kinds** spanning the
-whole Vercel surface — AI Gateway, Workflows, Sandboxes, Edge Middleware, Feature Flags,
-BotID, Edge Config, Rate Limit, OG Image, Blob, Postgres/Redis, Queues, and more — all
-verified against live docs. See [docs/architecture-targets.md](docs/architecture-targets.md).
+the security audit, and recommendations. **AWS: 26 kinds** (serverless + **containers**: ECS
+Fargate Service/Task, Redis, Realtime IoT pub/sub, Step Functions, …). **Vercel: 22 kinds**
+spanning the whole Vercel surface — AI Gateway, Workflows, Sandboxes, Edge Middleware, Feature
+Flags, BotID, Edge Config, Rate Limit, OG Image, and more — all verified against live docs. See
+[docs/architecture-targets.md](docs/architecture-targets.md).
 
 | Milestone | Focus                                                                          | Status |
 | --------- | ------------------------------------------------------------------------------ | ------ |
