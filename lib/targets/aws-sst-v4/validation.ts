@@ -276,13 +276,29 @@ export const AWS_RULES: ValidationRule[] = [
     run: (bp, ctx) =>
       bp.resources
         .filter((r) => !(r.kind in ctx.target.catalog))
-        .map((r) => ({
-          rule: 'known-resource-kind',
-          severity: 'error' as const,
-          resourceId: r.id,
-          message: `"${r.name}" has unknown resource kind "${r.kind}" — the export would silently drop it.`,
-          hint: 'Re-create the node from the palette, or fix the kind in the imported design.',
-        })),
+        .map((r) => {
+          // A GENERIC reference node from a scan/import (kind "unknown", carrying the real
+          // SST component) is informational — it's shown so the diagram is complete, and it
+          // simply won't appear in a generated export. A genuinely wrong kind (a typo or a
+          // lane mixup) is still a hard error that would silently break the export.
+          const sst = typeof r.props?.sstComponent === 'string' ? r.props.sstComponent : null;
+          if (r.kind === 'unknown') {
+            return {
+              rule: 'known-resource-kind',
+              severity: 'warning' as const,
+              resourceId: r.id,
+              message: `"${r.name}"${sst ? ` (${sst})` : ''} isn't modeled by the builder — shown for reference; it won't be in a generated export.`,
+              hint: 'Leave it as a reference, or re-create it from the palette if you plan to export.',
+            };
+          }
+          return {
+            rule: 'known-resource-kind',
+            severity: 'error' as const,
+            resourceId: r.id,
+            message: `"${r.name}" has unknown resource kind "${r.kind}" — the export would silently drop it.`,
+            hint: 'Re-create the node from the palette, or fix the kind in the imported design.',
+          };
+        }),
   },
   {
     // camelCase(name) becomes a `const` in sst.config.ts: reserved words emit

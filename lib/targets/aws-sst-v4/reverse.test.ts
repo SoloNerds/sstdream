@@ -138,6 +138,26 @@ jobs.subscribe("Processor", { handler: "src/processor.handler" });`;
     expect(workerLinks).toEqual(both);
   });
 
+  it('recovers a deprecated Cron with an inline function as cron → worker (invokes)', () => {
+    const cfg = `
+      const dbUrl = new sst.Secret("DatabaseUrl");
+      new sst.aws.Cron("DbPing", { schedule: "rate(5 minutes)", function: { handler: "x.handler", link: [dbUrl] } });
+    `;
+    const { nodes, edges } = parseAwsConfig(cfg);
+    const cron = nodes.find((n) => n.name === 'DbPing')!;
+    expect(cron.kind).toBe('cron'); // deprecated Cron → the real cron kind, NOT "unknown"
+    const worker = nodes.find((n) => n.kind === 'worker')!;
+    const secret = nodes.find((n) => n.kind === 'secret')!;
+    // The inline function is recovered as a worker the cron invokes, and the function's
+    // link lands on the worker — so the cron has a function (no "cron-needs-function" error).
+    expect(edges).toContainEqual(
+      expect.objectContaining({ source: cron.id, target: worker.id, intent: 'invokes' }),
+    );
+    expect(edges).toContainEqual(
+      expect.objectContaining({ source: worker.id, target: secret.id, intent: 'usesSecret' }),
+    );
+  });
+
   it('reports a link to an unresolved resource', () => {
     const { unrecognized } = parseAwsConfig(
       'const web = new sst.aws.Nextjs("Web", { link: [somethingElse] });',

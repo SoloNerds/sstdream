@@ -293,6 +293,8 @@ var COMPONENT_KIND = {
   Router: "router",
   Function: "worker",
   CronV2: "cron",
+  Cron: "cron",
+  // deprecated alias of CronV2 — same scheduled-function kind
   Email: "email",
   Service: "service",
   Task: "task",
@@ -464,6 +466,19 @@ function parseAwsConfig(source) {
     const ids = resolveRef(h[2]);
     if (ids.length) bindToIds.set(h[1], ids);
   }
+  for (const c of ctors) {
+    if (c.id && c.kind === "cron" && /\b(?:function|job)\s*:/.test(c.args)) {
+      const wn = counters.worker = (counters.worker ?? 0) + 1;
+      c.fnWorkerId = `worker_${wn}`;
+      nodes.push({
+        id: c.fnWorkerId,
+        kind: "worker",
+        name: `${c.name}Handler`,
+        props: {},
+        position: { x: 0, y: 0 }
+      });
+    }
+  }
   const idToKind = new Map(nodes.map((n) => [n.id, n.kind]));
   const edges = [];
   let edgeN = 0;
@@ -495,7 +510,13 @@ function parseAwsConfig(source) {
     }
   };
   for (const c of ctors) {
-    if (c.id) linkFrom(c.id, c.kind, c.name, c.args);
+    if (!c.id) continue;
+    if (c.fnWorkerId) {
+      addEdge(c.id, c.fnWorkerId, "invokes");
+      linkFrom(c.fnWorkerId, "worker", c.name, c.args);
+    } else {
+      linkFrom(c.id, c.kind, c.name, c.args);
+    }
   }
   const routeRe = /([A-Za-z_$][\w$]*)\.route\s*\(/g;
   let rt;
@@ -6120,13 +6141,25 @@ var AWS_RULES = [
     // Resources whose kind isn't in the catalog (hand-edited imports, lane
     // mixups) used to vanish silently from the export.
     id: "known-resource-kind",
-    run: (bp, ctx) => bp.resources.filter((r) => !(r.kind in ctx.target.catalog)).map((r) => ({
-      rule: "known-resource-kind",
-      severity: "error",
-      resourceId: r.id,
-      message: `"${r.name}" has unknown resource kind "${r.kind}" \u2014 the export would silently drop it.`,
-      hint: "Re-create the node from the palette, or fix the kind in the imported design."
-    }))
+    run: (bp, ctx) => bp.resources.filter((r) => !(r.kind in ctx.target.catalog)).map((r) => {
+      const sst = typeof r.props?.sstComponent === "string" ? r.props.sstComponent : null;
+      if (r.kind === "unknown") {
+        return {
+          rule: "known-resource-kind",
+          severity: "warning",
+          resourceId: r.id,
+          message: `"${r.name}"${sst ? ` (${sst})` : ""} isn't modeled by the builder \u2014 shown for reference; it won't be in a generated export.`,
+          hint: "Leave it as a reference, or re-create it from the palette if you plan to export."
+        };
+      }
+      return {
+        rule: "known-resource-kind",
+        severity: "error",
+        resourceId: r.id,
+        message: `"${r.name}" has unknown resource kind "${r.kind}" \u2014 the export would silently drop it.`,
+        hint: "Re-create the node from the palette, or fix the kind in the imported design."
+      };
+    })
   },
   {
     // camelCase(name) becomes a `const` in sst.config.ts: reserved words emit
