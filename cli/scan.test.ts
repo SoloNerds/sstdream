@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { scanRepo } from './scan';
+import { scanRepo, appNameFrom } from './scan';
 
 // A realistic MULTI-FILE SST project — the exact shape that breaks single-file paste:
 // sst.config.ts dynamically import()s packages/infra/*.ts, so the config alone has no
@@ -77,5 +77,18 @@ describe('sst-dream scan — multi-file local repo', () => {
     expect(r.cost.totalMonthlyUsd).toBeGreaterThan(0);
     // the Function is linked to Dynamo → that edge is recovered
     expect(r.edges.some((e) => e.intent === 'writesTo')).toBe(true);
+  });
+
+  it('appName comes from the app() block, not a resource name prop (regression)', () => {
+    // A resource named before the config used to hijack the app name (e.g. a Cognito
+    // pool / SES identity called "verified_email"). The app name must come from the
+    // app() block, where `name` sits next to `home`.
+    const blob = `
+      export const pool = new sst.aws.CognitoUserPool("Auth", { name: "verified_email" });
+      export default $config({ app() { return { name: "wellness-portal", home: "aws" }; }, async run() {} });
+    `;
+    expect(appNameFrom(blob, 'fallback')).toBe('wellness-portal');
+    // home-before-name order also works
+    expect(appNameFrom('return { home: "aws", name: "my-app" }', 'fb')).toBe('my-app');
   });
 });

@@ -2,9 +2,11 @@
 
 import { useState } from 'react';
 import { useCanvasStore } from '@/lib/canvas/store';
-import { getTarget } from '@/lib/targets/registry';
+import { getTarget, isTargetImplemented } from '@/lib/targets/registry';
 import { parseAwsConfig, type ReverseResult } from '@/lib/targets/aws-sst-v4/reverse';
 import { parseVercelConfig } from '@/lib/targets/vercel/reverse';
+import { parseScanImport } from '@/lib/core/reverse/scan-import';
+import type { DeployTarget } from '@/lib/targets/types';
 import { Button } from '@/components/ui/button';
 import { useDialog } from './useDialog';
 
@@ -17,17 +19,26 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
   const [source, setSource] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<ReverseResult | null>(null);
+  // Set when the pasted text is a sstdream-scan.json — carries its lane + app name so
+  // the import switches to the right lane and names the app (applied after the confirm).
+  const [scanMeta, setScanMeta] = useState<{ target: DeployTarget; appName: string } | null>(null);
 
   const supported = targetId === 'aws-sst-v4' || targetId === 'vercel';
   const isVercel = targetId === 'vercel';
   const parse = isVercel ? parseVercelConfig : parseAwsConfig;
 
-  const load = (result: ReverseResult) => {
+  const load = (result: ReverseResult, meta = scanMeta) => {
     if (
       useCanvasStore.getState().nodes.length > 0 &&
       !window.confirm('Importing replaces the current canvas. Continue?')
     ) {
       return;
+    }
+    if (meta) {
+      if (meta.target !== targetId && isTargetImplemented(meta.target)) {
+        useCanvasStore.setState({ targetId: meta.target });
+      }
+      if (meta.appName) useCanvasStore.getState().setApp({ name: meta.appName });
     }
     loadSnapshot(result);
     onClose();
@@ -35,6 +46,27 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
 
   const doImport = () => {
     setError(null);
+
+    // A sstdream-scan.json pastes straight in — it already holds the recovered design.
+    const scan = parseScanImport(source);
+    if (scan) {
+      const meta = { target: scan.target, appName: scan.appName };
+      setScanMeta(meta);
+      const result: ReverseResult = {
+        nodes: scan.nodes,
+        edges: scan.edges,
+        unrecognized: scan.unrecognized,
+      };
+      if (result.nodes.length === 0) {
+        setError("That scan recovered no resources — there's nothing to import.");
+        if (result.unrecognized.length) setReport(result);
+        return;
+      }
+      if (result.unrecognized.length) setReport(result);
+      else load(result, meta);
+      return;
+    }
+
     const what = isVercel ? 'a package.json or vercel.json' : 'a full sst.config.ts';
     let result: ReverseResult;
     try {
@@ -96,18 +128,22 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
                   Auto-infra (Vpc, Cluster) is folded in; env-only integrations (Stripe, Mongo)
                   can&apos;t be recovered from code.
                   <br />
-                  <strong>Infra split across files</strong> (e.g. <code>packages/infra/*.ts</code>)?
-                  Run{' '}
+                  <strong>Multi-file project?</strong> Run{' '}
                   <a
-                    href="https://github.com/SoloNerds/sstdream/blob/main/scripts/sstdream-collect.mjs"
+                    href="https://github.com/SoloNerds/sstdream/blob/main/scripts/README.md"
                     target="_blank"
                     rel="noreferrer"
                     className="text-indigo-600 underline dark:text-indigo-400"
                   >
-                    sstdream-collect
+                    <code>sst-dream scan</code>
                   </a>{' '}
-                  in your project — it bundles + <strong>sanitizes</strong> them (secrets redacted,{' '}
-                  <code>.env</code> skipped) into one blob to paste here.
+                  in your project and paste the resulting{' '}
+                  <strong>
+                    <code>sstdream-scan.json</code>
+                  </strong>{' '}
+                  here — the whole recovered design (and its lane + app name) loads directly. (The
+                  lighter <code>sstdream-collect</code> still works too: it pastes the sanitized
+                  source.)
                 </>
               )}
             </p>
@@ -117,6 +153,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
                 setSource(e.target.value);
                 setReport(null);
                 setError(null);
+                setScanMeta(null);
               }}
               spellCheck={false}
               placeholder={

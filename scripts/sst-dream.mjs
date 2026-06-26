@@ -8150,7 +8150,9 @@ function walk(dir) {
   return out;
 }
 function appNameFrom(source, fallback) {
-  const m = source.match(/name\s*:\s*["'`]([A-Za-z0-9._-]+)["'`]/);
+  const m = source.match(/\bname\s*:\s*["'`]([A-Za-z0-9._-]+)["'`][^}]{0,300}?\bhome\s*:/i) ?? source.match(
+    /\bhome\s*:\s*["'`][^"'`]+["'`][^}]{0,300}?\bname\s*:\s*["'`]([A-Za-z0-9._-]+)["'`]/i
+  );
   return m ? m[1] : fallback;
 }
 var CTOR = /new\s+sst\.(?:aws\.|cloudflare\.|vercel\.)?([A-Za-z0-9]+)\s*\(\s*["'`]([^"'`]+)["'`]/g;
@@ -8373,6 +8375,9 @@ ${HELP}`);
 
 \u2192 ${mdPath}  (read this)` : "") + `
 \u2192 ${jsonPath}
+
+  See it as an editable diagram: open the builder's "From code" import and paste
+  ${jsonPath} into it \u2014 the recovered design loads directly.
 `
     );
   }

@@ -68,7 +68,9 @@ function main(): void {
         `\n  ${result.redactions} secret(s) redacted · ~$${result.cost.totalMonthlyUsd.toFixed(2)}/mo` +
         (broken ? ` · ${broken} wiring issue(s)` : ' · wiring OK') +
         (mdPath ? `\n\n→ ${mdPath}  (read this)` : '') +
-        `\n→ ${jsonPath}\n`,
+        `\n→ ${jsonPath}` +
+        `\n\n  See it as an editable diagram: open the builder's "From code" import and paste` +
+        `\n  ${jsonPath} into it — the recovered design loads directly.\n`,
     );
   }
 }

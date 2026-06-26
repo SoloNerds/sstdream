@@ -24,8 +24,13 @@ node scripts/sst-dream.mjs scan .        # or:  ./scripts/sst-dream.sh scan .
 
 # outputs (written to the current dir, or --out <dir>):
 #   ARCHITECTURE.md       a human-readable map (resources, data flow, cost, wiring, gaps)
-#   sstdream-scan.json    the same, machine-readable (for CI / future builder import)
+#   sstdream-scan.json    the same, machine-readable
 ```
+
+**See it as an editable diagram.** Open the builder, click **From code**, and paste the
+`sstdream-scan.json` — the recovered design (its nodes, edges, lane, and app name) loads
+straight onto the canvas. (The parser auto-detects a scan file vs. raw `sst.config.ts`
+source.)
 
 (Working inside the SSTDREAM repo itself, `yarn build:cli` rebuilds that bundle from
 source; CI fails if the committed copy ever drifts.)
