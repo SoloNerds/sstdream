@@ -25,6 +25,7 @@ export function Toolbar({ validation }: { validation: ValidationResult }) {
   const appName = useCanvasStore((s) => s.app.name);
   const setApp = useCanvasStore((s) => s.setApp);
   const loadSnapshot = useCanvasStore((s) => s.loadSnapshot);
+  const applyLayout = useCanvasStore((s) => s.applyLayout);
   const reset = useCanvasStore((s) => s.reset);
 
   const onShare = () => {
@@ -95,6 +96,15 @@ export function Toolbar({ validation }: { validation: ValidationResult }) {
           }
         >
           From code
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={applyLayout}
+          disabled={useCanvasStore.getState().nodes.length === 0}
+          title="Auto-arrange the canvas into a tidy left-to-right layout"
+        >
+          Auto-layout
         </Button>
         <Button
           size="sm"

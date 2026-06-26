@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { CanvasEdge, CanvasNode } from './types';
+import { layoutGraph } from './layout';
 import { DEFAULT_TARGET, getTarget } from '@/lib/targets/registry';
 import type { DeployTarget } from '@/lib/targets/types';
 import type { CanvasSnapshot } from '@/lib/core/blueprint/serialize';
@@ -58,6 +59,7 @@ export interface CanvasState {
   select: (id: string | null) => void;
   setApp: (partial: Partial<AppConfigState>) => void;
   loadSnapshot: (snapshot: CanvasSnapshot) => void;
+  applyLayout: () => void;
   reset: () => void;
 }
 
@@ -126,6 +128,9 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   select: (id) => set({ selectedId: id }),
 
   setApp: (partial) => set((s) => ({ app: { ...s.app, ...partial } })),
+
+  // Tidy the canvas into a left-to-right layered layout (dagre).
+  applyLayout: () => set((s) => ({ nodes: layoutGraph(s.nodes, s.edges) })),
 
   loadSnapshot: (snapshot) => {
     bumpCounterPast([...snapshot.nodes.map((n) => n.id), ...snapshot.edges.map((e) => e.id)]);

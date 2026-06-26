@@ -41,6 +41,8 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
       if (meta.appName) useCanvasStore.getState().setApp({ name: meta.appName });
     }
     loadSnapshot(result);
+    // A reverse-parsed design uses a naive grid; tidy it so big imports are readable.
+    useCanvasStore.getState().applyLayout();
     onClose();
   };
 
