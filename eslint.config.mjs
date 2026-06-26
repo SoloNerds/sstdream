@@ -8,6 +8,7 @@ export default tseslint.config(
       'out/**',
       'build/**',
       'dist/**',
+      'scripts/sst-dream.mjs', // generated, committed drop-in bundle (see cli/build.mjs)
       'node_modules/**',
       'next-env.d.ts',
       'coverage/**',

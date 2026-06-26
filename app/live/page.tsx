@@ -141,14 +141,13 @@ export default function LivePage() {
       <section id="get-started" className="mx-auto max-w-3xl scroll-mt-8 px-6 py-10">
         <h2 className="text-2xl font-bold">Run it in 60 seconds</h2>
         <p className="mt-2 text-neutral-500">
-          It runs on <strong>your</strong> machine — clone the repo and point it at any project.
+          No clone, no install, no build. <strong>Drop the `scripts/` folder</strong> into your
+          existing SST/Vercel project and run it — it&apos;s a single self-contained file.
         </p>
         <pre className="mt-4 overflow-x-auto rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-sm leading-relaxed dark:border-neutral-800 dark:bg-neutral-900">
-          <code>{`git clone https://github.com/SoloNerds/sstdream
-cd sstdream
-yarn install
-yarn build:cli
-node dist/sst-dream.mjs scan /path/to/your/project
+          <code>{`# copy the repo's scripts/ folder into your project, then:
+cd your-sst-project
+node scripts/sst-dream.mjs scan .      # or:  ./scripts/sst-dream.sh scan .
 # writes ARCHITECTURE.md + sstdream-scan.json to the current dir (or --out <dir>)
 # zero credentials · zero network · nothing uploaded`}</code>
         </pre>

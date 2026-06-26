@@ -60,6 +60,9 @@ on disk instead of a canvas. Phase 1 = `cli/` → `sst-dream scan <dir>`: walk t
 attach `high`/`low` confidence, and emit `ARCHITECTURE.md` + `sstdream-scan.json`. Zero
 credentials, zero network — ships under the existing moat. The honesty backstop in
 `cli/scan.ts` reports every `new sst.*` that did NOT become a node (never a silent drop).
+`yarn build:cli` (esbuild) bundles `cli/` + the engines into a single self-contained
+**committed** `scripts/sst-dream.mjs` — users drop the `scripts/` folder into their own
+project and run it with no clone/install/build; CI rebuilds it and **fails on drift**.
 Cloud-observed phases (read-only AWS/Vercel) are deliberately fenced behind a security gate.
 See [docs/live-mode.md](docs/live-mode.md). The builder's codegen stays zero-AI regardless.
 

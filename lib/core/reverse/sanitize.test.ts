@@ -17,7 +17,7 @@ type Case = { snippet: string; secret: string };
 // at runtime — no literal secret string is committed.
 const corpus = JSON.parse(
   Buffer.from(
-    readFileSync(join(process.cwd(), 'scripts/secret-corpus.b64'), 'utf8'),
+    readFileSync(join(process.cwd(), 'lib/core/reverse/secret-corpus.b64'), 'utf8'),
     'base64',
   ).toString('utf8'),
 ) as Case[];
