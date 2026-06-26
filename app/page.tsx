@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { CopyButton } from '@/components/CopyButton';
 import { TEMPLATES } from '@/lib/templates/registry';
 import { getTarget } from '@/lib/targets/registry';
 
@@ -13,8 +14,12 @@ const STATS = [
     ),
     label: 'resource kinds',
   },
-  { value: '0', label: 'AI calls · 0 credentials stored' },
+  { value: '60s', label: 'to map an existing repo · local, no upload' },
 ];
+
+// The exact runnable commands shown in the Live Mode band (and copied by the button).
+const SCAN_COMMANDS = `curl -sO https://raw.githubusercontent.com/SoloNerds/sstdream/main/scripts/sst-dream.mjs
+node sst-dream.mjs scan .`;
 
 const WHY = [
   {
@@ -61,6 +66,10 @@ export default function Home() {
             className="text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
           >
             Live Mode
+            <span
+              className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-indigo-600 align-top"
+              aria-hidden
+            />
           </Link>
           <a
             href="https://github.com/SoloNerds/sstdream"
@@ -76,7 +85,7 @@ export default function Home() {
 
       <section className="mx-auto max-w-3xl px-6 pb-16 pt-16 text-center sm:pt-24">
         <p className="mb-4 inline-block rounded-full border border-neutral-300 px-3 py-1 text-xs font-medium text-neutral-500 dark:border-neutral-700">
-          Visual SST v4 / Vercel architecture builder · no AI, no credentials
+          Build new infra, or scan what you already shipped · no AI, no credentials
         </p>
         <h1 className="text-balance text-4xl font-bold leading-tight sm:text-6xl">
           Draw your app. Simulate it.
@@ -106,6 +115,71 @@ export default function Home() {
             <div className="mt-1 text-xs text-neutral-500">{s.label}</div>
           </div>
         ))}
+      </section>
+
+      {/* Live Mode — the "scan your existing project" hook (the second pillar). */}
+      <section className="mt-20 border-y border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900/40">
+        <div className="mx-auto max-w-5xl px-6 py-16">
+          <div className="grid gap-10 lg:grid-cols-2 lg:items-center">
+            <div>
+              <span className="inline-block rounded-full border border-indigo-200 px-3 py-1 text-xs font-medium text-indigo-600 dark:border-indigo-900/60 dark:text-indigo-400">
+                New · Live Mode
+              </span>
+              <h2 className="mt-4 text-balance text-3xl font-bold">
+                Already built it? See your whole architecture in 60 seconds.
+              </h2>
+              <p className="mt-4 text-neutral-500">
+                Live Mode reads an existing SST or Vercel repo and reverse-engineers it into the
+                same map the builder draws — every resource, the data flow, a cost estimate, and an
+                honest list of what it couldn&apos;t model. No clone, no install, no build; secrets
+                are redacted before parsing, nothing is uploaded, and it never touches your cloud —
+                zero credentials, zero network.
+              </p>
+              <div className="mt-6 flex flex-wrap gap-3">
+                <Button asChild className="h-11 px-5 text-base">
+                  <Link href="/live">See it on a real repo →</Link>
+                </Button>
+                <CopyButton
+                  text={SCAN_COMMANDS}
+                  label="Copy scan command"
+                  className="h-11 px-5 text-base"
+                />
+              </div>
+              <p className="mt-4 text-sm text-neutral-500">
+                …already have a <code>sstdream-scan.json</code>?{' '}
+                <Link
+                  href="/builder"
+                  className="text-indigo-600 hover:underline dark:text-indigo-400"
+                >
+                  Open it in the builder
+                </Link>
+                .
+              </p>
+            </div>
+            <div>
+              <pre className="overflow-x-auto rounded-xl border border-neutral-200 bg-white p-4 font-mono text-sm leading-relaxed dark:border-neutral-800 dark:bg-neutral-950">
+                <code>
+                  <span className="text-neutral-400">
+                    # in any existing SST/Vercel repo — zero install, zero network
+                  </span>
+                  {'\n'}
+                  <span className="text-indigo-600 dark:text-indigo-400">curl</span> -sO
+                  https://raw.githubusercontent.com/SoloNerds/sstdream/main/scripts/sst-dream.mjs
+                  {'\n'}
+                  <span className="text-indigo-600 dark:text-indigo-400">node</span> sst-dream.mjs
+                  scan .{'\n'}
+                  <span className="text-neutral-400">
+                    # → writes ARCHITECTURE.md + sstdream-scan.json · reads your code, sends nothing
+                  </span>
+                </code>
+              </pre>
+              <p className="mt-2 text-xs text-neutral-400">
+                Scan — a static map from your code — ships today. The live read-only metrics overlay
+                (X-Ray style) is on the roadmap.
+              </p>
+            </div>
+          </div>
+        </div>
       </section>
 
       <section className="mx-auto max-w-5xl px-6 py-20">
