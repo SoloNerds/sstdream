@@ -27,12 +27,13 @@ node scripts/sst-dream.mjs scan .     # or:  ./scripts/sst-dream.sh scan .
 
 1. **Full local scan (recommended)** — `node scripts/sst-dream.mjs scan .`
    You get `ARCHITECTURE.md` + `sstdream-scan.json` right in your project. Nothing leaves
-   your machine.
+   your machine. Want the **visual diagram**? Open the builder, click **From code**, and
+   paste the `sstdream-scan.json` — the recovered design loads straight onto the canvas.
 
-2. **Paste into the visual builder** — `node scripts/sstdream-collect.mjs`
-   Produces `sstdream-import.txt`; paste it into the builder's **From code** to see your
-   architecture as an editable diagram. (Review the file first — secrets are redacted, but
-   it's your call what to paste.)
+2. **Paste into the visual builder (lighter)** — `node scripts/sstdream-collect.mjs`
+   Produces `sstdream-import.txt` (your sanitized source); paste it into **From code** to
+   reverse-engineer the diagram. (Review the file first — secrets are redacted, but it's
+   your call what to paste.)
 
 ## Safety
 

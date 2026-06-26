@@ -31,6 +31,7 @@ const NOW_FEATURES = [
   'A high / low confidence flag on every recovered resource',
   'An honest “Not recognized” list — every new sst.* it could not model, never silently dropped',
   'Outputs ARCHITECTURE.md + sstdream-scan.json',
+  'Paste sstdream-scan.json into the builder’s “From code” → it loads as an editable diagram',
   'Zero credentials · zero network · nothing uploaded',
 ];
 
@@ -152,7 +153,12 @@ node scripts/sst-dream.mjs scan .      # or:  ./scripts/sst-dream.sh scan .
 # zero credentials · zero network · nothing uploaded`}</code>
         </pre>
         <p className="mt-3 text-sm text-neutral-500">
-          Full details in{' '}
+          Want the visual diagram? Open the{' '}
+          <Link href="/builder" className="text-indigo-600 hover:underline dark:text-indigo-400">
+            builder
+          </Link>
+          , click <strong>From code</strong>, and paste the <code>sstdream-scan.json</code> — the
+          recovered design loads as an editable canvas. Full details in{' '}
           <a
             href="https://github.com/SoloNerds/sstdream/blob/main/docs/live-mode.md"
             className="text-indigo-600 hover:underline dark:text-indigo-400"

@@ -74,8 +74,16 @@ export interface ScanResult {
   generatedAt: string;
 }
 
-function appNameFrom(source: string, fallback: string): string {
-  const m = source.match(/name\s*:\s*["'`]([A-Za-z0-9._-]+)["'`]/);
+export function appNameFrom(source: string, fallback: string): string {
+  // The app name lives in the config's app() block: `return { name: "x", home: "aws" }`.
+  // Match a `name:` that shares an object literal with `home:` (only the app block has
+  // `home`), in either order — so we don't grab a resource's `name:` prop by mistake
+  // (e.g. a Cognito pool or SES identity named "verified_email").
+  const m =
+    source.match(/\bname\s*:\s*["'`]([A-Za-z0-9._-]+)["'`][^}]{0,300}?\bhome\s*:/i) ??
+    source.match(
+      /\bhome\s*:\s*["'`][^"'`]+["'`][^}]{0,300}?\bname\s*:\s*["'`]([A-Za-z0-9._-]+)["'`]/i,
+    );
   return m ? m[1] : fallback;
 }
 
