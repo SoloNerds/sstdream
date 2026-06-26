@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { findDeprecations } from './deprecations';
 import { runCheck, runExplain } from './run';
+import { buildReport } from './report';
 import { scanRepo, listInfraSources } from '../scan';
 
 describe('agent check — grounded deprecation detection', () => {
@@ -77,5 +78,27 @@ describe('agent explain — grounded in the scanned graph', () => {
   it('listInfraSources returns the raw infra files for the check', () => {
     const files = listInfraSources(dir);
     expect(files.some((f) => f.path === 'infra/main.ts')).toBe(true);
+  });
+
+  it('buildReport produces a grounded report with a summary, deprecations, and checks', () => {
+    const proj = mkdtempSync(join(tmpdir(), 'sstdream-report-'));
+    mkdirSync(join(proj, 'infra'), { recursive: true });
+    writeFileSync(
+      join(proj, 'sst.config.ts'),
+      'export default $config({ app() { return { name: "acme", home: "aws" }; }, async run() {} });',
+    );
+    writeFileSync(
+      join(proj, 'infra', 'main.ts'),
+      'new sst.aws.Cron("Daily", { job: "x.handler" });\nnew sst.aws.Nextjs("Web", {});',
+    );
+    const scan = scanRepo(proj, '2026-06-26T00:00:00.000Z');
+    const md = buildReport(scan, findDeprecations(listInfraSources(proj)));
+    expect(md).toContain('# acme — agent report');
+    expect(md).toContain('## Summary');
+    expect(md).toContain('Deprecated SST');
+    expect(md).toContain('sst.aws.Cron'); // the deprecation, cited
+    expect(md).toContain('## Suggested checks');
+    expect(md).toContain('never writes infrastructure');
+    rmSync(proj, { recursive: true, force: true });
   });
 });
