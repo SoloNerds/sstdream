@@ -6,7 +6,7 @@ var __export = (target, all) => {
 };
 
 // cli/index.ts
-import { writeFileSync } from "node:fs";
+import { writeFileSync as writeFileSync2 } from "node:fs";
 import { join as join2, resolve as resolve2 } from "node:path";
 
 // cli/scan.ts
@@ -8454,6 +8454,7 @@ function toMarkdown(r) {
 }
 
 // cli/agent/cli.ts
+import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 // cli/agent/deprecations.ts
@@ -8611,6 +8612,82 @@ function runExplain(scan, resourceName) {
   };
 }
 
+// cli/agent/report.ts
+function section(out, heading, lines) {
+  if (!lines.length) return;
+  out.push(`## ${heading}`, "", ...lines, "");
+}
+function buildReport(scan, deprecations) {
+  const broken = scan.simulation.events.filter((e) => e.status === "broken");
+  const orphanSecrets = scan.validation.warnings.filter((w) => w.rule === "orphan-secret").length;
+  const out = [];
+  out.push(`# ${scan.appName} \u2014 agent report`, "");
+  out.push(
+    `> Grounded in the scanned graph and the verified SST v4 docs. Read-only. ${scan.redactions} secret(s) redacted before parsing.`,
+    ""
+  );
+  section(out, "Summary", [
+    `- ${scan.nodes.length} resources, ${scan.edges.length} connections, ~$${scan.cost.totalMonthlyUsd.toFixed(2)}/mo (lane: ${scan.target})`,
+    `- ${scan.validation.errors.length} error(s), ${scan.validation.warnings.length} warning(s), ${broken.length} wiring issue(s)`,
+    `- ${deprecations.length} deprecated SST pattern(s), ${scan.unmodeled.length} construct(s) not modeled`
+  ]);
+  section(
+    out,
+    "Deprecated SST (update against current docs)",
+    deprecations.map((d) => `- **${d.file}:${d.line}** ${d.title}. ${d.fix} _(${d.doc})_`)
+  );
+  section(
+    out,
+    "Wiring issues",
+    broken.map((e) => `- ${e.label}${e.detail ? ` ${e.detail}` : ""}`)
+  );
+  section(
+    out,
+    "Validation",
+    scan.validation.diagnostics.map(
+      (d) => `- [${d.severity}] ${d.message}${d.hint ? ` ${d.hint}` : ""}`
+    )
+  );
+  section(
+    out,
+    "Security and ops",
+    scan.audit.map((a) => `- [${a.level}] ${a.title}. ${a.detail}`)
+  );
+  section(
+    out,
+    "Estimated cost",
+    scan.cost.perResource.filter((p) => p.monthlyUsd > 0).map((p) => `- ${p.name} (${p.kind}): ~$${p.monthlyUsd.toFixed(2)}/mo`)
+  );
+  out.push("## Not recognized", "");
+  if (scan.unmodeled.length) {
+    for (const u of scan.unmodeled) out.push(`- \`${u.snippet}\` ${u.reason}`);
+  } else {
+    out.push("- Everything in your infra files mapped.");
+  }
+  out.push("");
+  const checks = [];
+  if (deprecations.length)
+    checks.push(`Update ${deprecations.length} deprecated SST pattern(s) to current syntax.`);
+  if (broken.length)
+    checks.push(`Wire up ${broken.length} resource(s) that have no consumer or trigger.`);
+  if (orphanSecrets)
+    checks.push(
+      `Confirm ${orphanSecrets} secret(s) flagged unlinked are actually used. The scan only sees link: edges.`
+    );
+  if (scan.unmodeled.length)
+    checks.push(`Review ${scan.unmodeled.length} construct(s) the static scan could not model.`);
+  section(
+    out,
+    "Suggested checks",
+    checks.map((c) => `- ${c}`)
+  );
+  out.push(
+    "---",
+    "_Deterministic, grounded report. No model was called. This never writes infrastructure._"
+  );
+  return out.join("\n") + "\n";
+}
+
 // cli/agent/types.ts
 function renderAnswer(a) {
   const out = [`# ${a.title}`, ""];
@@ -8643,11 +8720,16 @@ var HELP = `sst-dream agent \u2014 local, read-only, SST-aware analysis (grounde
 Usage:
   sst-dream agent check [dir]               Flag deprecated SST patterns vs current docs
   sst-dream agent explain <resource> [dir]  Describe a resource from the scanned graph
+  sst-dream agent report [dir] [--out f]    A full grounded report of the whole project
 
 Grounded in YOUR scanned graph + the verified SST v4 docs (cited). No model is called in
 this build \u2014 zero network. BYO-model / local-LLM narration is opt-in and coming next.
 `;
 var dirArg = (a) => a && !a.startsWith("-") ? a : ".";
+var flag = (argv, name) => {
+  const i = argv.indexOf(name);
+  return i >= 0 ? argv[i + 1] : void 0;
+};
 function runAgent(argv) {
   const sub = argv[3];
   if (!sub || sub === "help" || sub === "--help" || sub === "-h") {
@@ -8669,6 +8751,20 @@ function runAgent(argv) {
     const root = resolve(process.cwd(), dirArg(argv[5]));
     const scan = scanRepo(root, (/* @__PURE__ */ new Date()).toISOString());
     process.stdout.write(renderAnswer(runExplain(scan, resource)));
+    return;
+  }
+  if (sub === "report") {
+    const root = resolve(process.cwd(), dirArg(argv[4]));
+    const scan = scanRepo(root, (/* @__PURE__ */ new Date()).toISOString());
+    const md = buildReport(scan, findDeprecations(listInfraSources(root)));
+    const out = flag(argv, "--out");
+    if (out) {
+      writeFileSync(resolve(process.cwd(), out), md);
+      process.stdout.write(`Wrote ${out}
+`);
+    } else {
+      process.stdout.write(md);
+    }
     return;
   }
   process.stderr.write(`Unknown agent command "${sub}".
@@ -8694,11 +8790,11 @@ Outputs:
 
 Runs entirely on your machine. No credentials, no network, nothing uploaded.
 `;
-function arg(flag) {
-  const i = process.argv.indexOf(flag);
+function arg(flag2) {
+  const i = process.argv.indexOf(flag2);
   return i >= 0 ? process.argv[i + 1] : void 0;
 }
-var has = (flag) => process.argv.includes(flag);
+var has = (flag2) => process.argv.includes(flag2);
 function main() {
   const cmd = process.argv[2];
   if (!cmd || cmd === "--help" || cmd === "-h" || cmd === "help") {
@@ -8722,11 +8818,11 @@ ${HELP2}`);
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const result = scanRepo(root, now);
   const jsonPath = join2(outDir, "sstdream-scan.json");
-  writeFileSync(jsonPath, JSON.stringify(result, null, 2));
+  writeFileSync2(jsonPath, JSON.stringify(result, null, 2));
   let mdPath;
   if (!has("--json-only")) {
     mdPath = join2(outDir, "ARCHITECTURE.md");
-    writeFileSync(mdPath, toMarkdown(result));
+    writeFileSync2(mdPath, toMarkdown(result));
   }
   if (!has("--quiet")) {
     const broken = result.simulation.events.filter((e) => e.status === "broken").length;
