@@ -4,6 +4,10 @@
 // it can never invent a Known fact. NoAI is the default and renders the deterministic
 // facts with the model seam unplugged.
 
+// One egress vocabulary across the whole product — defined in the plugin host, aliased below for
+// the AI seam. (Type-only; erased at build, so the agent bundle is unaffected.)
+import type { Egress } from '@/lib/plugin-host/manifest';
+
 export interface Cited {
   text: string;
   source: string; // a graph node id, or a verified doc + section
@@ -18,7 +22,7 @@ export interface AgentAnswer {
   grounding: string; // e.g. "the scanned graph + SST docs (docs/sst-v4-target.md)"
 }
 
-export type ProviderEgress = 'none' | 'local' | 'hosted';
+export type ProviderEgress = Egress;
 
 // The BYO-model seam. NoAI (egress 'none') is the default; local (Ollama/OpenAI-compatible)
 // and hosted adapters implement this later. Context MUST pass through the sanitizer before

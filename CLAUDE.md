@@ -77,6 +77,15 @@ a 4-section honest format (Known facts cited / Likely / Suggested checks / Unkno
 narration (local Ollama first, then hosted behind a 2nd sanitizer corpus + eval) is the next
 phase. See [docs/ai-ops-agent.md](docs/ai-ops-agent.md).
 
+**Plugin foundation (prep only, `lib/plugin-host/`):** the contract for opt-in, user-installed,
+capability-scoped plugins (cloud connectors / AI providers / notifiers / panels / analyzers).
+Trust = declare (`CapabilityManifest`, Zod; read-only, no-wildcard egress allowlist) → consent
+(hash-pinned grant) → contain (sanitize-at-egress). **Nothing loads yet** (no loader, no connector,
+no credentials). THE HARD RULE: plugins NEVER enter the static web export — the host is reached
+only from `cli/`, enforced by `lib/plugin-host/static-bundle.test.ts` (import-graph scan from
+`app/`+`components/`) + a CI grep of `out/` for a host sentinel. A manifest is consent+audit, NOT
+a sandbox (isolation/signing are v2). See [docs/plugins.md](docs/plugins.md).
+
 ## Conventions
 
 - **Correctness is the product.** Every generated snippet must match the verified target
