@@ -145,6 +145,12 @@ export default function LivePage() {
                     {' '}
                     not recognized: 1 (listed, never dropped)
                   </span>
+                  {'\n'}
+                  <span className="text-indigo-600 dark:text-indigo-400">$ </span>
+                  <span
+                    aria-hidden
+                    className="inline-block h-3.5 w-2 animate-pulse bg-neutral-500 align-text-bottom"
+                  />
                 </code>
               </pre>
             </div>

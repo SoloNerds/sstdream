@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { CopyButton } from '@/components/CopyButton';
@@ -45,13 +44,20 @@ const STEPS: [string, string][] = [
   ['Ship', 'Export a type-checked project and run it yourself. You deploy. We never do.'],
 ];
 
-function Chip({ children }: { children: ReactNode }) {
+// A mini node that reads like a real builder resource (a colored kind bar + name + component).
+function Node({ label, sub, accent }: { label: string; sub: string; accent: string }) {
   return (
-    <span className="rounded-lg border border-neutral-200 bg-white px-2.5 py-1 font-mono text-xs dark:border-neutral-700 dark:bg-neutral-900">
-      {children}
-    </span>
+    <div className="w-36 overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
+      <div className={`h-1 ${accent}`} />
+      <div className="px-3 py-1.5">
+        <div className="text-xs font-semibold leading-tight">{label}</div>
+        <div className="font-mono text-[10px] text-neutral-400">{sub}</div>
+      </div>
+    </div>
   );
 }
+
+const Wire = () => <span className="my-1 block h-4 w-px bg-indigo-500/40" aria-hidden />;
 
 export default function Home() {
   return (
@@ -142,19 +148,31 @@ export default function Home() {
                   builder · aws-sst-v4
                 </span>
               </div>
-              <div className="flex flex-col items-center gap-0 px-6 py-7">
-                <Chip>Next.js App</Chip>
-                <span className="my-1 h-5 w-px bg-indigo-500/40" aria-hidden />
-                <div className="flex items-center gap-3">
-                  <Chip>Bucket</Chip>
-                  <Chip>Queue</Chip>
-                  <Chip>Dynamo</Chip>
+              <div className="relative flex flex-col items-center px-6 py-7">
+                <div
+                  aria-hidden
+                  className="absolute inset-0 opacity-50 dark:opacity-100"
+                  style={{
+                    backgroundImage:
+                      'radial-gradient(circle, rgb(115 115 115 / 0.22) 1px, transparent 1px)',
+                    backgroundSize: '16px 16px',
+                  }}
+                />
+                <div className="relative flex flex-col items-center">
+                  <Node label="Web" sub="sst.aws.Nextjs" accent="bg-indigo-500" />
+                  <Wire />
+                  <div className="flex items-start gap-3">
+                    <Node label="Uploads" sub="sst.aws.Bucket" accent="bg-emerald-500" />
+                    <Node label="Jobs" sub="sst.aws.Queue" accent="bg-amber-500" />
+                    <Node label="Table" sub="sst.aws.Dynamo" accent="bg-sky-500" />
+                  </div>
+                  <Wire />
+                  <Node label="Worker" sub="sst.aws.Function" accent="bg-violet-500" />
+                  <span className="mt-5 inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+                    wiring 5/5 connected · type-check passed
+                  </span>
                 </div>
-                <span className="my-1 h-5 w-px bg-indigo-500/40" aria-hidden />
-                <Chip>Worker</Chip>
-                <span className="mt-5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                  wiring 5/5 connected · type-check passed
-                </span>
               </div>
             </div>
           </div>
