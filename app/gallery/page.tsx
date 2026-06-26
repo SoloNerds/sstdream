@@ -36,9 +36,17 @@ export default function GalleryPage() {
         <Link href="/" className="font-bold">
           SSTDREAM
         </Link>
-        <Link href="/builder" className="text-indigo-600 hover:underline dark:text-indigo-400">
-          Open the builder →
-        </Link>
+        <div className="flex items-center gap-5">
+          <Link
+            href="/live"
+            className="text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
+          >
+            Live Mode
+          </Link>
+          <Link href="/builder" className="text-indigo-600 hover:underline dark:text-indigo-400">
+            Open the builder →
+          </Link>
+        </div>
       </nav>
 
       <header className="mb-10">
