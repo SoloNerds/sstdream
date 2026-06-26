@@ -14,15 +14,21 @@ your disk instead of a canvas in the browser.
 A local CLI that turns an existing SST/Vercel repo into a sanitized, confidence-scored
 infrastructure map. **No credentials. No network. Nothing uploaded.**
 
+**Drop-in: no clone, no install, no build.** `scripts/sst-dream.mjs` is a single
+self-contained bundle (every engine inlined), committed to the repo. Copy the `scripts/`
+folder into your own project and run it:
+
 ```bash
-# in your SST project (from the SSTDREAM repo, until it's on npm):
-yarn build:cli
-node dist/sst-dream.mjs scan /path/to/your/project
+cd your-sst-project
+node scripts/sst-dream.mjs scan .        # or:  ./scripts/sst-dream.sh scan .
 
 # outputs (written to the current dir, or --out <dir>):
 #   ARCHITECTURE.md       a human-readable map (resources, data flow, cost, wiring, gaps)
 #   sstdream-scan.json    the same, machine-readable (for CI / future builder import)
 ```
+
+(Working inside the SSTDREAM repo itself, `yarn build:cli` rebuilds that bundle from
+source; CI fails if the committed copy ever drifts.)
 
 It works on the hard case the single-file paste can't: a `sst.config.ts` that
 dynamically `import()`s `packages/infra/*.ts`. The scanner walks the repo, finds **every**

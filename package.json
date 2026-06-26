@@ -4,7 +4,7 @@
   "private": true,
   "packageManager": "yarn@1.22.22",
   "bin": {
-    "sst-dream": "dist/sst-dream.mjs"
+    "sst-dream": "scripts/sst-dream.mjs"
   },
   "scripts": {
     "dev": "next dev",

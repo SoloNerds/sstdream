@@ -3,3 +3,5 @@ node_modules/
 coverage/
 yarn.lock
 **/*.snap
+scripts/sst-dream.mjs
+dist/

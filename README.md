@@ -81,17 +81,20 @@ you already have. Phase 1 is a CLI that turns an existing repo — including the
 a `sst.config.ts` that dynamically `import()`s `packages/infra/*.ts` — into a sanitized,
 confidence-scored infrastructure map. **No credentials, no network, nothing uploaded.**
 
+**Drop-in — no clone, no install, no build.** `scripts/sst-dream.mjs` is a single
+self-contained bundle (committed). Copy the `scripts/` folder into your own project and run:
+
 ```bash
-yarn build:cli
-node dist/sst-dream.mjs scan /path/to/your/project
+cd your-sst-project
+node scripts/sst-dream.mjs scan .     # or  ./scripts/sst-dream.sh scan .
 #  → ARCHITECTURE.md   resources, data flow, cost, wiring check, and an honest
 #                      "couldn't model" list (nothing is ever silently dropped)
 #  → sstdream-scan.json the same, machine-readable
 ```
 
 Secrets are redacted **before** parsing (same adversarial-corpus-tested sanitizer as the
-import collector). See [docs/live-mode.md](docs/live-mode.md) for the roadmap and the
-per-mode trust model.
+import collector). See [docs/live-mode.md](docs/live-mode.md) and
+[scripts/README.md](scripts/README.md) for the roadmap and the per-mode trust model.
 
 ## Targets
 

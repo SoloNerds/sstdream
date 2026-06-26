@@ -19,4 +19,7 @@ jobs:
       - run: yarn test
       - run: yarn build
       - run: yarn build:cli
+      # The drop-in bundle (scripts/sst-dream.mjs) is committed; fail if it's stale.
+      - name: Verify committed CLI bundle is current
+        run: git diff --exit-code -- scripts/sst-dream.mjs
       - run: yarn typecheck

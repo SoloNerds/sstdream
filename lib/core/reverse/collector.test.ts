@@ -55,7 +55,7 @@ describe('sstdream-collect — runs standalone (no clone, one file)', () => {
     type Case = { snippet: string };
     const corpus = JSON.parse(
       Buffer.from(
-        readFileSync(join(process.cwd(), 'scripts/secret-corpus.b64'), 'utf8'),
+        readFileSync(join(process.cwd(), 'lib/core/reverse/secret-corpus.b64'), 'utf8'),
         'base64',
       ).toString('utf8'),
     ) as Case[];
