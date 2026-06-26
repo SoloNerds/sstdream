@@ -12,7 +12,8 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    // lib logic + the first component tests (rendered via react-dom/server — no jsdom).
-    include: ['lib/**/*.test.ts', 'components/**/*.test.tsx'],
+    // lib logic + the first component tests (rendered via react-dom/server — no jsdom)
+    // + the sst-dream CLI (Live Mode local scan).
+    include: ['lib/**/*.test.ts', 'components/**/*.test.tsx', 'cli/**/*.test.ts'],
   },
 });

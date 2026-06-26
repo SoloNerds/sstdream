@@ -44,10 +44,24 @@ lib/targets/<aws-sst-v4|vercel>/   # PER-LANE: catalog, edges, validation,
 components/builder/   # canvas, palette, panels (Props/Sim/Cost/Tips), Export dialog
 app/                  # Next.js app (/builder)
 lib/templates/        # reference designs (AI Processing App, Vercel SaaS)
+cli/                  # the `sst-dream` CLI (Live Mode) — bundled via `yarn build:cli`
 ```
 
 A new lane is registered in `lib/targets/registry.ts` plus the `generate.ts`,
 `validate.ts`, and `export/manifest.ts` maps. The blueprint `target.deploy` selects it.
+
+## Two pillars: Design Mode + Live Mode
+
+**Design Mode** is the builder (everything above). **Live Mode** is a second, local-first
+pillar that _understands_ an existing project rather than generating a new one. It reuses
+the SAME engines (reverse parser + validation/simulation/cost/expansion/audit) over a repo
+on disk instead of a canvas. Phase 1 = `cli/` → `sst-dream scan <dir>`: walk the repo,
+**sanitize before parsing** (shared `scripts/sanitize.mjs`), reverse-parse, run the engines,
+attach `high`/`low` confidence, and emit `ARCHITECTURE.md` + `sstdream-scan.json`. Zero
+credentials, zero network — ships under the existing moat. The honesty backstop in
+`cli/scan.ts` reports every `new sst.*` that did NOT become a node (never a silent drop).
+Cloud-observed phases (read-only AWS/Vercel) are deliberately fenced behind a security gate.
+See [docs/live-mode.md](docs/live-mode.md). The builder's codegen stays zero-AI regardless.
 
 ## Conventions
 

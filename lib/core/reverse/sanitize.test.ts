@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 // @ts-expect-error — plain-JS module shared with the standalone collector script.
-import { sanitize } from '@/scripts/sstdream-collect.mjs';
+import { sanitize } from '@/scripts/sanitize.mjs';
 
 // The import collector ships secrets off the user's machine into a browser paste, so
 // its redaction is safety-critical. This runs the sanitizer against an adversarial

@@ -74,6 +74,25 @@ Visit site
   never touches your credentials. (The AI Gateway / AI Chat kinds only _generate_ code that
   calls AI — the builder itself makes zero AI calls.)
 
+## Live Mode — scan an existing project _(new)_
+
+A second pillar, **local-first**. Where the builder _designs_, Live Mode _understands_ what
+you already have. Phase 1 is a CLI that turns an existing repo — including the hard case of
+a `sst.config.ts` that dynamically `import()`s `packages/infra/*.ts` — into a sanitized,
+confidence-scored infrastructure map. **No credentials, no network, nothing uploaded.**
+
+```bash
+yarn build:cli
+node dist/sst-dream.mjs scan /path/to/your/project
+#  → ARCHITECTURE.md   resources, data flow, cost, wiring check, and an honest
+#                      "couldn't model" list (nothing is ever silently dropped)
+#  → sstdream-scan.json the same, machine-readable
+```
+
+Secrets are redacted **before** parsing (same adversarial-corpus-tested sanitizer as the
+import collector). See [docs/live-mode.md](docs/live-mode.md) for the roadmap and the
+per-mode trust model.
+
 ## Targets
 
 | Target      | Status   | How it deploys                                                                                                                |
