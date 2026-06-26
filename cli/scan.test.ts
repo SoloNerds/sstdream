@@ -79,6 +79,43 @@ describe('sst-dream scan — multi-file local repo', () => {
     expect(r.edges.some((e) => e.intent === 'writesTo')).toBe(true);
   });
 
+  it('resolves links across files through an object-map + spread (no orphaned secrets)', () => {
+    // The exact real-world shape that produced zero edges: secrets in an object map in
+    // one file, spread-linked from the app in another.
+    const proj = mkdtempSync(join(tmpdir(), 'sstdream-edges-'));
+    mkdirSync(join(proj, 'infra'), { recursive: true });
+    writeFileSync(
+      join(proj, 'sst.config.ts'),
+      'export default $config({ app() { return { name: "x", home: "aws" }; }, async run() {} });',
+    );
+    writeFileSync(
+      join(proj, 'infra', 'secrets.ts'),
+      'export const secrets = { db: new sst.Secret("DATABASE_URL"), stripe: new sst.Secret("StripeSecret") };\nexport const allSecrets = Object.values(secrets);',
+    );
+    writeFileSync(
+      join(proj, 'infra', 'web.ts'),
+      'export const web = new sst.aws.Nextjs("Web", { link: [...allSecrets] });',
+    );
+    const r = scanRepo(proj, now);
+    const web = r.nodes.find((n) => n.name === 'Web')!;
+    const secretEdges = r.edges.filter((e) => e.source === web.id && e.intent === 'usesSecret');
+    expect(secretEdges).toHaveLength(2); // both secrets linked — not orphaned
+    rmSync(proj, { recursive: true, force: true });
+  });
+
+  it('shows an unmodeled construct (e.g. CognitoIdentityPool) as a node, not a dropped line', () => {
+    const proj = mkdtempSync(join(tmpdir(), 'sstdream-generic-'));
+    writeFileSync(
+      join(proj, 'sst.config.ts'),
+      'export default $config({ app() { return { name: "x", home: "aws" }; }, run() { new sst.aws.CognitoIdentityPool("IdPool"); } });',
+    );
+    const r = scanRepo(proj, now);
+    const idPool = r.nodes.find((n) => n.name === 'IdPool');
+    expect(idPool?.kind).toBe('unknown'); // appears as a generic node
+    expect(r.unmodeled.some((u) => u.snippet.includes('CognitoIdentityPool'))).toBe(true); // still honest
+    rmSync(proj, { recursive: true, force: true });
+  });
+
   it('appName comes from the app() block, not a resource name prop (regression)', () => {
     // A resource named before the config used to hijack the app name (e.g. a Cognito
     // pool / SES identity called "verified_email"). The app name must come from the

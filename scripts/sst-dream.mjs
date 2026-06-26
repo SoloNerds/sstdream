@@ -303,6 +303,7 @@ var COMPONENT_KIND = {
   Secret: "secret"
   // sst.Secret (also how `ai` is rendered)
 };
+var GENERIC_KIND = "unknown";
 var SKIP = /* @__PURE__ */ new Set(["Vpc", "Cluster"]);
 var SCALAR_PROPS = {
   postgres: ["nat"],
@@ -312,7 +313,7 @@ var SCALAR_PROPS = {
   service: ["cpu", "memory", "public"],
   task: ["cpu", "memory"]
 };
-function balanced(src, openIdx, open, close) {
+function balancedRange(src, openIdx, open, close) {
   let depth = 0;
   let inStr = null;
   for (let i = openIdx; i < src.length; i++) {
@@ -326,21 +327,43 @@ function balanced(src, openIdx, open, close) {
     else if (ch === open) depth++;
     else if (ch === close) {
       depth--;
-      if (depth === 0) return src.slice(openIdx + 1, i);
+      if (depth === 0) return { inner: src.slice(openIdx + 1, i), end: i };
     }
   }
-  return src.slice(openIdx + 1);
+  return { inner: src.slice(openIdx + 1), end: src.length };
 }
 function firstStringArg(args) {
   const m = args.match(/^\s*["'`]([^"'`]+)["'`]/);
   return m ? m[1] : null;
 }
-function extractLinks(args) {
+function splitTopLevel(s) {
+  const out = [];
+  let depth = 0;
+  let inStr = null;
+  let start = 0;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (inStr) {
+      if (ch === "\\") i++;
+      else if (ch === inStr) inStr = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === "`") inStr = ch;
+    else if (ch === "(" || ch === "[" || ch === "{") depth++;
+    else if (ch === ")" || ch === "]" || ch === "}") depth--;
+    else if (ch === "," && depth === 0) {
+      out.push(s.slice(start, i));
+      start = i + 1;
+    }
+  }
+  out.push(s.slice(start));
+  return out.map((t) => t.trim()).filter(Boolean);
+}
+function linkTokens(args) {
   const idx = args.search(/\blink\s*:\s*\[/);
   if (idx === -1) return [];
   const bracket = args.indexOf("[", idx);
-  const inner = balanced(args, bracket, "[", "]");
-  return inner.split(",").map((s) => s.trim()).filter((s) => /^[A-Za-z_$][\w$]*$/.test(s));
+  return splitTopLevel(balancedRange(args, bracket, "[", "]").inner);
 }
 function extractScalars(kind, args) {
   const out = {};
@@ -352,80 +375,144 @@ function extractScalars(kind, args) {
   return out;
 }
 function parseAwsConfig(source) {
-  const resources = [];
   const unrecognized = [];
-  const re = /(?:const\s+([A-Za-z_$][\w$]*)\s*=\s*)?new\s+sst\.(?:aws\.)?([A-Za-z0-9]+)\s*\(/g;
+  const ctors = [];
+  const re = /(?:([A-Za-z_$][\w$]*)\s*[:=]\s*)?new\s+sst\.(?:aws\.)?([A-Za-z0-9]+)\s*\(/g;
   let m;
   while ((m = re.exec(source)) !== null) {
     const component = m[2];
     if (SKIP.has(component)) continue;
     const ref = m[0].includes("sst.aws.") ? `sst.aws.${component}` : `sst.${component}`;
     const parenIdx = source.indexOf("(", m.index + m[0].length - 1);
-    const args = balanced(source, parenIdx, "(", ")");
-    const name = firstStringArg(args);
-    const kind = COMPONENT_KIND[component];
-    if (!kind) {
+    const { inner: args, end } = balancedRange(source, parenIdx, "(", ")");
+    ctors.push({
+      component,
+      ref,
+      kind: COMPONENT_KIND[component] ?? GENERIC_KIND,
+      name: firstStringArg(args),
+      args,
+      binding: m[1],
+      start: m.index,
+      end
+    });
+  }
+  const nodes = [];
+  const counters = {};
+  const bindToIds = /* @__PURE__ */ new Map();
+  for (const c of ctors) {
+    if (!c.name) {
       unrecognized.push({
-        snippet: `new ${ref}(${name ? `"${name}"` : "\u2026"})`,
-        reason: `${ref} isn't modeled by the builder yet`
-      });
-      continue;
-    }
-    if (!name) {
-      unrecognized.push({
-        snippet: `new ${ref}(\u2026)`,
+        snippet: `new ${c.ref}(\u2026)`,
         reason: "could not read the resource name (expected a string-literal first argument)"
       });
       continue;
     }
-    resources.push({ varName: m[1], component, kind, name, args });
-  }
-  const nodes = [];
-  const varToId = /* @__PURE__ */ new Map();
-  const counters = {};
-  for (const r of resources) {
-    const n = counters[r.kind] = (counters[r.kind] ?? 0) + 1;
-    const id = `${r.kind}_${n}`;
+    const n = counters[c.kind] = (counters[c.kind] ?? 0) + 1;
+    c.id = `${c.kind}_${n}`;
     nodes.push({
-      id,
-      kind: r.kind,
-      name: r.name,
-      props: extractScalars(r.kind, r.args),
+      id: c.id,
+      kind: c.kind,
+      name: c.name,
+      props: c.kind === GENERIC_KIND ? { sstComponent: c.ref } : extractScalars(c.kind, c.args),
       position: { x: 0, y: 0 }
     });
-    if (r.varName) varToId.set(r.varName, id);
+    if (c.binding) bindToIds.set(c.binding, [c.id]);
+    if (c.kind === GENERIC_KIND) {
+      unrecognized.push({
+        snippet: `new ${c.ref}("${c.name}")`,
+        reason: `${c.ref} isn't modeled by the builder yet \u2014 shown as a generic node`
+      });
+    }
+  }
+  const objToIds = /* @__PURE__ */ new Map();
+  const propToId = /* @__PURE__ */ new Map();
+  const objRe = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*\{/g;
+  let o;
+  while ((o = objRe.exec(source)) !== null) {
+    const objName = o[1];
+    const braceIdx = source.indexOf("{", o.index + o[0].length - 1);
+    const { end } = balancedRange(source, braceIdx, "{", "}");
+    const members = ctors.filter((c) => c.id && c.binding && c.start > braceIdx && c.end < end);
+    if (!members.length) continue;
+    objToIds.set(
+      objName,
+      members.map((c) => c.id)
+    );
+    for (const c of members) propToId.set(`${objName}.${c.binding}`, c.id);
+  }
+  const resolveRef = (raw) => {
+    const token = raw.trim().replace(/^\.\.\.\s*/, "");
+    let mm;
+    if (mm = token.match(/^Object\.values\(\s*([A-Za-z_$][\w$]*)\s*\)$/)) {
+      return objToIds.get(mm[1]) ?? [];
+    }
+    if (mm = token.match(/^([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)$/)) {
+      const id = propToId.get(`${mm[1]}.${mm[2]}`);
+      return id ? [id] : [];
+    }
+    if (token.startsWith("[")) {
+      return splitTopLevel(token.slice(1, -1)).flatMap(resolveRef);
+    }
+    if (/^[A-Za-z_$][\w$]*$/.test(token)) {
+      return bindToIds.get(token) ?? objToIds.get(token) ?? [];
+    }
+    return [];
+  };
+  const helperRe = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(Object\.values\(\s*[A-Za-z_$][\w$]*\s*\)|\[[^\]]*\])/g;
+  let h;
+  while ((h = helperRe.exec(source)) !== null) {
+    const ids = resolveRef(h[2]);
+    if (ids.length) bindToIds.set(h[1], ids);
   }
   const idToKind = new Map(nodes.map((n) => [n.id, n.kind]));
   const edges = [];
   let edgeN = 0;
-  const addEdge = (source2, target, intent) => {
-    edges.push({ id: `edge_${++edgeN}`, source: source2, target, intent });
+  const seen = /* @__PURE__ */ new Set();
+  const addEdge = (src, tgt, intent) => {
+    const key = `${src}->${tgt}`;
+    if (src !== tgt && !seen.has(key)) {
+      seen.add(key);
+      edges.push({ id: `edge_${++edgeN}`, source: src, target: tgt, intent });
+    }
   };
-  for (const r of resources) {
-    if (!r.varName) continue;
-    const sourceId = varToId.get(r.varName);
-    if (!sourceId) continue;
-    const sourceKind = idToKind.get(sourceId);
-    for (const linkVar of extractLinks(r.args)) {
-      const targetId = varToId.get(linkVar);
-      if (!targetId) {
-        unrecognized.push({
-          snippet: `${r.name} \u2192 link: [${linkVar}]`,
-          reason: `links "${linkVar}", which wasn't recognized as a resource in this file`
-        });
+  const linkFrom = (sourceId, sourceKind, sourceName, args) => {
+    for (const token of linkTokens(args)) {
+      const targets = resolveRef(token);
+      if (targets.length === 0) {
+        const bare = token.replace(/^\.\.\.\s*/, "");
+        if (/^[A-Za-z_$][\w$.]*$/.test(bare)) {
+          unrecognized.push({
+            snippet: `${sourceName} \u2192 link: [${token}]`,
+            reason: `links "${bare}", which wasn't recognized as a resource`
+          });
+        }
         continue;
       }
-      const targetKind = idToKind.get(targetId);
-      const intent = awsDefaultIntent(sourceKind, targetKind);
-      if (intent) addEdge(sourceId, targetId, intent);
+      for (const tId of targets) {
+        const intent = awsDefaultIntent(sourceKind, idToKind.get(tId));
+        if (intent) addEdge(sourceId, tId, intent);
+      }
     }
+  };
+  for (const c of ctors) {
+    if (c.id) linkFrom(c.id, c.kind, c.name, c.args);
+  }
+  const routeRe = /([A-Za-z_$][\w$]*)\.route\s*\(/g;
+  let rt;
+  while ((rt = routeRe.exec(source)) !== null) {
+    const ids = bindToIds.get(rt[1]);
+    if (!ids?.length) continue;
+    const parenIdx = source.indexOf("(", rt.index + rt[0].length - 1);
+    const { inner } = balancedRange(source, parenIdx, "(", ")");
+    const srcId = ids[0];
+    linkFrom(srcId, idToKind.get(srcId), rt[1], inner);
   }
   const subRe = /([A-Za-z_$][\w$]*)\.subscribe\(\s*["'`]([^"'`]+)["'`]/g;
   let s;
   while ((s = subRe.exec(source)) !== null) {
-    const targetId = varToId.get(s[1]);
+    const targetIds = bindToIds.get(s[1]);
     const workerName = s[2];
-    if (!targetId || workerName.includes("/") || workerName.includes(".handler")) continue;
+    if (!targetIds?.length || workerName.includes("/") || workerName.includes(".handler")) continue;
     const wn = counters.worker = (counters.worker ?? 0) + 1;
     const workerId = `worker_${wn}`;
     nodes.push({
@@ -435,7 +522,8 @@ function parseAwsConfig(source) {
       props: {},
       position: { x: 0, y: 0 }
     });
-    addEdge(workerId, targetId, "subscribesTo");
+    idToKind.set(workerId, "worker");
+    addEdge(workerId, targetIds[0], "subscribesTo");
   }
   layout(nodes, edges);
   return { nodes, edges, unrecognized };

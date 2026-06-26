@@ -92,20 +92,50 @@ jobs.subscribe("Processor", { handler: "src/processor.handler" });`;
     expect(edges).toEqual([expect.objectContaining({ source: worker.id, intent: 'subscribesTo' })]);
   });
 
-  it('surfaces unmodeled components in `unrecognized` instead of silently dropping them', () => {
+  it('shows unmodeled components as generic nodes AND notes them (never silently dropped)', () => {
     const cfg = `
       const web = new sst.aws.Nextjs("Web", { link: [stream] });
       const stream = new sst.aws.Kinesis("Stream", {});
       const fs = new sst.aws.Efs("Files", { vpc });
     `;
     const { nodes, unrecognized } = parseAwsConfig(cfg);
-    // The modeled node is recovered…
-    expect(nodes.map((n) => n.kind)).toEqual(['nextjs']);
-    // …and the two unmodeled components are reported, not dropped.
-    const reasons = unrecognized.map((u) => u.snippet).join(' ');
-    expect(reasons).toContain('sst.aws.Kinesis');
-    expect(reasons).toContain('sst.aws.Efs');
+    // The modeled node keeps its real kind…
+    expect(nodes.find((n) => n.name === 'Web')!.kind).toBe('nextjs');
+    // …and the unmodeled ones appear as GENERIC nodes, so the diagram is complete…
+    expect(nodes.find((n) => n.name === 'Stream')!.kind).toBe('unknown');
+    expect(nodes.find((n) => n.name === 'Files')!.kind).toBe('unknown');
+    // …while STILL being reported honestly.
+    const snippets = unrecognized.map((u) => u.snippet).join(' ');
+    expect(snippets).toContain('sst.aws.Kinesis');
+    expect(snippets).toContain('sst.aws.Efs');
     expect(unrecognized.some((u) => /isn't modeled/.test(u.reason))).toBe(true);
+  });
+
+  it('resolves links through object maps + spreads + Object.values (real multi-secret setup)', () => {
+    const cfg = `
+      const secrets = {
+        databaseUrl: new sst.Secret("DATABASE_URL"),
+        stripeSecret: new sst.Secret("StripeSecret"),
+      };
+      const allSecrets = Object.values(secrets);
+      new sst.aws.Nextjs("Web", { link: [...allSecrets, secrets.databaseUrl] });
+      new sst.aws.Function("Worker", { handler: "x.handler", link: [Object.values(secrets)] });
+    `;
+    const { nodes, edges } = parseAwsConfig(cfg);
+    const id = (name: string) => nodes.find((n) => n.name === name)!.id;
+    const both = [id('DATABASE_URL'), id('StripeSecret')].sort();
+    // The anonymous Next.js (no const binding) links BOTH secrets via the spread + member access…
+    const webLinks = edges
+      .filter((e) => e.source === id('Web'))
+      .map((e) => e.target)
+      .sort();
+    expect(webLinks).toEqual(both);
+    // …and the anonymous Function links them via Object.values(secrets).
+    const workerLinks = edges
+      .filter((e) => e.source === id('Worker'))
+      .map((e) => e.target)
+      .sort();
+    expect(workerLinks).toEqual(both);
   });
 
   it('reports a link to an unresolved resource', () => {

@@ -3,11 +3,12 @@ import { awsDefaultIntent } from './edges';
 
 // Reverse-engineer an existing `sst.config.ts` back into a canvas design (code →
 // diagram). Pure + dependency-free (a focused brace/bracket scanner, NOT the TS
-// compiler) so it costs nothing in the client bundle. It recovers the resources
-// that appear as `new sst.aws.X(...)` / `new sst.Secret(...)` declarations and the
-// edges implied by their `link: [...]` arrays + name-first `.subscribe("Name", …)`
-// calls — the inverse of generator/config.ts. Auto-infra (Vpc, Cluster) is skipped;
-// env-only integrations (Stripe/Mongo/Clerk/external API) leave no infra to recover.
+// compiler) so it costs nothing in the client bundle. It recovers every `new sst.*`
+// resource — known kinds map to catalog kinds, unknown ones become GENERIC nodes so
+// nothing is ever missing from the diagram — and the edges implied by `link: [...]`
+// arrays (resolving object-maps, spreads, `Object.values()`, member access and
+// cross-file helpers) plus name-first `.subscribe("Name", …)` calls. Auto-infra
+// (Vpc, Cluster) is skipped.
 
 // sst component → catalog kind. Mirrors the `new sst.aws.X` strings config.ts emits.
 const COMPONENT_KIND: Record<string, string> = {
@@ -36,6 +37,12 @@ const COMPONENT_KIND: Record<string, string> = {
   Secret: 'secret', // sst.Secret (also how `ai` is rendered)
 };
 
+// Unknown components become a node of this kind: the canvas renders it as a generic
+// box (label = the SST type), and the engines (switch/per-kind) skip it. So a brand-new
+// or niche component (CognitoIdentityPool, the deprecated Cron, …) always shows up
+// instead of being dropped — no more whack-a-mole per kind.
+const GENERIC_KIND = 'unknown';
+
 // Auto-generated shared infra — implied by the kinds that need it, never its own node.
 const SKIP = new Set(['Vpc', 'Cluster']);
 
@@ -50,16 +57,13 @@ const SCALAR_PROPS: Record<string, ('nat' | 'engine' | 'type' | 'public' | 'cpu'
   task: ['cpu', 'memory'],
 };
 
-interface ParsedResource {
-  varName?: string;
-  component: string;
-  kind: string;
-  name: string;
-  args: string; // the full argument-list source (after the first paren, balanced)
-}
-
-/** From an open-delimiter index, return the substring up to its balanced close. */
-function balanced(src: string, openIdx: number, open: string, close: string): string {
+/** From an open-delimiter index, return the inner substring AND the close index. */
+function balancedRange(
+  src: string,
+  openIdx: number,
+  open: string,
+  close: string,
+): { inner: string; end: number } {
   let depth = 0;
   let inStr: string | null = null;
   for (let i = openIdx; i < src.length; i++) {
@@ -73,10 +77,10 @@ function balanced(src: string, openIdx: number, open: string, close: string): st
     else if (ch === open) depth++;
     else if (ch === close) {
       depth--;
-      if (depth === 0) return src.slice(openIdx + 1, i);
+      if (depth === 0) return { inner: src.slice(openIdx + 1, i), end: i };
     }
   }
-  return src.slice(openIdx + 1);
+  return { inner: src.slice(openIdx + 1), end: src.length };
 }
 
 /** First string-literal argument (the resource name). */
@@ -85,16 +89,37 @@ function firstStringArg(args: string): string | null {
   return m ? m[1] : null;
 }
 
-/** Extract the `link: [a, b]` variable names from a props object source. */
-function extractLinks(args: string): string[] {
+/** Split a comma list at top level only (so `Object.values(x)` / `[a,b]` stay whole). */
+function splitTopLevel(s: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let inStr: string | null = null;
+  let start = 0;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (inStr) {
+      if (ch === '\\') i++;
+      else if (ch === inStr) inStr = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') inStr = ch;
+    else if (ch === '(' || ch === '[' || ch === '{') depth++;
+    else if (ch === ')' || ch === ']' || ch === '}') depth--;
+    else if (ch === ',' && depth === 0) {
+      out.push(s.slice(start, i));
+      start = i + 1;
+    }
+  }
+  out.push(s.slice(start));
+  return out.map((t) => t.trim()).filter(Boolean);
+}
+
+/** The raw `link: [...]` element tokens (identifiers, `...spread`, `Object.values(x)`, `a.b`). */
+function linkTokens(args: string): string[] {
   const idx = args.search(/\blink\s*:\s*\[/);
   if (idx === -1) return [];
   const bracket = args.indexOf('[', idx);
-  const inner = balanced(args, bracket, '[', ']');
-  return inner
-    .split(',')
-    .map((s) => s.trim())
-    .filter((s) => /^[A-Za-z_$][\w$]*$/.test(s)); // bare identifiers only
+  return splitTopLevel(balancedRange(args, bracket, '[', ']').inner);
 }
 
 /** Pull a few simple scalar props out of the props object. */
@@ -104,13 +129,11 @@ function extractScalars(kind: string, args: string): Record<string, unknown> {
     const str = args.match(new RegExp(`\\b${key}\\s*:\\s*["'\`]([^"'\`]+)["'\`]`));
     if (str) out[key] = str[1];
   }
-  // public is a select on the catalog (yes/no), but a Service renders it as the
-  // presence/absence of a loadBalancer — so derive it from the source, not a prop.
   if (kind === 'service') out.public = /\bloadBalancer\s*:/.test(args) ? 'yes' : 'no';
   return out;
 }
 
-/** Something in the config the parser could not turn into a node — surfaced, never
+/** Something in the config the parser could not fully resolve — surfaced, never
  *  silently dropped (a correctness-branded tool must not lie about what it lost). */
 export interface Unrecognized {
   snippet: string;
@@ -123,87 +146,173 @@ export interface ReverseResult {
   unrecognized: Unrecognized[];
 }
 
+interface Ctor {
+  component: string;
+  ref: string; // e.g. "sst.aws.Function" — for messages
+  kind: string;
+  name: string | null;
+  args: string;
+  binding?: string; // `const X =`, `X =`, or object property `X:`
+  start: number;
+  end: number; // index of the args' closing paren
+  id?: string;
+}
+
 /**
  * Parse an `sst.config.ts` source string into a canvas design.
  * Returns the recovered nodes + edges (grid-laid-out) AND an `unrecognized` list of
- * everything it couldn't model, so the UI can say "recovered N of M".
+ * anything it couldn't fully resolve, so the UI can say "recovered N of M".
  */
 export function parseAwsConfig(source: string): ReverseResult {
-  const resources: ParsedResource[] = [];
   const unrecognized: Unrecognized[] = [];
-  // `[const <var> =] new sst[.aws].<Component>(` — captures the optional binding + component.
-  const re = /(?:const\s+([A-Za-z_$][\w$]*)\s*=\s*)?new\s+sst\.(?:aws\.)?([A-Za-z0-9]+)\s*\(/g;
+
+  // 1) Find every constructor, with its binding (const X= / X= / object prop X:) + span.
+  const ctors: Ctor[] = [];
+  const re = /(?:([A-Za-z_$][\w$]*)\s*[:=]\s*)?new\s+sst\.(?:aws\.)?([A-Za-z0-9]+)\s*\(/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(source)) !== null) {
     const component = m[2];
     if (SKIP.has(component)) continue; // Vpc/Cluster are auto-infra — intentional, not a miss.
     const ref = m[0].includes('sst.aws.') ? `sst.aws.${component}` : `sst.${component}`;
     const parenIdx = source.indexOf('(', m.index + m[0].length - 1);
-    const args = balanced(source, parenIdx, '(', ')');
-    const name = firstStringArg(args);
-    const kind = COMPONENT_KIND[component];
-    if (!kind) {
+    const { inner: args, end } = balancedRange(source, parenIdx, '(', ')');
+    ctors.push({
+      component,
+      ref,
+      kind: COMPONENT_KIND[component] ?? GENERIC_KIND,
+      name: firstStringArg(args),
+      args,
+      binding: m[1],
+      start: m.index,
+      end,
+    });
+  }
+
+  // 2) Build nodes — known kinds map to the catalog; unknown ones become generic nodes
+  //    (still noted in `unrecognized`), so nothing is dropped from the picture.
+  const nodes: CanvasNode[] = [];
+  const counters: Record<string, number> = {};
+  const bindToIds = new Map<string, string[]>(); // a var/helper name → the node id(s) it refers to
+  for (const c of ctors) {
+    if (!c.name) {
       unrecognized.push({
-        snippet: `new ${ref}(${name ? `"${name}"` : '…'})`,
-        reason: `${ref} isn't modeled by the builder yet`,
-      });
-      continue;
-    }
-    if (!name) {
-      unrecognized.push({
-        snippet: `new ${ref}(…)`,
+        snippet: `new ${c.ref}(…)`,
         reason: 'could not read the resource name (expected a string-literal first argument)',
       });
       continue;
     }
-    resources.push({ varName: m[1], component, kind, name, args });
-  }
-
-  // Build nodes + a var→nodeId map (for resolving link edges).
-  const nodes: CanvasNode[] = [];
-  const varToId = new Map<string, string>();
-  const counters: Record<string, number> = {};
-  for (const r of resources) {
-    const n = (counters[r.kind] = (counters[r.kind] ?? 0) + 1);
-    const id = `${r.kind}_${n}`;
+    const n = (counters[c.kind] = (counters[c.kind] ?? 0) + 1);
+    c.id = `${c.kind}_${n}`;
     nodes.push({
-      id,
-      kind: r.kind,
-      name: r.name,
-      props: extractScalars(r.kind, r.args),
+      id: c.id,
+      kind: c.kind,
+      name: c.name,
+      props: c.kind === GENERIC_KIND ? { sstComponent: c.ref } : extractScalars(c.kind, c.args),
       position: { x: 0, y: 0 },
     });
-    if (r.varName) varToId.set(r.varName, id);
+    if (c.binding) bindToIds.set(c.binding, [c.id]);
+    if (c.kind === GENERIC_KIND) {
+      unrecognized.push({
+        snippet: `new ${c.ref}("${c.name}")`,
+        reason: `${c.ref} isn't modeled by the builder yet — shown as a generic node`,
+      });
+    }
   }
-  const idToKind = new Map(nodes.map((n) => [n.id, n.kind]));
 
-  const edges: CanvasEdge[] = [];
-  let edgeN = 0;
-  const addEdge = (source: string, target: string, intent: string) => {
-    edges.push({ id: `edge_${++edgeN}`, source, target, intent });
+  // 3) Object maps + helper arrays, so links through them resolve:
+  //    const OBJ = { key: new sst..., … }   → OBJ and OBJ.key resolve to the member(s)
+  const objToIds = new Map<string, string[]>(); // OBJ → member ids
+  const propToId = new Map<string, string>(); // "OBJ.key" → id
+  const objRe = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*\{/g;
+  let o: RegExpExecArray | null;
+  while ((o = objRe.exec(source)) !== null) {
+    const objName = o[1];
+    const braceIdx = source.indexOf('{', o.index + o[0].length - 1);
+    const { end } = balancedRange(source, braceIdx, '{', '}');
+    const members = ctors.filter((c) => c.id && c.binding && c.start > braceIdx && c.end < end);
+    if (!members.length) continue;
+    objToIds.set(
+      objName,
+      members.map((c) => c.id!),
+    );
+    for (const c of members) propToId.set(`${objName}.${c.binding}`, c.id!);
+  }
+
+  // Resolve a single link token to node id(s): identifier, `...spread`, `Object.values(OBJ)`,
+  // member access `OBJ.key`, or an inline `[a, b]`.
+  const resolveRef = (raw: string): string[] => {
+    const token = raw.trim().replace(/^\.\.\.\s*/, '');
+    let mm: RegExpMatchArray | null;
+    if ((mm = token.match(/^Object\.values\(\s*([A-Za-z_$][\w$]*)\s*\)$/))) {
+      return objToIds.get(mm[1]) ?? [];
+    }
+    if ((mm = token.match(/^([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)$/))) {
+      const id = propToId.get(`${mm[1]}.${mm[2]}`);
+      return id ? [id] : [];
+    }
+    if (token.startsWith('[')) {
+      return splitTopLevel(token.slice(1, -1)).flatMap(resolveRef);
+    }
+    if (/^[A-Za-z_$][\w$]*$/.test(token)) {
+      return bindToIds.get(token) ?? objToIds.get(token) ?? [];
+    }
+    return [];
   };
 
-  // link: [...] → the declaring resource links each target.
-  for (const r of resources) {
-    if (!r.varName) continue;
-    const sourceId = varToId.get(r.varName);
-    if (!sourceId) continue;
-    const sourceKind = idToKind.get(sourceId)!;
-    for (const linkVar of extractLinks(r.args)) {
-      const targetId = varToId.get(linkVar);
-      if (!targetId) {
-        // A link to something we never turned into a node (unmodeled component, or a
-        // resource declared in another file) — record it rather than dropping the edge.
-        unrecognized.push({
-          snippet: `${r.name} → link: [${linkVar}]`,
-          reason: `links "${linkVar}", which wasn't recognized as a resource in this file`,
-        });
+  //    const X = Object.values(OBJ);   const X = [a, b];   → X resolves to many ids
+  const helperRe =
+    /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(Object\.values\(\s*[A-Za-z_$][\w$]*\s*\)|\[[^\]]*\])/g;
+  let h: RegExpExecArray | null;
+  while ((h = helperRe.exec(source)) !== null) {
+    const ids = resolveRef(h[2]);
+    if (ids.length) bindToIds.set(h[1], ids);
+  }
+
+  // 4) Edges from EVERY resource's `link: [...]` (including anonymous `new sst.X("N", {link})`).
+  const idToKind = new Map(nodes.map((n) => [n.id, n.kind]));
+  const edges: CanvasEdge[] = [];
+  let edgeN = 0;
+  const seen = new Set<string>();
+  const addEdge = (src: string, tgt: string, intent: string) => {
+    const key = `${src}->${tgt}`;
+    if (src !== tgt && !seen.has(key)) {
+      seen.add(key);
+      edges.push({ id: `edge_${++edgeN}`, source: src, target: tgt, intent });
+    }
+  };
+  const linkFrom = (sourceId: string, sourceKind: string, sourceName: string, args: string) => {
+    for (const token of linkTokens(args)) {
+      const targets = resolveRef(token);
+      if (targets.length === 0) {
+        const bare = token.replace(/^\.\.\.\s*/, '');
+        if (/^[A-Za-z_$][\w$.]*$/.test(bare)) {
+          unrecognized.push({
+            snippet: `${sourceName} → link: [${token}]`,
+            reason: `links "${bare}", which wasn't recognized as a resource`,
+          });
+        }
         continue;
       }
-      const targetKind = idToKind.get(targetId)!;
-      const intent = awsDefaultIntent(sourceKind, targetKind);
-      if (intent) addEdge(sourceId, targetId, intent);
+      for (const tId of targets) {
+        const intent = awsDefaultIntent(sourceKind, idToKind.get(tId)!);
+        if (intent) addEdge(sourceId, tId, intent);
+      }
     }
+  };
+  for (const c of ctors) {
+    if (c.id) linkFrom(c.id, c.kind, c.name!, c.args);
+  }
+
+  // <var>.route("METHOD /path", { link: [...] }) → the routed resource links its targets.
+  const routeRe = /([A-Za-z_$][\w$]*)\.route\s*\(/g;
+  let rt: RegExpExecArray | null;
+  while ((rt = routeRe.exec(source)) !== null) {
+    const ids = bindToIds.get(rt[1]);
+    if (!ids?.length) continue;
+    const parenIdx = source.indexOf('(', rt.index + rt[0].length - 1);
+    const { inner } = balancedRange(source, parenIdx, '(', ')');
+    const srcId = ids[0];
+    linkFrom(srcId, idToKind.get(srcId)!, rt[1], inner);
   }
 
   // <var>.subscribe("WorkerName", {...}) → a worker node + a subscribesTo edge.
@@ -211,9 +320,9 @@ export function parseAwsConfig(source: string): ReverseResult {
   const subRe = /([A-Za-z_$][\w$]*)\.subscribe\(\s*["'`]([^"'`]+)["'`]/g;
   let s: RegExpExecArray | null;
   while ((s = subRe.exec(source)) !== null) {
-    const targetId = varToId.get(s[1]);
+    const targetIds = bindToIds.get(s[1]);
     const workerName = s[2];
-    if (!targetId || workerName.includes('/') || workerName.includes('.handler')) continue;
+    if (!targetIds?.length || workerName.includes('/') || workerName.includes('.handler')) continue;
     const wn = (counters.worker = (counters.worker ?? 0) + 1);
     const workerId = `worker_${wn}`;
     nodes.push({
@@ -223,7 +332,8 @@ export function parseAwsConfig(source: string): ReverseResult {
       props: {},
       position: { x: 0, y: 0 },
     });
-    addEdge(workerId, targetId, 'subscribesTo');
+    idToKind.set(workerId, 'worker');
+    addEdge(workerId, targetIds[0], 'subscribesTo');
   }
 
   layout(nodes, edges);
@@ -238,7 +348,6 @@ function layout(nodes: CanvasNode[], edges: CanvasEdge[]): void {
   const hasOutgoing = new Set(edges.map((e) => e.source));
   const col = new Map<string, number>();
   for (const n of nodes) col.set(n.id, hasOutgoing.has(n.id) ? 0 : 1);
-  // Anything with no edges at all sits in column 0 too.
   const connected = new Set([...edges.map((e) => e.source), ...edges.map((e) => e.target)]);
   for (const n of nodes) if (!connected.has(n.id)) col.set(n.id, 0);
 
