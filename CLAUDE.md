@@ -66,6 +66,17 @@ project and run it with no clone/install/build; CI rebuilds it and **fails on dr
 Cloud-observed phases (read-only AWS/Vercel) are deliberately fenced behind a security gate.
 See [docs/live-mode.md](docs/live-mode.md). The builder's codegen stays zero-AI regardless.
 
+**Third pillar (Phase 0 foundation): a Local AI Ops Agent** in `cli/agent/` — read-only,
+SST-aware, **BYO-model/local/NoAI**, grounded in the scan graph + the **verified SST docs**.
+Optional cherry-on-top; the product is complete without it. `sst-dream agent check` flags
+deprecated SST (Cron→CronV2, `sst/constructs`, `removal:"destroy"`, …) cited to
+`docs/sst-v4-target.md`; `agent explain <resource>` describes a node from the graph — both
+**deterministic, zero network** (no model called yet). MOAT AS CODE: `cli/agent/no-codegen.test.ts`
+forbids any agent file from importing the generator — the agent can NEVER write infra. Output is
+a 4-section honest format (Known facts cited / Likely / Suggested checks / Unknowns). Model
+narration (local Ollama first, then hosted behind a 2nd sanitizer corpus + eval) is the next
+phase. See [docs/ai-ops-agent.md](docs/ai-ops-agent.md).
+
 ## Conventions
 
 - **Correctness is the product.** Every generated snippet must match the verified target

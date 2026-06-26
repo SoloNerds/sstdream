@@ -211,3 +211,19 @@ function readPkg(root: string): string | undefined {
     return undefined;
   }
 }
+
+/** The raw infra-defining source files (path + text), for tools that need the source —
+ *  e.g. the agent's deprecation check. (The scan itself works off sanitized copies.) */
+export function listInfraSources(root: string): { path: string; text: string }[] {
+  const out: { path: string; text: string }[] = [];
+  for (const f of walk(root)) {
+    try {
+      const text = readFileSync(f, 'utf8');
+      if (DEFINES_INFRA.test(text))
+        out.push({ path: relative(root, f).split(sep).join('/'), text });
+    } catch {
+      /* unreadable — skip */
+    }
+  }
+  return out;
+}

@@ -7,6 +7,7 @@ import { writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { scanRepo } from './scan';
 import { toMarkdown } from './report';
+import { runAgent } from './agent/cli';
 
 const HELP = `sst-dream — local infrastructure intelligence (no credentials, no network)
 
@@ -15,6 +16,8 @@ Usage:
     --out <dir>               Where to write outputs (default: current dir)
     --json-only               Write only the graph JSON (skip the Markdown map)
     --quiet                   Suppress the stdout summary
+  sst-dream agent <cmd>       Local, read-only, SST-aware analysis (grounded; never writes
+                              infra). Try: sst-dream agent check | agent explain <resource>
 
 Outputs:
   ARCHITECTURE.md             A human-readable architecture map
@@ -33,6 +36,10 @@ function main(): void {
   const cmd = process.argv[2];
   if (!cmd || cmd === '--help' || cmd === '-h' || cmd === 'help') {
     process.stdout.write(HELP);
+    return;
+  }
+  if (cmd === 'agent') {
+    runAgent(process.argv);
     return;
   }
   if (cmd !== 'scan') {

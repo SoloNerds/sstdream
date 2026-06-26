@@ -7,7 +7,7 @@ var __export = (target, all) => {
 
 // cli/index.ts
 import { writeFileSync } from "node:fs";
-import { join as join2, resolve } from "node:path";
+import { join as join2, resolve as resolve2 } from "node:path";
 
 // cli/scan.ts
 import { readdirSync, readFileSync } from "node:fs";
@@ -8365,6 +8365,18 @@ function readPkg(root) {
     return void 0;
   }
 }
+function listInfraSources(root) {
+  const out = [];
+  for (const f of walk(root)) {
+    try {
+      const text = readFileSync(f, "utf8");
+      if (DEFINES_INFRA.test(text))
+        out.push({ path: relative(root, f).split(sep).join("/"), text });
+    } catch {
+    }
+  }
+  return out;
+}
 
 // cli/report.ts
 var KIND_NOTE = (c) => c === "high" ? "" : " _(low confidence)_";
@@ -8441,14 +8453,240 @@ function toMarkdown(r) {
   return out.join("\n") + "\n";
 }
 
+// cli/agent/cli.ts
+import { resolve } from "node:path";
+
+// cli/agent/deprecations.ts
+var DOC = "docs/sst-v4-target.md";
+var RULES2 = [
+  {
+    id: "cron",
+    pattern: /\bnew\s+sst\.aws\.Cron\s*\((?![\s\S]*V2)/g,
+    title: "`sst.aws.Cron` is deprecated",
+    fix: "Use `sst.aws.CronV2` with a `function:` prop. A future SST major may remove `Cron`.",
+    ref: "\xA74.6"
+  },
+  {
+    id: "cron-job-prop",
+    pattern: /\bnew\s+sst\.aws\.CronV2\b[\s\S]{0,240}?\bjob\s*:/g,
+    title: "CronV2 takes `function:`, not `job:`",
+    fix: "Rename the `job:` prop to `function:`.",
+    ref: "\xA74.6"
+  },
+  {
+    id: "sst-constructs",
+    pattern: /\bfrom\s+["'`]sst\/constructs["'`]|import\s*\{[^}]*\bSSTConfig\b/g,
+    title: "`sst/constructs` / `SSTConfig` is SST v2 (CDK)",
+    fix: "SST v4 defines resources as `new sst.aws.*` inside `$config({ async run() {} })`.",
+    ref: "\xA71"
+  },
+  {
+    id: "provider-import",
+    pattern: /\bfrom\s+["'`]@pulumi\/(?:aws|cloudflare|pulumi)["'`]/g,
+    title: "Provider packages are injected as globals",
+    fix: "Remove the `@pulumi/*` import \u2014 SST injects `aws`, `cloudflare`, \u2026 as globals.",
+    ref: "\xA71"
+  },
+  {
+    id: "removal-destroy",
+    pattern: /\bremoval\s*:\s*["'`]destroy["'`]/g,
+    title: '`removal: "destroy"` is not a valid value',
+    fix: 'Use `"remove" | "retain" | "retain-all"` (default `"retain"`).',
+    ref: "\xA73"
+  },
+  {
+    id: "bucket-public-bool",
+    pattern: /\bnew\s+sst\.aws\.Bucket\b[\s\S]{0,240}?\bpublic\s*:\s*true\b/g,
+    title: "Bucket `public: true` is not valid",
+    fix: 'Use `access: "public"` (`"public" | "cloudfront"`) \u2014 there is no `public` boolean.',
+    ref: "\xA74"
+  }
+];
+var lineAt = (text, idx) => text.slice(0, idx).split("\n").length;
+function findDeprecations(files) {
+  const hits = [];
+  for (const f of files) {
+    const lines = f.text.split("\n");
+    for (const rule of RULES2) {
+      rule.pattern.lastIndex = 0;
+      let m;
+      const seen = /* @__PURE__ */ new Set();
+      while ((m = rule.pattern.exec(f.text)) !== null) {
+        const line = lineAt(f.text, m.index);
+        if (!seen.has(line)) {
+          seen.add(line);
+          hits.push({
+            id: rule.id,
+            title: rule.title,
+            fix: rule.fix,
+            doc: `${DOC} ${rule.ref}`,
+            file: f.path,
+            line,
+            snippet: (lines[line - 1] ?? m[0]).trim().slice(0, 100)
+          });
+        }
+        if (m.index === rule.pattern.lastIndex) rule.pattern.lastIndex++;
+      }
+    }
+  }
+  return hits;
+}
+
+// cli/agent/run.ts
+function runCheck(files) {
+  const hits = findDeprecations(files);
+  return {
+    title: hits.length ? `${hits.length} deprecated SST pattern${hits.length === 1 ? "" : "s"} found` : "No deprecated SST patterns found \u2014 your config matches current SST v4",
+    knownFacts: hits.map((h) => ({
+      text: `${h.file}:${h.line} \u2014 ${h.title} (\`${h.snippet}\`)`,
+      source: h.doc
+    })),
+    likelyCauses: [],
+    suggestedChecks: hits.map((h) => `${h.file}:${h.line} \u2192 ${h.fix}`),
+    unknowns: [],
+    grounding: "the verified SST v4 facts in docs/sst-v4-target.md"
+  };
+}
+function runExplain(scan, resourceName) {
+  const node = scan.nodes.find((n) => n.name.toLowerCase() === resourceName.toLowerCase());
+  if (!node) {
+    return {
+      title: `No resource named "${resourceName}" in the scan`,
+      knownFacts: [],
+      likelyCauses: [],
+      suggestedChecks: [
+        `Resources in this scan: ${scan.nodes.map((n) => n.name).join(", ") || "(none)"}`
+      ],
+      unknowns: [],
+      grounding: "the scanned graph"
+    };
+  }
+  const nameOf = new Map(scan.nodes.map((n) => [n.id, n.name]));
+  const known = [
+    { text: `${node.name} is a \`${node.kind}\` resource.`, source: node.id }
+  ];
+  for (const e of scan.edges.filter((x) => x.source === node.id)) {
+    known.push({
+      text: `${node.name} ${e.intent} ${nameOf.get(e.target) ?? e.target}.`,
+      source: e.id
+    });
+  }
+  for (const e of scan.edges.filter((x) => x.target === node.id)) {
+    known.push({
+      text: `${nameOf.get(e.source) ?? e.source} ${e.intent} ${node.name}.`,
+      source: e.id
+    });
+  }
+  const cost = scan.cost.perResource.find((c) => c.resourceId === node.id);
+  if (cost)
+    known.push({
+      text: `Estimated cost ~$${cost.monthlyUsd.toFixed(2)}/mo.`,
+      source: "cost engine"
+    });
+  const exp = scan.expansion.find((g) => g.id === node.id);
+  if (exp) {
+    known.push({
+      text: `Expands to ${exp.resources.length} real AWS resource(s) when deployed.`,
+      source: "expansion engine"
+    });
+  }
+  const checks = scan.validation.diagnostics.filter((d) => d.resourceId === node.id).map((d) => `[${d.severity}] ${d.message}${d.hint ? ` \u2014 ${d.hint}` : ""}`);
+  const unknowns = [];
+  if (node.kind === "unknown") {
+    const sst = typeof node.props.sstComponent === "string" ? node.props.sstComponent : "unknown component";
+    unknowns.push(
+      `${node.name} is an unmodeled construct (${sst}) \u2014 shown for reference, not fully understood.`
+    );
+  }
+  for (const u of scan.unmodeled) {
+    if (u.snippet.includes(node.name)) unknowns.push(`${u.snippet} \u2014 ${u.reason}`);
+  }
+  return {
+    title: `${node.name} (${node.kind})`,
+    knownFacts: known,
+    likelyCauses: [],
+    suggestedChecks: checks,
+    unknowns,
+    grounding: "the scanned graph + verified SST v4 facts"
+  };
+}
+
+// cli/agent/types.ts
+function renderAnswer(a) {
+  const out = [`# ${a.title}`, ""];
+  if (a.knownFacts.length) {
+    out.push("## Known facts");
+    for (const f of a.knownFacts) out.push(`- ${f.text}  [${f.source}]`);
+    out.push("");
+  }
+  if (a.likelyCauses.length) {
+    out.push("## Likely causes");
+    for (const c of a.likelyCauses) out.push(`- ${c}`);
+    out.push("");
+  }
+  if (a.suggestedChecks.length) {
+    out.push("## Suggested checks");
+    for (const c of a.suggestedChecks) out.push(`- ${c}`);
+    out.push("");
+  }
+  out.push("## Unknowns");
+  if (a.unknowns.length) for (const u of a.unknowns) out.push(`- ${u}`);
+  else out.push("- (nothing the scan flagged as unmodeled)");
+  out.push("");
+  out.push(`_Grounded in ${a.grounding}. Read-only \u2014 this never writes infrastructure._`);
+  return out.join("\n") + "\n";
+}
+
+// cli/agent/cli.ts
+var HELP = `sst-dream agent \u2014 local, read-only, SST-aware analysis (grounded; never writes infra)
+
+Usage:
+  sst-dream agent check [dir]               Flag deprecated SST patterns vs current docs
+  sst-dream agent explain <resource> [dir]  Describe a resource from the scanned graph
+
+Grounded in YOUR scanned graph + the verified SST v4 docs (cited). No model is called in
+this build \u2014 zero network. BYO-model / local-LLM narration is opt-in and coming next.
+`;
+var dirArg = (a) => a && !a.startsWith("-") ? a : ".";
+function runAgent(argv) {
+  const sub = argv[3];
+  if (!sub || sub === "help" || sub === "--help" || sub === "-h") {
+    process.stdout.write(HELP);
+    return;
+  }
+  if (sub === "check") {
+    const root = resolve(process.cwd(), dirArg(argv[4]));
+    process.stdout.write(renderAnswer(runCheck(listInfraSources(root))));
+    return;
+  }
+  if (sub === "explain") {
+    const resource = argv[4];
+    if (!resource || resource.startsWith("-")) {
+      process.stderr.write("Usage: sst-dream agent explain <resource> [dir]\n");
+      process.exitCode = 1;
+      return;
+    }
+    const root = resolve(process.cwd(), dirArg(argv[5]));
+    const scan = scanRepo(root, (/* @__PURE__ */ new Date()).toISOString());
+    process.stdout.write(renderAnswer(runExplain(scan, resource)));
+    return;
+  }
+  process.stderr.write(`Unknown agent command "${sub}".
+
+${HELP}`);
+  process.exitCode = 1;
+}
+
 // cli/index.ts
-var HELP = `sst-dream \u2014 local infrastructure intelligence (no credentials, no network)
+var HELP2 = `sst-dream \u2014 local infrastructure intelligence (no credentials, no network)
 
 Usage:
   sst-dream scan [dir]        Scan a local SST/Vercel project into an infra map
     --out <dir>               Where to write outputs (default: current dir)
     --json-only               Write only the graph JSON (skip the Markdown map)
     --quiet                   Suppress the stdout summary
+  sst-dream agent <cmd>       Local, read-only, SST-aware analysis (grounded; never writes
+                              infra). Try: sst-dream agent check | agent explain <resource>
 
 Outputs:
   ARCHITECTURE.md             A human-readable architecture map
@@ -8464,19 +8702,23 @@ var has = (flag) => process.argv.includes(flag);
 function main() {
   const cmd = process.argv[2];
   if (!cmd || cmd === "--help" || cmd === "-h" || cmd === "help") {
-    process.stdout.write(HELP);
+    process.stdout.write(HELP2);
+    return;
+  }
+  if (cmd === "agent") {
+    runAgent(process.argv);
     return;
   }
   if (cmd !== "scan") {
     process.stderr.write(`Unknown command "${cmd}".
 
-${HELP}`);
+${HELP2}`);
     process.exitCode = 1;
     return;
   }
-  const dirArg = process.argv[3] && !process.argv[3].startsWith("-") ? process.argv[3] : ".";
-  const root = resolve(process.cwd(), dirArg);
-  const outDir = resolve(process.cwd(), arg("--out") ?? ".");
+  const dirArg2 = process.argv[3] && !process.argv[3].startsWith("-") ? process.argv[3] : ".";
+  const root = resolve2(process.cwd(), dirArg2);
+  const outDir = resolve2(process.cwd(), arg("--out") ?? ".");
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const result = scanRepo(root, now);
   const jsonPath = join2(outDir, "sstdream-scan.json");
