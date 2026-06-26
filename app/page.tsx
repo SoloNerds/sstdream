@@ -56,6 +56,12 @@ export default function Home() {
           >
             Gallery
           </Link>
+          <Link
+            href="/live"
+            className="text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
+          >
+            Live Mode
+          </Link>
           <a
             href="https://github.com/SoloNerds/sstdream"
             className="text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"

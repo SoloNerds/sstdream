@@ -170,6 +170,12 @@ export function BuilderShell() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Link
+              href="/live"
+              className="text-xs text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
+            >
+              Live Mode
+            </Link>
             <Toolbar validation={validation} />
             <ThemeToggle />
           </div>
