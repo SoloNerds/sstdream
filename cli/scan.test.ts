@@ -113,6 +113,11 @@ describe('sst-dream scan — multi-file local repo', () => {
     const idPool = r.nodes.find((n) => n.name === 'IdPool');
     expect(idPool?.kind).toBe('unknown'); // appears as a generic node
     expect(r.unmodeled.some((u) => u.snippet.includes('CognitoIdentityPool'))).toBe(true); // still honest
+    // A generic reference node WARNS — it doesn't hard-error the imported design.
+    const kindDiags = r.validation.diagnostics.filter((d) => d.rule === 'known-resource-kind');
+    expect(kindDiags).toHaveLength(1);
+    expect(kindDiags[0].severity).toBe('warning');
+    expect(r.validation.errors.some((e) => e.resourceId === idPool!.id)).toBe(false);
     rmSync(proj, { recursive: true, force: true });
   });
 

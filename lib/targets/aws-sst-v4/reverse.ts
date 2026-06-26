@@ -28,6 +28,7 @@ const COMPONENT_KIND: Record<string, string> = {
   Router: 'router',
   Function: 'worker',
   CronV2: 'cron',
+  Cron: 'cron', // deprecated alias of CronV2 — same scheduled-function kind
   Email: 'email',
   Service: 'service',
   Task: 'task',
@@ -156,6 +157,7 @@ interface Ctor {
   start: number;
   end: number; // index of the args' closing paren
   id?: string;
+  fnWorkerId?: string; // a cron's inline function, recovered as its own worker node
 }
 
 /**
@@ -268,6 +270,24 @@ export function parseAwsConfig(source: string): ReverseResult {
     if (ids.length) bindToIds.set(h[1], ids);
   }
 
+  // A cron's function is inline (`new sst.aws.Cron("X", { function|job: {...} })`), but the
+  // builder models it as a Cron → Worker (invokes) pair — so recover the inline function as
+  // its own worker node (the faithful inverse of the generator), and attribute the function's
+  // links to that worker. Keeps the scanned design valid (the cron has a function to invoke).
+  for (const c of ctors) {
+    if (c.id && c.kind === 'cron' && /\b(?:function|job)\s*:/.test(c.args)) {
+      const wn = (counters.worker = (counters.worker ?? 0) + 1);
+      c.fnWorkerId = `worker_${wn}`;
+      nodes.push({
+        id: c.fnWorkerId,
+        kind: 'worker',
+        name: `${c.name}Handler`,
+        props: {},
+        position: { x: 0, y: 0 },
+      });
+    }
+  }
+
   // 4) Edges from EVERY resource's `link: [...]` (including anonymous `new sst.X("N", {link})`).
   const idToKind = new Map(nodes.map((n) => [n.id, n.kind]));
   const edges: CanvasEdge[] = [];
@@ -300,7 +320,14 @@ export function parseAwsConfig(source: string): ReverseResult {
     }
   };
   for (const c of ctors) {
-    if (c.id) linkFrom(c.id, c.kind, c.name!, c.args);
+    if (!c.id) continue;
+    if (c.fnWorkerId) {
+      // The cron invokes its function (worker); the function's links belong to the worker.
+      addEdge(c.id, c.fnWorkerId, 'invokes');
+      linkFrom(c.fnWorkerId, 'worker', c.name!, c.args);
+    } else {
+      linkFrom(c.id, c.kind, c.name!, c.args);
+    }
   }
 
   // <var>.route("METHOD /path", { link: [...] }) → the routed resource links its targets.
