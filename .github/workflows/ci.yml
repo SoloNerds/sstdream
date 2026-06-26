@@ -18,6 +18,13 @@ jobs:
       - run: yarn format:check
       - run: yarn test
       - run: yarn build
+      # The static export (out/) must NEVER contain plugin-host code. Guard #2 (the build-output
+      # backstop to the static-bundle.test.ts import scan): fail if the host sentinel leaked in.
+      - name: Static export must be plugin-free
+        run: |
+          if grep -rqF "__SSTDREAM_PLUGIN_HOST_NEVER_IN_STATIC_BUNDLE__" out/; then
+            echo "::error::plugin-host code leaked into the static export (out/)"; exit 1
+          fi
       - run: yarn build:cli
       # The drop-in bundle (scripts/sst-dream.mjs) is committed; fail if it's stale.
       - name: Verify committed CLI bundle is current
